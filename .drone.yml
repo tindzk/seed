@@ -1,0 +1,69 @@
+kind: pipeline
+name: default
+
+steps:
+  - name: version
+    image: alpine:3.8
+    commands:
+      - apk add git
+      - git fetch --tags
+      - git describe > SEED
+      - echo -n $(git describe),latest > .tags
+  - name: build
+    image: plugins/docker
+    environment:
+      BINTRAY_USERNAME:
+        from_secret: bintray_username
+      BINTRAY_API:
+        from_secret: bintray_api
+    settings:
+      repo: tindzk/seed
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      build_args_from_env:
+        - BINTRAY_USERNAME
+        - BINTRAY_API
+    trigger:
+      event:
+        - push
+        - tag
+  - name: benchmarks
+    image: tindzk/seed:latest
+    pull: always
+    commands:
+      - blp-server &
+      - apk add git curl zip bash
+      - git clone https://github.com/sparsetech/toml-scala.git
+      - cd toml-scala
+      - curl -L -o hyperfine.tar.gz https://github.com/sharkdp/hyperfine/releases/download/v1.5.0/hyperfine-v1.5.0-x86_64-unknown-linux-musl.tar.gz
+      - tar xvf hyperfine.tar.gz
+      - curl -L -o sbt.zip https://piccolo.link/sbt-1.2.8.zip && unzip sbt.zip
+      - export PATH=$(pwd)/hyperfine-v1.5.0-x86_64-unknown-linux-musl:$(pwd)/sbt/bin:$PATH
+      - seed version
+
+      - echo Comparing start-up time
+      - sbt exit  # Download dependencies
+      - hyperfine --export-markdown comparison.md 'sbt exit' 'seed help'
+      - cat comparison.md
+
+      - echo Comparing Bloop project generation time
+      - echo 'addSbtPlugin("ch.epfl.scala" % "sbt-bloop" % "1.2.3")' >> project/plugins.sbt
+      - sbt bloopInstall
+      - seed bloop
+      - hyperfine --export-markdown comparison.md 'sbt bloopInstall' 'seed bloop'
+      - cat comparison.md
+
+      - echo Comparing compilation time
+      - hyperfine -i --show-output --export-markdown comparison.md \
+        'sbt "; clean; compile"' \
+        'bloop clean --propagate --cascade && bloop compile toml-js toml-jvm toml-native'
+      - cat comparison.md
+    trigger:
+      event:
+        - tag
+    when:
+      ref:
+        include:
+          - refs/tags/benchmark
