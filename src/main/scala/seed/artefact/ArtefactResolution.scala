@@ -170,7 +170,7 @@ object ArtefactResolution {
                   platforms: Set[Platform],
                   parent: Module = Module()
                  ): Set[Dep] =
-    module.targets.toSet[Platform].union(platforms).flatMap { target =>
+    module.targets.toSet[Platform].intersect(platforms).flatMap { target =>
       // Shared libraries
       if (target == JVM)
         jvmDeps(build,
