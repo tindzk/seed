@@ -61,13 +61,13 @@ Note that we use Bloop's version of Coursier. This is to avoid incompatibilities
 A [self-contained Docker image](https://hub.docker.com/r/tindzk/seed) based on [Alpine Linux](https://alpinelinux.org/) is provided for all Seed versions. You can pull it from the public Docker Hub registry:
 
 ```shell
-$ docker pull tindzk/seed:latest
+$ docker pull tindzk/seed:$version
 ```
 
 It contains a compatible Bloop version and all dependencies needed for cross-platform builds (JVM, Node, Clang/LLVM). You can use the image to build your projects. For example, the [toml-scala](https://github.com/sparsetech/toml-scala) project could be built as follows:
 
 ```shell
-$ docker run -it tindzk/seed:latest /bin/sh
+$ docker run -it tindzk/seed:$version /bin/sh
 apk add git
 git clone https://github.com/sparsetech/toml-scala.git
 cd toml-scala
