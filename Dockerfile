@@ -11,11 +11,11 @@ FROM alpine:3.8 as build
 ARG BINTRAY_USERNAME
 ARG BINTRAY_API
 
-RUN apk add --no-cache openjdk8 python curl
+RUN apk add --no-cache openjdk8 python curl nodejs
 
 ENV LANG       C.UTF-8
 ENV JAVA_HOME  /usr/lib/jvm/java-1.8-openjdk
-ENV PATH       $PATH:$JAVA_HOME/jre/bin:$JAVA_HOME/bin
+ENV PATH       $PATH:$JAVA_HOME/jre/bin:$JAVA_HOME/bin:/seed/bloop
 
 COPY build.sbt BLOOP SEED COURSIER  /seed/
 COPY project/  /seed/project/
@@ -27,12 +27,13 @@ RUN curl -L https://github.com/scalacenter/bloop/releases/download/v$(cat BLOOP)
 
 # Pre-fetch bridges and their dependencies to speed up dependency resolution
 # later
-RUN bloop/blp-coursier fetch \
+RUN blp-coursier fetch \
     ch.epfl.scala:bloop-js-bridge-0-6_2.12:$(cat BLOOP) \
     ch.epfl.scala:bloop-js-bridge-1-0_2.12:$(cat BLOOP) \
     ch.epfl.scala:bloop-native-bridge_2.12:$(cat BLOOP)
 
 RUN set -x && \
+    (blp-server &) && \
     curl -o csbt https://raw.githubusercontent.com/coursier/sbt-launcher/master/csbt && \
     chmod +x csbt && \
     (./csbt compile || \
@@ -62,7 +63,7 @@ RUN set -x && \
     ./csbt test && \
     BINTRAY_USER=$BINTRAY_USERNAME BINTRAY_PASS=$BINTRAY_API ./csbt --add-coursier=true "; publishLocal; publish"
 
-RUN bloop/blp-coursier bootstrap tindzk:seed_2.12:$(cat SEED) -f -o seed
+RUN blp-coursier bootstrap tindzk:seed_2.12:$(cat SEED) -f -o seed
 
 #
 # Run stage
