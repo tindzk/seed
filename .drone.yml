@@ -5,12 +5,21 @@ steps:
   - name: version
     image: alpine:3.8
     commands:
-      - apk add git
+      - apk add --no-cache git
       - git fetch --tags
       - git describe
       - git describe > SEED
       - echo -n $(git describe),latest > .tags
-  - name: build
+  - name: test
+    image: alpine:3.8
+    commands:
+      - apk add --no-cache openjdk8 python curl nodejs
+      - curl -L https://github.com/scalacenter/bloop/releases/download/v$(cat BLOOP)/install.py | python - -d bloop
+      - export PATH=$(pwd)/bloop:$PATH
+      - blp-server &
+      - ./build.sh
+      - ./csbt test
+  - name: publish
     image: plugins/docker
     environment:
       BINTRAY_USERNAME:
@@ -26,10 +35,15 @@ steps:
       build_args_from_env:
         - BINTRAY_USERNAME
         - BINTRAY_API
-    trigger:
+    when:
+      branch:
+        - master
       event:
-        - push
-        - tag
+        include:
+          - push
+          - tag
+        exclude:
+          - pull_request
   - name: benchmarks
     image: tindzk/seed:latest
     pull: always
