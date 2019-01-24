@@ -438,14 +438,11 @@ object Bloop {
           name = name + "-test",
           bloopPath = bloopPath,
           buildPath = buildPath,
-          dependencies = targets.map(name + "-" + _ + "-test"),
+          dependencies = targets.map(t => name + "-" + t.id + "-test"),
           classesDir = buildPath,
           classPath = List(),
           sources = List(),
-          // TODO Cannot be set to None
-          scalaCompiler = Some(Resolution.ScalaCompiler(
-            build.project.scalaOrganisation, build.project.scalaVersion, List(),
-            List())),
+          scalaCompiler = None,
           scalaOptions = List(),
           testFrameworks = List(),
           platform = None)
@@ -457,14 +454,11 @@ object Bloop {
         name = name,
         bloopPath = bloopPath,
         buildPath = buildPath,
-        dependencies = module.targets.map(name + "-" + _),
+        dependencies = module.targets.map(t => name + "-" + t.id),
         classesDir = buildPath,
         classPath = List(),
         sources = List(),
-        // TODO Cannot be set to None
-        scalaCompiler = Some(Resolution.ScalaCompiler(
-          build.project.scalaOrganisation, build.project.scalaVersion, List(),
-          List())),
+        scalaCompiler = None,
         scalaOptions = List(),
         testFrameworks = List(),
         platform = None)

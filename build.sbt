@@ -43,7 +43,8 @@ libraryDependencies ++= Seq(
   "com.joefkelley"  %% "argyle"         % "1.0.0",
   "org.scalaj"      %% "scalaj-http"    % "2.4.1",
   "commons-io"      %  "commons-io"     % "2.6",
-  "io.monix"        %% "minitest"       % "2.2.2" % "test",
+  "com.zaxxer"      %  "nuprocess"      % "1.2.4" % "test",
+  "io.monix"        %% "minitest"       % "2.3.2" % "test",
 
   scalaOrganization.value % "scala-reflect" % scalaVersion.value
 )
