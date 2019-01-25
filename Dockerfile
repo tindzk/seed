@@ -11,13 +11,13 @@ FROM alpine:3.8 as build
 ARG BINTRAY_USERNAME
 ARG BINTRAY_API
 
-RUN apk add --no-cache openjdk8 python curl nodejs
+RUN apk add --no-cache openjdk8 python curl
 
 ENV LANG       C.UTF-8
 ENV JAVA_HOME  /usr/lib/jvm/java-1.8-openjdk
 ENV PATH       $PATH:$JAVA_HOME/jre/bin:$JAVA_HOME/bin:/seed/bloop
 
-COPY build.sbt BLOOP SEED COURSIER  /seed/
+COPY build.sh build.sbt BLOOP SEED COURSIER  /seed/
 COPY project/  /seed/project/
 COPY src/      /seed/src/
 
@@ -33,34 +33,7 @@ RUN blp-coursier fetch \
     ch.epfl.scala:bloop-native-bridge_2.12:$(cat BLOOP)
 
 RUN set -x && \
-    (blp-server &) && \
-    curl -o csbt https://raw.githubusercontent.com/coursier/sbt-launcher/master/csbt && \
-    chmod +x csbt && \
-    (./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile || \
-     ./csbt compile \
-    ) && \
-    ./csbt test && \
+    ./build.sh && \
     BINTRAY_USER=$BINTRAY_USERNAME BINTRAY_PASS=$BINTRAY_API ./csbt --add-coursier=true "; publishLocal; publish"
 
 RUN blp-coursier bootstrap tindzk:seed_2.12:$(cat SEED) -f -o seed
