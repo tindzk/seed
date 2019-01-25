@@ -7,7 +7,7 @@ import java.nio.file.Paths
 
 import org.apache.commons.io.FileUtils
 import seed.model.Build
-import seed.model.Build.Project
+import seed.model.Build.{Project, ScalaDep, VersionTag}
 import seed.model.Platform.{JVM, JavaScript}
 
 object BuildConfigSpec extends SimpleTestSuite {
@@ -69,5 +69,26 @@ object BuildConfigSpec extends SimpleTestSuite {
     assertEquals(
       build.module("example").test.get.targets,
       List(JavaScript, JVM))
+  }
+
+  test("Parse TOML with full Scala dependency") {
+    val toml = """
+      |[project]
+      |scalaVersion = "2.12.8"
+      |
+      |[module.example.jvm]
+      |sources = ["shared/src"]
+      |scalaDeps = [
+      |  ["org.scalameta", "interactive", "4.1.0", "full"]
+      |]
+    """.stripMargin
+
+    val buildRaw = BuildConfig.parseToml(Paths.get("."))(toml)
+    val build = BuildConfig.processBuild(buildRaw.right.get, _ =>
+      Build(project = Project(scalaVersion = "2.12.8"), module = Map()))
+
+    assertEquals(
+      build.module("example").jvm.get.scalaDeps,
+      List(ScalaDep("org.scalameta", "interactive", "4.1.0", VersionTag.Full)))
   }
 }

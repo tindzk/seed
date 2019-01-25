@@ -1,42 +1,41 @@
 package seed.model
 
+import seed.model.Build.{Dep, JavaDep, ScalaDep, VersionTag}
+
 case class Artefact(organisation: String,
                     name: String,
-                    platformSuffix: Artefact.PlatformSuffix)
+                    versionTag: Option[VersionTag])
 
 object Artefact {
-  case class Versioned(artefact: Artefact, version: String)
+  import VersionTag._
 
-  sealed trait PlatformSuffix
-  object PlatformSuffix {
-    case object PlatformAndCompiler extends PlatformSuffix
-    case object Compiler extends PlatformSuffix
-    case object CompilerLibrary extends PlatformSuffix
-    case object Regular extends PlatformSuffix
-  }
-
-  import PlatformSuffix._
+  def fromDep(dep: Dep): Artefact =
+    dep match {
+      case JavaDep(org, name, _) => Artefact(org, name, None)
+      case ScalaDep(org, name, _, versionTag) =>
+        Artefact(org, name, Some(versionTag))
+    }
 
   def scalaCompiler(organisation: String) =
-    Artefact(organisation, "scala-compiler", Regular)
+    Artefact(organisation, "scala-compiler", None)
   def scalaLibrary(organisation: String) =
-    Artefact(organisation, "scala-library", Regular)
+    Artefact(organisation, "scala-library", None)
   def scalaReflect(organisation: String) =
-    Artefact(organisation, "scala-reflect", Regular)
+    Artefact(organisation, "scala-reflect", None)
 
-  val CompilerBridge = Artefact("ch.epfl.scala", "compiler-bridge", Compiler)
+  val CompilerBridge = Artefact("ch.epfl.scala", "compiler-bridge", Some(Full))
 
-  val ScalaJsCompiler = Artefact("org.scala-js", "scalajs-compiler", Compiler)
-  val ScalaJsLibrary  = Artefact("org.scala-js", "scalajs-library", CompilerLibrary)
+  val ScalaJsCompiler = Artefact("org.scala-js", "scalajs-compiler", Some(Full))
+  val ScalaJsLibrary  = Artefact("org.scala-js", "scalajs-library", Some(Binary))
 
-  val ScalaNativePlugin    = Artefact("org.scala-native", "nscplugin", Compiler)
-  val ScalaNativeJavalib   = Artefact("org.scala-native", "javalib", PlatformAndCompiler)
-  val ScalaNativeScalalib  = Artefact("org.scala-native", "scalalib", PlatformAndCompiler)
-  val ScalaNativeNativelib = Artefact("org.scala-native", "nativelib", PlatformAndCompiler)
-  val ScalaNativeAuxlib    = Artefact("org.scala-native", "auxlib", PlatformAndCompiler)
+  val ScalaNativePlugin    = Artefact("org.scala-native", "nscplugin", Some(Full))
+  val ScalaNativeJavalib   = Artefact("org.scala-native", "javalib", Some(PlatformBinary))
+  val ScalaNativeScalalib  = Artefact("org.scala-native", "scalalib", Some(PlatformBinary))
+  val ScalaNativeNativelib = Artefact("org.scala-native", "nativelib", Some(PlatformBinary))
+  val ScalaNativeAuxlib    = Artefact("org.scala-native", "auxlib", Some(PlatformBinary))
 
-  val Minitest   = Artefact("io.monix", "minitest", PlatformAndCompiler)
-  val ScalaTest  = Artefact("org.scalatest", "scalatest", PlatformAndCompiler)
-  val ScalaCheck = Artefact("org.scalacheck", "scalacheck", PlatformAndCompiler)
-  val Utest      = Artefact("com.lihaoyi", "utest", PlatformAndCompiler)
+  val Minitest   = Artefact("io.monix", "minitest", Some(PlatformBinary))
+  val ScalaTest  = Artefact("org.scalatest", "scalatest", Some(PlatformBinary))
+  val ScalaCheck = Artefact("org.scalacheck", "scalacheck", Some(PlatformBinary))
+  val Utest      = Artefact("com.lihaoyi", "utest", Some(PlatformBinary))
 }

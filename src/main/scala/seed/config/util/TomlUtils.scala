@@ -5,6 +5,7 @@ import java.nio.file.{Path, Paths}
 import org.apache.commons.io.FileUtils
 import seed.Log
 import seed.cli.util.Ansi
+import seed.model.Build.VersionTag
 import seed.model.Platform
 import toml.{Codec, Value}
 
@@ -19,12 +20,24 @@ object TomlUtils {
           case Some(p) => Right(p)
         }
 
-      case (value, _, _) => Left((List.empty, s"Platform expected, $value provided"))
+      case (value, _, _) => Left((List(), s"Platform expected, $value provided"))
+    }
+
+    implicit val versionTagCodec: Codec[VersionTag] = Codec {
+      case (Value.Str(id), _, _) =>
+        id match {
+          case "full" => Right(VersionTag.Full)
+          case "binary" => Right(VersionTag.Binary)
+          case "platformBinary" => Right(VersionTag.PlatformBinary)
+          case _ => Left((List(), "Invalid version tag provided"))
+        }
+
+      case (value, _, _) => Left((List(), s"Version tag expected, $value provided"))
     }
 
     def pathCodec(f: Path => Path): Codec[Path] = Codec {
       case (Value.Str(path), _, _) => Right(f(Paths.get(path)))
-      case (value, _, _) => Left((List.empty, s"Path expected, $value provided"))
+      case (value, _, _) => Left((List(), s"Path expected, $value provided"))
     }
   }
 

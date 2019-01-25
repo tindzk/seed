@@ -8,7 +8,6 @@ import seed.config.BuildConfig.{collectJsDeps, collectJsModuleDeps, collectJvmJa
 import seed.artefact.{Coursier, ArtefactResolution}
 import seed.cli.util.Ansi
 import seed.generation.util.IdeaFile
-import seed.model.Artefact.PlatformSuffix
 import seed.model.{Build, Resolution}
 import seed.model.Build.Module
 import seed.model.Platform.{JVM, JavaScript, Native}
@@ -164,7 +163,7 @@ object Idea {
               _.js.toList.flatMap(_.sources)),
             resolvedDeps = Coursier.localArtefacts(resolution,
               collectJsDeps(build, module).map(dep =>
-                ArtefactResolution.dependencyFromDep(
+                ArtefactResolution.javaDepFromScalaDep(
                   dep, JavaScript,
                   build.project.scalaJsVersion.get,
                   build.project.scalaVersion)
@@ -173,7 +172,7 @@ object Idea {
             resolvedTestDeps = module.test.toList.flatMap(test =>
               Coursier.localArtefacts(resolution,
                 collectJsDeps(build, test).map(dep =>
-                  ArtefactResolution.dependencyFromDep(
+                  ArtefactResolution.javaDepFromScalaDep(
                     dep, JavaScript,
                     build.project.scalaJsVersion.get,
                     build.project.scalaVersion)
@@ -210,16 +209,9 @@ object Idea {
             tests = module.test.toList.flatMap(
               _.jvm.toList.flatMap(_.sources)),
             resolvedDeps = Coursier.localArtefacts(resolution,
-              collectJvmJavaDeps(build, module).map(dep =>
-                ArtefactResolution.dependencyFromDep(
-                  dep, JVM,
-                  build.project.scalaVersion,
-                  build.project.scalaVersion,
-                  PlatformSuffix.Regular
-                )
-              ).toSet ++
+              collectJvmJavaDeps(build, module).toSet ++
               collectJvmScalaDeps(build, module).map(dep =>
-                ArtefactResolution.dependencyFromDep(
+                ArtefactResolution.javaDepFromScalaDep(
                   dep, JVM,
                   build.project.scalaVersion,
                   build.project.scalaVersion)
@@ -228,7 +220,7 @@ object Idea {
             resolvedTestDeps = module.test.toSet.flatMap(test =>
               Coursier.localArtefacts(resolution,
                 collectJvmScalaDeps(build, test).map(dep =>
-                  ArtefactResolution.dependencyFromDep(
+                  ArtefactResolution.javaDepFromScalaDep(
                     dep, JVM,
                     build.project.scalaVersion,
                     build.project.scalaVersion)
@@ -268,7 +260,7 @@ object Idea {
             resolvedDeps = Coursier.localArtefacts(
               resolution,
               collectNativeDeps(build, module).map(dep =>
-                ArtefactResolution.dependencyFromDep(
+                ArtefactResolution.javaDepFromScalaDep(
                   dep, Native,
                   build.project.scalaNativeVersion.get,
                   build.project.scalaVersion)
@@ -277,7 +269,7 @@ object Idea {
             resolvedTestDeps = module.test.toList.flatMap(test =>
               Coursier.localArtefacts(resolution,
                 collectNativeDeps(build, test).map(dep =>
-                  ArtefactResolution.dependencyFromDep(
+                  ArtefactResolution.javaDepFromScalaDep(
                     dep, Native,
                     build.project.scalaNativeVersion.get,
                     build.project.scalaVersion)
@@ -312,16 +304,9 @@ object Idea {
             sources = module.sources,
             tests = module.test.toList.flatMap(_.sources),
             resolvedDeps = Coursier.localArtefacts(resolution,
-              collectJvmJavaDeps(build, module).map(dep =>
-                ArtefactResolution.dependencyFromDep(
-                  dep, JVM,
-                  build.project.scalaVersion,
-                  build.project.scalaVersion,
-                  PlatformSuffix.Regular
-                )
-              ).toSet ++
+              collectJvmJavaDeps(build, module).toSet ++
               collectJvmScalaDeps(build, module).map(dep =>
-                ArtefactResolution.dependencyFromDep(
+                ArtefactResolution.javaDepFromScalaDep(
                   dep, JVM,
                   build.project.scalaVersion,
                   build.project.scalaVersion)
@@ -330,7 +315,7 @@ object Idea {
             resolvedTestDeps = module.test.toSet.flatMap(test =>
               Coursier.localArtefacts(resolution,
                 collectJvmScalaDeps(build, test).map(dep =>
-                  ArtefactResolution.dependencyFromDep(
+                  ArtefactResolution.javaDepFromScalaDep(
                     dep, JVM,
                     build.project.scalaVersion,
                     build.project.scalaVersion)
