@@ -1,6 +1,5 @@
-.idea/
 .bloop/
-build/
 target/
-project/target/
-test/
+/.idea/
+/build/
+/test/
