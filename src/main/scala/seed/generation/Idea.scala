@@ -16,6 +16,9 @@ import seed.Log
 import seed.config.BuildConfig
 
 object Idea {
+  val ModuleDir  = "$MODULE_DIR$"
+  val ProjectDir = "$PROJECT_DIR$"
+
   /** Replace non alpha-numerical characters, otherwise IntelliJ will rename
     * such files.
     */
@@ -38,6 +41,22 @@ object Idea {
     FileUtils.write(
       librariesPath.resolve(ideaName(libraryJar.getFileName.toString) + ".xml")
         .toFile, xml, "UTF-8")
+  }
+
+  def normalisePath(pathVariable: String, root: Path)(path: Path): String = {
+    val canonicalRoot = root.toFile.getCanonicalPath
+    val canonicalPath = path.toFile.getCanonicalPath
+
+    val rootElems = canonicalRoot.split("/").toList
+    val pathElems = canonicalPath.split("/").toList
+    val common = pathElems.zip(rootElems).takeWhile { case (a, b) => a == b }
+
+    if (common.length == 1) canonicalPath
+    else {
+      val levels = rootElems.length - common.length
+      val relativePath = (0 until levels).map(_ => "../").mkString
+      pathVariable + "/" + relativePath + pathElems.drop(common.length).mkString("/")
+    }
   }
 
   def createModule(build      : Build,
@@ -66,23 +85,17 @@ object Idea {
     if (!Files.exists(testClassPathOut))
       Files.createDirectories(testClassPathOut)
 
-    val moduleDir = "$MODULE_DIR$/"
-
     val xml = IdeaFile.createModule(IdeaFile.Module(
       projectId = name,
-      rootPath = moduleDir + modulesPath.relativize(root).toString,
-      sourcePaths = sources.map(p => moduleDir + modulesPath.relativize(p).toString),
-      testPaths = tests.map(p => moduleDir + modulesPath.relativize(p).toString),
+      rootPath = normalisePath(ModuleDir, modulesPath)(root),
+      sourcePaths = sources.map(normalisePath(ModuleDir, modulesPath)),
+      testPaths = tests.map(normalisePath(ModuleDir, modulesPath)),
       libraries = List(scalaDep) ++ resolvedDeps.map(_.libraryJar.getFileName.toString),
       testLibraries = resolvedTestDeps.map(_.libraryJar.getFileName.toString),
       moduleDeps = moduleDeps,
       output = Some(IdeaFile.Output(
-        classPath =
-          if (classPathOut.isAbsolute) classPathOut.toString
-          else moduleDir + "../../" + classPathOut.toString,
-        testClassPath =
-          if (testClassPathOut.isAbsolute) testClassPathOut.toString
-          else moduleDir + "../../" + testClassPathOut.toString))))
+        classPath = normalisePath(ModuleDir, modulesPath)(classPathOut),
+        testClassPath = normalisePath(ModuleDir, modulesPath)(testClassPathOut)))))
 
     FileUtils.write(modulesPath.resolve(name + ".iml").toFile, xml, "UTF-8")
   }
@@ -346,15 +359,13 @@ object Idea {
                    modules: List[String]): Unit = {
     // TODO Indent file properly
     val xml = IdeaFile.createProject(modules.sorted.map(module =>
-      "$PROJECT_DIR$/" + projectPath
-        .relativize(modulesPath)
-        .resolve(module + ".iml")
-        .toString))
-
+      normalisePath(ProjectDir, projectPath)(
+        modulesPath.resolve(module + ".iml"))))
     FileUtils.write(ideaPath.resolve("modules.xml").toFile, xml, "UTF-8")
   }
 
   def build(projectPath: Path,
+            outputPath: Path,
             build: Build,
             resolution: Coursier.ResolutionResult,
             compilerResolution: List[Coursier.ResolutionResult],
@@ -367,7 +378,7 @@ object Idea {
 
     Log.info(s"Build path: ${Ansi.italic(buildPath.toString)}")
 
-    val ideaPath      = projectPath.resolve(".idea")
+    val ideaPath      = outputPath.resolve(".idea")
     val modulesPath   = ideaPath.resolve("modules")
     val librariesPath = ideaPath.resolve("libraries")
 

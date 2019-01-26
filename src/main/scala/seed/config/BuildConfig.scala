@@ -20,8 +20,13 @@ object BuildConfig {
       sys.exit(1)
     }
 
+    def parentOf(path: Path): Path = {
+      val p = path.getParent
+      if (p != null) p else path.toAbsolutePath.getParent
+    }
+
     val (projectPath, projectFile) =
-      if (Files.isRegularFile(path)) (path.toAbsolutePath.getParent, path)
+      if (Files.isRegularFile(path)) (parentOf(path), path)
       else (path, path.resolve("build.toml"))
 
     Log.info(s"Loading project ${Ansi.italic(projectFile.toString)}...")
