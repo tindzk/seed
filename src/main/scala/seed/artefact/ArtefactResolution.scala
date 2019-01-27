@@ -169,8 +169,9 @@ object ArtefactResolution {
                   module: Module,
                   platforms: Set[Platform],
                   parent: Module = Module()
-                 ): Set[Dep] =
-    module.targets.toSet[Platform].intersect(platforms).flatMap { target =>
+                 ): Set[Dep] = {
+    val targets = if (module.targets.isEmpty) parent.targets else module.targets
+    targets.toSet[Platform].intersect(platforms).flatMap { target =>
       // Shared libraries
       if (target == JVM)
         jvmDeps(build,
@@ -194,6 +195,7 @@ object ArtefactResolution {
        List(native, parent.native.getOrElse(Module()), module)))
     ) ++
     module.test.toSet.flatMap(libraryDeps(build, _, platforms, module))
+  }
 
   def libraryArtefacts(build: Build,
                        module: Module,

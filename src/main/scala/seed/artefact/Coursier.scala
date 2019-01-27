@@ -142,9 +142,10 @@ object Coursier {
               sources = optionalArtefacts,
               javaDoc = optionalArtefacts)))
 
-    require(deps.forall(d => result.map(_._1.module).exists(m =>
+    val missing = deps.filter(d => !result.map(_._1.module).exists(m =>
       m.organization.value == d.organisation &&
-      m.name.value == d.artefact)), "Missing dependencies in artefact resolution")
+      m.name.value == d.artefact))
+    require(missing.isEmpty, s"Missing dependencies in artefact resolution: $missing")
 
     result.map(a => (a._2.classifier, a._3)).toList
   }
