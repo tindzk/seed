@@ -38,48 +38,59 @@ object BuildConfig {
       sys.exit(1)
     }
 
+    val parsed = TomlUtils.parseFile(
+      projectFile, parseToml(projectPath), "build file")
+
+    (projectPath.normalize(), processBuild(parsed, { path =>
+      val (_, build) = load(path)
+
+      parsed.module.keySet.intersect(build.module.keySet).foreach(name =>
+        Log.error(s"Module name ${Ansi.italic(name)} is not unique"))
+
+      build
+    }))
+  }
+
+  def parseToml(projectPath: Path)(content: String) = {
     import toml._
     import toml.Codecs._
     import seed.config.util.TomlUtils.Codecs._
 
     implicit val pCodec = pathCodec(fixPath(projectPath, _))
 
-    val parsed = TomlUtils.parseFile(projectFile, Toml.parseAs[Build](_), "build file") match { case p =>
+    Toml.parseAs[Build](content)
+  }
+
+  def processBuild(build: Build, parse: Path => Build): Build = {
+    val parsed = build match { case p =>
       p.copy(module = p.module.mapValues { module =>
-        val parentTargets = moduleTargets(module)
+        val parentTargets = moduleTargets(module, module.targets)
         module.copy(
           targets = parentTargets,
           test = module.test.map { module =>
-            val testTargets = moduleTargets(module)
             module.copy(
-              targets =
-                if (testTargets.nonEmpty) testTargets
-                else parentTargets)
+              targets = moduleTargets(
+                module,
+                if (module.targets.isEmpty) parentTargets else module.targets))
           }
         )
       })
     }
 
-    val imported = parsed.`import`.map { path =>
-      val (_, imp) = load(projectPath.resolve(path).normalize())
+    val imported = parsed.`import`.map(parse(_))
 
-      parsed.module.keySet.intersect(imp.module.keySet).foreach(name =>
-        Log.error(s"Module name ${Ansi.italic(name)} is not unique"))
-
-      imp
-    }
-
-    (projectPath.normalize(), parsed.copy(
+    parsed.copy(
       project = parsed.project.copy(testFrameworks =
         (parsed.project.testFrameworks ++
          imported.flatMap(_.project.testFrameworks)
         ).distinct
       ),
-      module = parsed.module ++ imported.flatMap(_.module)))
+      module = parsed.module ++ imported.flatMap(_.module))
   }
 
-  def moduleTargets(module: Build.Module): List[Platform] = (
-    module.targets ++
+  def moduleTargets(module: Build.Module,
+                    otherTargets: List[Platform]): List[Platform] = (
+    otherTargets ++
     (if (module.jvm.nonEmpty) List(JVM) else List()) ++
     (if (module.js.nonEmpty) List(JavaScript) else List()) ++
     (if (module.native.nonEmpty) List(Native) else List())

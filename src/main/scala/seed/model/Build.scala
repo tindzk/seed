@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 import seed.artefact.MavenCentral
 
-case class Build(`import`: List[String] = List(),
+case class Build(`import`: List[Path] = List(),
                  project: Build.Project,
                  resolvers: Build.Resolvers = Build.Resolvers(),
                  module: Map[String, Build.Module])
