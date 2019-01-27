@@ -126,14 +126,22 @@ object Coursier {
 
   def resolveSubset(resolution: Resolution,
                     deps: Set[Dep],
-                    optionalArtefacts: Boolean): List[(Classifier, Artefact)] =
-    resolution.subset(coursierDependencies(deps))
-      .dependencyArtifacts(
-        Some(
-          overrideClassifiers(
-            sources = optionalArtefacts,
-            javaDoc = optionalArtefacts))
-      ).map(a => (a._2.classifier, a._3)).toList
+                    optionalArtefacts: Boolean): List[(Classifier, Artefact)] = {
+    val result =
+      resolution
+        .subset(coursierDependencies(deps))
+        .dependencyArtifacts(
+          Some(
+            overrideClassifiers(
+              sources = optionalArtefacts,
+              javaDoc = optionalArtefacts)))
+
+    require(deps.forall(d => result.map(_._1.module).exists(m =>
+      m.organization.value == d.organisation &&
+      m.name.value == d.artefact)), "Missing dependencies in artefact resolution")
+
+    result.map(a => (a._2.classifier, a._3)).toList
+  }
 
   def overrideClassifiers(sources: Boolean, javaDoc: Boolean): Seq[Classifier] =
     Seq(Classifier.empty) ++

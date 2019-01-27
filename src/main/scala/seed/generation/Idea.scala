@@ -153,8 +153,8 @@ object Idea {
               collectJsDeps(build, module).map(dep =>
                 ArtefactResolution.dependencyFromDep(
                   dep, JavaScript,
-                  build.project.scalaVersion,
-                  build.project.scalaJsVersion.get)
+                  build.project.scalaJsVersion.get,
+                  build.project.scalaVersion)
               ).toSet,
               optionalArtefacts = true),
             resolvedTestDeps = module.test.toList.flatMap(test =>
@@ -162,8 +162,8 @@ object Idea {
                 collectJsDeps(build, test).map(dep =>
                   ArtefactResolution.dependencyFromDep(
                     dep, JavaScript,
-                    build.project.scalaVersion,
-                    build.project.scalaJsVersion.get)
+                    build.project.scalaJsVersion.get,
+                    build.project.scalaVersion)
                 ).toSet,
                 optionalArtefacts = true)),
             moduleDeps =
@@ -257,8 +257,8 @@ object Idea {
               collectNativeDeps(build, module).map(dep =>
                 ArtefactResolution.dependencyFromDep(
                   dep, Native,
-                  build.project.scalaVersion,
-                  build.project.scalaNativeVersion.get)
+                  build.project.scalaNativeVersion.get,
+                  build.project.scalaVersion)
               ).toSet,
               optionalArtefacts = true),
             resolvedTestDeps = module.test.toList.flatMap(test =>
@@ -266,8 +266,8 @@ object Idea {
                 collectNativeDeps(build, test).map(dep =>
                   ArtefactResolution.dependencyFromDep(
                     dep, Native,
-                    build.project.scalaVersion,
-                    build.project.scalaNativeVersion.get)
+                    build.project.scalaNativeVersion.get,
+                    build.project.scalaVersion)
                 ).toSet,
                 optionalArtefacts = true)),
             moduleDeps =
