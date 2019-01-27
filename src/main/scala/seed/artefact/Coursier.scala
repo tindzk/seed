@@ -2,6 +2,7 @@ package seed.artefact
 
 import java.io.{File, OutputStreamWriter}
 import java.nio.file.{Path, Paths}
+import java.util.concurrent.locks.ReentrantLock
 
 import coursier.Cache.Logger
 import coursier.core.{Classifier, ModuleName, Organization}
@@ -28,14 +29,13 @@ object Coursier {
 
   private var logger: Option[Logger] = None
 
-  def initLogger(): Unit = {
-    require(logger.isEmpty)
+  def initLogger(): Unit =
+    if (logger.isEmpty) {
+      val termDisplay = new TermDisplay(new OutputStreamWriter(System.err))
+      termDisplay.init()
 
-    val termDisplay = new TermDisplay(new OutputStreamWriter(System.err))
-    termDisplay.init()
-
-    logger = Some(termDisplay)
-  }
+      logger = Some(termDisplay)
+    }
 
   def hasDep(resolutionResult: Coursier.ResolutionResult, dep: Dep): Boolean =
     resolutionResult.resolution.dependencies.exists(d =>
@@ -45,6 +45,8 @@ object Coursier {
 
   def coursierDependencies(deps: Set[Dep]): Set[Dependency] =
     deps.map(r => Dependency(Module(Organization(r.organisation), ModuleName(r.artefact)), r.version))
+
+  private val lock = new ReentrantLock()
 
   def resolve(all: Set[Dep], resolvers: Resolvers, ivyPath: Path, cachePath: Path): Resolution =
     if (all.isEmpty) Resolution.empty
@@ -116,12 +118,16 @@ object Coursier {
                          ivyPath: Path,
                          cachePath: Path,
                          optionalArtefacts: Boolean): ResolutionResult = {
+    lock.lock()
     val resolution = resolve(deps, resolvers, ivyPath, cachePath)
     val artefacts = resolution.dependencyArtifacts(
       Some(overrideClassifiers(
         sources = optionalArtefacts,
         javaDoc = optionalArtefacts))).map(_._3).toList
-    ResolutionResult(resolution, localArtefacts(artefacts, cachePath))
+
+    val result = ResolutionResult(resolution, localArtefacts(artefacts, cachePath))
+    lock.unlock()
+    result
   }
 
   def resolveSubset(resolution: Resolution,

@@ -36,7 +36,7 @@ object Build {
     val tmpfs = command.packageConfig.tmpfs || seedConfig.build.tmpfs
     if (isBloop) Bloop.build(projectPath, build, platformResolution,
       compilerResolution, tmpfs)
-    if (isIdea) Idea.build(projectPath, build, platformResolution,
+    if (isIdea) Idea.build(projectPath, projectPath, build, platformResolution,
       compilerResolution, tmpfs)
   }
 }
