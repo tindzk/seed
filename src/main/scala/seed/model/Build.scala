@@ -21,8 +21,11 @@ object Build {
 
   sealed trait VersionTag
   object VersionTag {
-    /** Binary Scala version (e.g. 2.12). This behaves as Full if the Scala
-      * version is a pre-release (e.g. 2.12.8-M3).
+    /**
+      * Binary Scala version (e.g. 2.12)
+      *
+      * This behaves like [[Full]] if the Scala version is a pre-release (e.g.
+      * 2.12.8-M3).
       */
     case object Binary extends VersionTag
 
