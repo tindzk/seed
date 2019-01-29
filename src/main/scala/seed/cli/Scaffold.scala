@@ -6,7 +6,6 @@ import org.apache.commons.io.FileUtils
 import seed.artefact.{MavenCentral, SemanticVersioning}
 import seed.artefact.MavenCentral.{CompilerVersion, PlatformVersion}
 import seed.cli.util.{Ansi, ColourScheme}
-import seed.model.Artefact.PlatformSuffix
 import seed.model.{Artefact, Organisation, Platform, TestFramework}
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.Log
@@ -156,7 +155,7 @@ object Scaffold {
       (if (platforms.contains(Native)) Map((Native, Artefact.ScalaNativePlugin)) else Map())
 
     compilerArtefacts.map { case (platform, artefact) =>
-      if (artefact.platformSuffix == PlatformSuffix.Regular)
+      if (artefact.versionTag.isEmpty)
         platform -> MavenCentral.fetchCompilerVersions(artefact, stable)
       else
         platform -> MavenCentral.fetchPlatformCompilerVersions(artefact, stable)

@@ -5,7 +5,6 @@ import java.nio.file.{Files, Path, Paths}
 import seed.config.BuildConfig.{collectJsClassPath, collectJsDeps, collectJvmClassPath, collectJvmScalaDeps, collectNativeClassPath, collectNativeDeps}
 import seed.artefact.{Coursier, ArtefactResolution}
 import seed.cli.util.Ansi
-import seed.model.Artefact.PlatformSuffix
 import seed.model.Build.{Module, Project}
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.model.{Artefact, Build, Resolution}
@@ -119,7 +118,7 @@ object Bloop {
         val resolvedDeps = Coursier.localArtefacts(
           resolution,
           (scalaDeps ++ js.scalaDeps).map(dep =>
-            ArtefactResolution.dependencyFromDep(
+            ArtefactResolution.javaDepFromScalaDep(
               dep, JavaScript, scalaJsVersion.get, scalaVersion)
           ).toSet)
         val dependencies = if (test) List(name)
@@ -229,7 +228,7 @@ object Bloop {
         val resolvedDeps =
           Coursier.localArtefacts(resolution,
             (scalaDeps ++ native.scalaDeps).map(dep =>
-              ArtefactResolution.dependencyFromDep(dep, Native,
+              ArtefactResolution.javaDepFromScalaDep(dep, Native,
                 scalaNativeVersion.get, scalaVersion)
             ).toSet)
 
@@ -312,12 +311,10 @@ object Bloop {
         val scalaVersion = BuildConfig.scalaVersion(project,
           List(jvm, parentModule.jvm.getOrElse(Module()), parentModule))
 
-        val javaDeps = jvm.javaDeps.map(dep =>
-          ArtefactResolution.dependencyFromDep(dep, JVM,
-            scalaVersion, scalaVersion, PlatformSuffix.Regular))
+        val javaDeps = jvm.javaDeps
         val scalaDeps = (parentModule.scalaDeps ++ jvm.scalaDeps).map(dep =>
-          ArtefactResolution.dependencyFromDep(dep, JVM,
-            scalaVersion, scalaVersion))
+          ArtefactResolution.javaDepFromScalaDep(dep, JVM, scalaVersion,
+            scalaVersion))
 
         val resolvedDeps = Coursier.localArtefacts(resolution,
           (javaDeps ++ scalaDeps).toSet)

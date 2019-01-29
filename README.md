@@ -357,6 +357,26 @@ scalaDeps = [
 ]
 ```
 
+On `scalaDeps`, you can specify a fourth parameter for the version tag. The version tag is the actual difference between a Java and Scala dependency.
+
+The Scala naming conventions stipulate that a suffix be added to the artefact name. Thus, `scalaj-http` becomes [`scalaj-http_2.12`](http://central.maven.org/maven2/org/scalaj/scalaj-http_2.12/).
+
+The previous example could be rewritten as:
+
+```toml
+scalaDeps = [
+  ["org.scalaj", "scalaj-http", "2.4.1", "platformBinary"]
+]
+```
+
+The default is `platformBinary` which will suit most libraries. However, some libraries target a specific compiler version or share one artefact with all platforms.
+
+The available options are:
+
+* `binary`: Binary Scala version (e.g. 2.12). This behaves like `full` if the Scala version is a pre-release (e.g. `2.12.8-M3`)
+* `full`: Full Scala version (e.g. `2.11.11`)
+* `platformBinary`: Platform name including the binary Scala version (`native0.3_2.11`)
+
 `scalaDeps` only works with Scala artefacts. For all other artefacts, you can use `javaDeps`:
 
 ```toml

@@ -5,7 +5,7 @@ import java.nio.file.Path
 import seed.artefact.{ArtefactResolution, SemanticVersioning}
 import seed.cli.util.{Ansi, ColourScheme}
 import seed.config.BuildConfig
-import seed.model.Platform
+import seed.model.{Artefact, Platform}
 import seed.model.Platform.{JavaScript, Native}
 
 object Update {
@@ -45,7 +45,7 @@ object Update {
 
     val (compilerVersions, platformVersions, libraryArtefacts) = Scaffold.checkVersions(
       build.project.scalaOrganisation, BuildConfig.buildTargets(build),
-      buildArtefacts.mapValues(_.map(_.artefact)), stable)
+      buildArtefacts.mapValues(_.map(Artefact.fromDep)), stable)
 
     println(Ansi.underlined("Compiler report"))
 
@@ -88,20 +88,20 @@ object Update {
       .sortBy(_._1)(Platform.Ordering)
       .zipWithIndex
       .foreach
-    { case ((platform, artefacts), i) =>
+    { case ((platform, deps), i) =>
       val latestArtefacts = libraryArtefacts.getOrElse(platform, Map())
 
       println(ColourScheme.blue1.toFansi(fansi.Bold.On(platform.caption)))
 
-      artefacts.foreach { artefact =>
+      deps.foreach { dep =>
         // TODO fansi does not support italics
         val description =
           fansi.Str("Dependency ") ++
-          fansi.Underlined.On(artefact.artefact.organisation) + ":" +
-          fansi.Underlined.On(artefact.artefact.name)
-        val newVersion = latestArtefacts.get(artefact.artefact).flatten
+          fansi.Underlined.On(dep.organisation) + ":" +
+          fansi.Underlined.On(dep.artefact)
+        val newVersion = latestArtefacts.get(Artefact.fromDep(dep)).flatten
 
-        compareVersion(description, artefact.version, newVersion)
+        compareVersion(description, dep.version, newVersion)
       }
 
       if (i != buildArtefacts.size - 1) println()

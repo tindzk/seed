@@ -9,7 +9,7 @@ import seed.cli.util.Ansi
 import seed.config.BuildConfig
 import seed.generation.Bloop
 import seed.model
-import seed.model.Build.Dep
+import seed.model.Build.JavaDep
 import seed.model.Config
 import seed.model.Platform.JVM
 import seed.{Cli, Log}
@@ -65,9 +65,9 @@ object Package {
               val scalaVersion = BuildConfig.scalaVersion(build.project,
                 List(jvmModule))
               val scalaLibraryDep =
-                Dep(build.project.scalaOrganisation, "scala-library", scalaVersion)
+                JavaDep(build.project.scalaOrganisation, "scala-library", scalaVersion)
               val scalaReflectDep =
-                Dep(build.project.scalaOrganisation, "scala-reflect", scalaVersion)
+                JavaDep(build.project.scalaOrganisation, "scala-reflect", scalaVersion)
               val platformDeps = Set(scalaLibraryDep, scalaReflectDep)
 
               val libraryDeps = ArtefactResolution.allLibraryDeps(build,

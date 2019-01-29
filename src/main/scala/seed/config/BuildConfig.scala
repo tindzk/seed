@@ -3,7 +3,7 @@ package seed.config
 import java.nio.file.{Files, Path, Paths}
 
 import seed.cli.util.{Ansi, ColourScheme}
-import seed.model.Build.{Dep, Module, Project}
+import seed.model.Build.{JavaDep, Module, Project, ScalaDep}
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.model.{Build, Platform}
 import seed.Log
@@ -218,19 +218,19 @@ object BuildConfig {
       buildPath.resolve(targetName(build, name, JVM)) +:
       collectJvmClassPath(buildPath, build, build.module(name)))
 
-  def collectJsDeps(build: Build, module: Module): List[Dep] =
+  def collectJsDeps(build: Build, module: Module): List[ScalaDep] =
     module.scalaDeps ++ module.js.map(_.scalaDeps).getOrElse(List()) ++
     jsModuleDeps(module).flatMap(m => collectJsDeps(build, build.module(m)))
 
-  def collectNativeDeps(build: Build, module: Module): List[Dep] =
+  def collectNativeDeps(build: Build, module: Module): List[ScalaDep] =
     module.scalaDeps ++ module.native.map(_.scalaDeps).getOrElse(List()) ++
     nativeModuleDeps(module).flatMap(m => collectNativeDeps(build, build.module(m)))
 
-  def collectJvmScalaDeps(build: Build, module: Module): List[Dep] =
+  def collectJvmScalaDeps(build: Build, module: Module): List[ScalaDep] =
     module.scalaDeps ++ module.jvm.map(_.scalaDeps).getOrElse(List()) ++
     jvmModuleDeps(module).flatMap(m => collectJvmScalaDeps(build, build.module(m)))
 
-  def collectJvmJavaDeps(build: Build, module: Module): List[Dep] =
+  def collectJvmJavaDeps(build: Build, module: Module): List[JavaDep] =
     module.javaDeps ++ module.jvm.map(_.javaDeps).getOrElse(List()) ++
     jvmModuleDeps(module).flatMap(m => collectJvmJavaDeps(build, build.module(m)))
 

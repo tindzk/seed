@@ -1,9 +1,9 @@
 package seed.artefact
 
-import seed.model.Artefact.PlatformSuffix
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.model.{Artefact, Platform}
 import seed.Log
+import seed.model.Build.VersionTag
 
 import scala.util.Try
 
@@ -90,13 +90,13 @@ object MavenCentral {
   }
 
   def fetchCompilerVersions(artefact: Artefact, stable: Boolean): List[String] = {
-    require(artefact.platformSuffix == PlatformSuffix.Regular)
+    require(artefact.versionTag.isEmpty)
     val url = urlForArtefactMetaData(artefact.organisation, artefact.name)
     parseVersionsXml(requestHttp(url), stable)
   }
 
   def fetchPlatformCompilerVersions(artefact: Artefact, stable: Boolean): List[String] = {
-    require(artefact.platformSuffix == PlatformSuffix.Compiler)
+    require(artefact.versionTag.contains(VersionTag.Full))
     fetchLibraryArtefacts(artefact, stable).map(_._3).distinct
   }
 
@@ -115,13 +115,14 @@ object MavenCentral {
       }
     }
 
-  def formatArtefactName(artefact: Artefact,
+  def formatArtefactName(artefactName: String,
+                         versionTag: VersionTag,
                          platform: Platform,
                          platformVersion: PlatformVersion,
                          compilerVersion: CompilerVersion
                         ): String =
-    artefact.platformSuffix match {
-      case PlatformSuffix.PlatformAndCompiler =>
+    versionTag match {
+      case VersionTag.PlatformBinary =>
         val trimmedCompilerVersion = trimCompilerVersion(compilerVersion)
 
         val version = platform match {
@@ -132,17 +133,15 @@ object MavenCentral {
                              "_" + trimmedCompilerVersion
         }
 
-        artefact.name + "_" + version
+        artefactName + "_" + version
 
-      case PlatformSuffix.Compiler =>
+      case VersionTag.Full =>
         val trimmedCompilerVersion = trimCompilerVendor(compilerVersion)
-        artefact.name + "_" + trimmedCompilerVersion
+        artefactName + "_" + trimmedCompilerVersion
 
-      case PlatformSuffix.CompilerLibrary =>
+      case VersionTag.Binary =>
         val trimmedCompilerVersion = trimCompilerVersion(compilerVersion)
-        artefact.name + "_" + trimmedCompilerVersion
-
-      case PlatformSuffix.Regular => artefact.name
+        artefactName + "_" + trimmedCompilerVersion
     }
 
   def fetchVersions(artefact: Artefact,
@@ -152,7 +151,9 @@ object MavenCentral {
                     stable: Boolean
                    ): List[String] = {
     val artefactName =
-      formatArtefactName(artefact, platform, platformVersion, compilerVersion)
+      artefact.versionTag.fold(artefact.name)(vt =>
+        formatArtefactName(artefact.name, vt, platform, platformVersion,
+          compilerVersion))
     val url = urlForArtefactMetaData(artefact.organisation, artefactName)
 
     parseVersionsXml(requestHttp(url), stable)

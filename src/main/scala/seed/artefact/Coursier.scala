@@ -10,7 +10,7 @@ import coursier.ivy.IvyRepository
 import coursier.util.{Gather, Task}
 import coursier.{Artifact, Cache, CachePath, Dependency, Fetch, MavenRepository, Module, Resolution, TermDisplay}
 import seed.cli.util.Ansi
-import seed.model.Build.{Dep, Resolvers}
+import seed.model.Build.{JavaDep, Resolvers}
 import seed.model.Platform
 import seed.{Log, model}
 
@@ -37,18 +37,18 @@ object Coursier {
       logger = Some(termDisplay)
     }
 
-  def hasDep(resolutionResult: Coursier.ResolutionResult, dep: Dep): Boolean =
+  def hasDep(resolutionResult: Coursier.ResolutionResult, dep: JavaDep): Boolean =
     resolutionResult.resolution.dependencies.exists(d =>
       d.module.organization.value == dep.organisation &&
       d.module.name.value == dep.artefact &&
       d.version == dep.version)
 
-  def coursierDependencies(deps: Set[Dep]): Set[Dependency] =
+  def coursierDependencies(deps: Set[JavaDep]): Set[Dependency] =
     deps.map(r => Dependency(Module(Organization(r.organisation), ModuleName(r.artefact)), r.version))
 
   private val lock = new ReentrantLock()
 
-  def resolve(all: Set[Dep], resolvers: Resolvers, ivyPath: Path, cachePath: Path): Resolution =
+  def resolve(all: Set[JavaDep], resolvers: Resolvers, ivyPath: Path, cachePath: Path): Resolution =
     if (all.isEmpty) Resolution.empty
     else {
       val organisations = all.map(_.organisation).toList.sorted.map(Ansi.italic).mkString(", ")
@@ -113,7 +113,7 @@ object Coursier {
       }
   }
 
-  def resolveAndDownload(deps: Set[Dep],
+  def resolveAndDownload(deps: Set[JavaDep],
                          resolvers: Resolvers,
                          ivyPath: Path,
                          cachePath: Path,
@@ -131,7 +131,7 @@ object Coursier {
   }
 
   def resolveSubset(resolution: Resolution,
-                    deps: Set[Dep],
+                    deps: Set[JavaDep],
                     optionalArtefacts: Boolean): List[(Classifier, Artefact)] = {
     val result =
       resolution
@@ -157,7 +157,7 @@ object Coursier {
 
   /** Resolves requested libraries and their dependencies */
   def localArtefacts(result: ResolutionResult,
-                     all: Set[Dep],
+                     all: Set[JavaDep],
                      optionalArtefacts: Boolean = false
                     ): List[model.Resolution.Artefact] =
     resolveSubset(result.resolution, all, optionalArtefacts)
@@ -184,8 +184,10 @@ object Coursier {
                    platformVersion: MavenCentral.PlatformVersion,
                    compilerVersion: MavenCentral.CompilerVersion,
                    version: String): Option[Path] = {
-    val name = MavenCentral.formatArtefactName(artefact, platform,
-      platformVersion, compilerVersion)
+    val name =
+      artefact.versionTag.fold(artefact.name)(vt =>
+        MavenCentral.formatArtefactName(artefact.name, vt, platform,
+          platformVersion, compilerVersion))
 
     result.resolution.dependencyArtifacts().find { case (dep, attr, art) =>
       dep.module.name.value == name
