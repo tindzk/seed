@@ -160,6 +160,13 @@ object BuildConfig {
       .flatMap(_.scalaVersion)
       .getOrElse(project.scalaVersion)
 
+  def platformVersion(build: Build, module: Module, platform: Platform): String =
+    platform match {
+      case JVM => BuildConfig.scalaVersion(build.project, List(module))
+      case JavaScript => build.project.scalaJsVersion.get
+      case Native => build.project.scalaNativeVersion.get
+    }
+
   def isCrossBuild(module: Module): Boolean = module.targets.toSet.size > 1
 
   def targetName(build: Build, name: String, platform: Platform): String =
@@ -196,6 +203,13 @@ object BuildConfig {
   def collectJvmModuleDeps(build: Build, module: Module): List[String] =
     jvmModuleDeps(module).flatMap(m =>
       List(m) ++ collectJvmModuleDeps(build, build.module(m)))
+
+  def collectModuleDeps(build: Build, module: Module, platform: Platform): List[String] =
+    platform match {
+      case JVM => collectJvmModuleDeps(build, module)
+      case JavaScript => collectJsModuleDeps(build, module)
+      case Native => collectNativeModuleDeps(build, module)
+    }
 
   def collectJsClassPath(buildPath: Path,
                          build: Build,

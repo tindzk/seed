@@ -55,6 +55,7 @@ object Build {
                     resources: List[Path] = List(),
                     scalaDeps: List[ScalaDep] = List(),
                     javaDeps: List[JavaDep] = List(),
+                    compilerDeps: List[ScalaDep] = List(),
                     moduleDeps: List[String] = List(),
                     mainClass: Option[String] = None,
                     targets: List[Platform] = List(),

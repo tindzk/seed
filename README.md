@@ -223,6 +223,7 @@ scalaVersion = ""  # If unset, the project-wide default will be used
 root         = ""  # Module root path for IntelliJ 
 sources      = []  # List of source directories and files
 scalaDeps    = []  # Module-specific Scala dependencies
+compilerDeps = []  # Compiler plug-ins (specified in the same format as scalaDeps)
 moduleDeps   = []  # Module dependencies
 mainClass    = ""  # Optional entry point; needed for running/packaging module
 targets      = []  # Platform targets
@@ -443,6 +444,20 @@ Setting `moduleDeps` to `core`, gives `webapp` and `server` access to its compil
 `moduleDeps` can refer to any modules available in the scope as long as the target platforms match.
 
 `bloop compile webapp` triggers the compilation of `core-js` whereas `bloop compile server` would compile `core-jvm`.
+
+### Compiler plug-ins
+A module can add Scala plug-ins with `compilerDeps`. The setting behaves like `scalaDeps`, but also adds the `-Xplugin` parameter to the Scala compiler when the module is compiled. A minimal example looks as follows:
+
+```toml
+[module.macros.js]
+compilerDeps = [
+  ["org.scalamacros", "paradise", "2.1.1", "full"]
+]
+```
+
+Note that plug-ins are inherited by all dependent modules such that `compilerDeps` only needs to be defined on the base module.
+
+For a complete cross-compiled Macro Paradise example, please refer to [this project](test/example-paradise/).
 
 ### Project dependencies
 External builds can be imported into the scope by using the `import` setting at the root level. It can point to a build file, or its parent directory in which case it will attempt to load `<path>/build.toml`. From the imported file, Seed will only make its modules accessible. Other project-level settings are being ignored. Multiple projects can be imported as `import` is a list.

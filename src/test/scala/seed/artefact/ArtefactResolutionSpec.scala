@@ -52,4 +52,34 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
       JavaDep("io.monix", "minitest_2.12", "2.3.2"),
       JavaDep("net.java.dev.jna", "jna", "4.5.1")))
   }
+
+  test("compilerDeps()") {
+    val build = Build(
+      project = Project("2.12.8", scalaJsVersion = Some("0.6.26")),
+      module = Map())
+    val module = Module(
+      targets = List(JVM, JavaScript),
+      compilerDeps = List(
+        ScalaDep("org.scalamacros", "paradise", "2.1.1", VersionTag.Full)),
+      js = Some(Module(
+        compilerDeps = List(
+          ScalaDep(
+            // TODO Set classifier to "bundle"
+            "com.softwaremill.clippy", "plugin", "0.6.0", VersionTag.Binary)))))
+    val deps = ArtefactResolution.compilerDeps(build, module)
+
+    assertEquals(deps,
+      List(
+        Set(
+          JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
+          JavaDep("org.scala-lang", "scala-library", "2.12.8"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
+          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1")),
+        Set(
+          JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
+          JavaDep("org.scala-lang", "scala-library", "2.12.8"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
+          JavaDep("org.scala-js", "scalajs-compiler_2.12.8", "0.6.26"),
+          JavaDep("com.softwaremill.clippy", "plugin_2.12", "0.6.0"))))
+  }
 }

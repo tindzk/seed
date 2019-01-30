@@ -119,9 +119,21 @@ object Idea {
   }
 
   def createCompilerSettings(build: Build,
+                             compilerResolution: List[Coursier.ResolutionResult],
                              ideaPath: Path,
                              modules: List[String]): Unit = {
-    val xml = IdeaFile.createScalaCompiler(build.project.scalaOptions, modules)
+    // Group all modules by additional settings; create compiler configuration
+    // for each unique set of parameters
+    val modulePlugIns = modules.filter(build.module.contains).map(m =>
+      m -> util.ScalaCompiler.compilerPlugIns(
+        build, build.module(m), compilerResolution, JVM))
+    val compilerSettings =
+      modulePlugIns.groupBy(_._2).mapValues(_.map(_._1)).toList.map {
+        case (settings, modules) =>
+          (build.project.scalaOptions ++ settings, modules)
+      }
+
+    val xml = IdeaFile.createScalaCompiler(compilerSettings)
     FileUtils.write(ideaPath.resolve("scala_compiler.xml").toFile, xml, "UTF-8")
   }
 
@@ -389,7 +401,7 @@ object Idea {
         resolution, name, module)
     }
 
-    createCompilerSettings(build, ideaPath, modules)
+    createCompilerSettings(build, compilerResolution, ideaPath, modules)
     writeModules(projectPath, ideaPath, modulesPath, modules)
 
     Log.info("IDEA project has been created")

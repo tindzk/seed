@@ -41,7 +41,6 @@ object ArtefactResolution {
     val scalaJsVersion = build.project.scalaJsVersion.get
 
     Set(
-      Artefact.ScalaJsCompiler,
       Artefact.ScalaJsLibrary
     ).map(artefact =>
       javaDepFromArtefact(artefact, scalaJsVersion, JavaScript,
@@ -54,7 +53,6 @@ object ArtefactResolution {
     val scalaNativeVersion = build.project.scalaNativeVersion.get
 
     Set(
-      Artefact.ScalaNativePlugin,
       Artefact.ScalaNativeJavalib,
       Artefact.ScalaNativeScalalib,
       Artefact.ScalaNativeNativelib,
@@ -105,24 +103,34 @@ object ArtefactResolution {
     }
 
   def compilerDeps(build: Build, module: Module): List[Set[JavaDep]] = {
-    def f(build: Build, module: Module): Set[JavaDep] = {
+    def f(build: Build, module: Module, platform: Platform): Set[JavaDep] = {
       import build.project.scalaOrganisation
-      val scalaVersion = BuildConfig.scalaVersion(build.project, List(module))
+      val platformVer = BuildConfig.platformVersion(build, module, platform)
+      val compilerVer = BuildConfig.scalaVersion(build.project, List(module))
 
-      Set(
-        Artefact.scalaCompiler(scalaOrganisation),
-        Artefact.scalaLibrary(scalaOrganisation),
-        Artefact.scalaReflect(scalaOrganisation)
-      ).map(artefact =>
-        javaDepFromArtefact(artefact, scalaVersion, JVM, scalaVersion,
-          scalaVersion))
+      val scalaDeps = Set(
+        Artefact.scalaCompiler(scalaOrganisation) -> compilerVer,
+        Artefact.scalaLibrary(scalaOrganisation) -> compilerVer,
+        Artefact.scalaReflect(scalaOrganisation) -> compilerVer
+      ) ++ (
+        if (platform == Platform.Native)
+          Set(Artefact.ScalaNativePlugin -> platformVer)
+        else if (platform == Platform.JavaScript)
+          Set(Artefact.ScalaJsCompiler -> platformVer)
+        else Set()
+      )
+
+      scalaDeps.map { case (artefact, version) =>
+        javaDepFromArtefact(artefact, version, platform, platformVer,
+          compilerVer)
+      } ++ module.compilerDeps.map(dep =>
+        javaDepFromScalaDep(dep, platform, platformVer, compilerVer))
     }
 
-    List(
-      f(build, module),
-      module.jvm.toSet.flatMap(module => f(build, module)),
-      module.js.toSet.flatMap(module => f(build, module)),
-      module.native.toSet.flatMap(module => f(build, module))
+    module.targets.map(target =>
+      f(build,
+        BuildConfig.platformModule(module, target).getOrElse(module),
+        target)
     ).filter(_.nonEmpty)
   }
 
