@@ -20,7 +20,8 @@ object SeedConfig {
     implicit val pCodec = pathCodec(identity)
 
     def parse(path: Path) =
-      TomlUtils.parseFile(path, Toml.parseAs[Config](_), "Seed configuration")
+      TomlUtils.parseFile(path, Toml.parseAs[Config](_), "Seed configuration", Log)
+        .getOrElse(sys.exit(1))
 
     userConfigPath match {
       case None =>

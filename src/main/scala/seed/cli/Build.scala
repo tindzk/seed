@@ -2,7 +2,7 @@ package seed.cli
 
 import java.nio.file.Path
 
-import seed.model
+import seed.{Log, model}
 import seed.Cli.Command
 import seed.generation.{Bloop, Idea}
 import seed.artefact.ArtefactResolution
@@ -14,9 +14,9 @@ object Build {
          build: model.Build,
          command: Command.Build
         ): Unit = {
-    build.module.toList.foreach { case (name, module) =>
-      BuildConfig.checkModule(build, name, module)
-    }
+    if (!build.module.toList.forall { case (name, module) =>
+      BuildConfig.checkModule(build, name, module, Log)
+    }) sys.exit(1)
 
     val compilerDeps = ArtefactResolution.allCompilerDeps(build)
     val platformDeps = ArtefactResolution.allPlatformDeps(build)

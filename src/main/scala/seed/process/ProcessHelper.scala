@@ -1,11 +1,11 @@
-package seed.generation.util
+package seed.process
 
 import java.nio.ByteBuffer
 import java.nio.file.Path
-import java.util.concurrent.{Executors, TimeUnit}
 
 import com.zaxxer.nuprocess.{NuAbstractProcessHandler, NuProcess, NuProcessBuilder}
 import seed.Log
+import seed.cli.util.{Ansi, BloopCli}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{Future, Promise}
@@ -47,49 +47,47 @@ class ProcessHandler(onLog: ProcessOutput => Unit,
 }
 
 object ProcessHelper {
-  val scheduler = Executors.newScheduledThreadPool(1)
-  def schedule(seconds: Int)(f: => Unit): Unit =
-    scheduler.schedule({ () => f }: Runnable, seconds, TimeUnit.SECONDS)
+  /**
+    * @param nuProcess   Underlying NuProcess instance
+    * @param termination Future that terminates with status code
+    */
+  class Process(private val nuProcess: NuProcess,
+                val termination: Future[Int]) {
+    private var _killed = false
 
-  def runBloop(cwd: Path, silent: Boolean = false)
-              (args: String*): Future[String] = {
-    val promise = Promise[String]()
-    val sb = new StringBuilder
-    val pb = new NuProcessBuilder((List("bloop") ++ args).asJava)
+    def isRunning: Boolean = nuProcess.isRunning
+    def killed: Boolean = _killed
+    def kill(): Unit = {
+      nuProcess.destroy(true)
+      _killed = true
+    }
+  }
 
-    var terminated = false
+  def runBloop(cwd: Path,
+               silent: Boolean = false,
+               onStdOut: String => Unit
+              )(args: String*): Process = {
+    val cmd = List("bloop") ++ args
+    Log.info(s"Running ${Ansi.italic(cmd.mkString(" "))} in ${Ansi.italic(cwd.toString)}...")
 
+    val termination = Promise[Int]()
+
+    val pb = new NuProcessBuilder(cmd.asJava)
     pb.setProcessListener(new ProcessHandler(
       { case ProcessOutput.StdOut(output) =>
-          if (!silent) Log.info("stdout: " + output)
-          sb.append(output + "\n")
-        case ProcessOutput.StdErr(output) =>
-          if (!silent) Log.error("stderr: " + output)
-          sb.append(output + "\n")
+        if (!silent) System.out.println(output)
+        if (!BloopCli.skipOutput(output)) onStdOut(output)
+      case ProcessOutput.StdErr(output) =>
+        if (!silent) System.err.println(output)
+        if (!BloopCli.skipOutput(output)) onStdOut(output)
       },
       pid => if (!silent) Log.info("PID: " + pid) else (),
       { statusCode =>
         if (!silent) Log.info("Status code: " + statusCode)
-        if (terminated || statusCode == 0) promise.success(sb.toString)
-        else promise.failure(new Exception("Status code: " + statusCode))
+        termination.success(statusCode)
       }
     ))
-    pb.setCwd(cwd)
-    val proc = pb.start()
-
-    // Work around a CI problem where onExit() does not get called on
-    // ProcessHandler
-    schedule(60) {
-      if (!promise.isCompleted) {
-        Log.error(s"Process did not terminate after 60s (isRunning = ${proc.isRunning})")
-        if (proc.isRunning) {
-          Log.error("Forcing termination...")
-          terminated = true
-          proc.destroy(true)
-        }
-      }
-    }
-
-    promise.future
+    if (cwd.toString != "") pb.setCwd(cwd)
+    new Process(pb.start(), termination.future)
   }
 }

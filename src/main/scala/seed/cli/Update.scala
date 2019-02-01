@@ -2,6 +2,7 @@ package seed.cli
 
 import java.nio.file.Path
 
+import seed.Log
 import seed.artefact.{ArtefactResolution, SemanticVersioning}
 import seed.cli.util.{Ansi, ColourScheme}
 import seed.config.BuildConfig
@@ -39,7 +40,8 @@ object Update {
     }
 
   def ui(path: Path, stable: Boolean): Unit = {
-    val (projectPath, build) = BuildConfig.load(path)
+    val (projectPath, build) = BuildConfig.load(path, Log)
+      .getOrElse(sys.exit(1))
 
     val buildArtefacts = ArtefactResolution.allLibraryArtefacts(build)
 

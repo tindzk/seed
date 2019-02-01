@@ -6,6 +6,7 @@ import minitest.SimpleTestSuite
 import java.nio.file.Paths
 
 import org.apache.commons.io.FileUtils
+import seed.Log
 import seed.config.util.TomlUtils
 import seed.model.Build
 import seed.model.Build.{Project, ScalaDep, VersionTag}
@@ -22,7 +23,7 @@ object BuildConfigSpec extends SimpleTestSuite {
         |sources = ["src"]
       """.stripMargin, "UTF-8")
 
-    val (projectPath, _) = BuildConfig.load(Paths.get("/tmp/a.toml"))
+    val (projectPath, _) = BuildConfig.load(Paths.get("/tmp/a.toml"), Log).get
     assertEquals(projectPath, Paths.get("/tmp"))
   }
 
@@ -36,7 +37,7 @@ object BuildConfigSpec extends SimpleTestSuite {
         |sources = ["src"]
       """.stripMargin, "UTF-8")
 
-    val (projectPath, _) = BuildConfig.load(Paths.get("test/a.toml"))
+    val (projectPath, _) = BuildConfig.load(Paths.get("test/a.toml"), Log).get
     assertEquals(projectPath, Paths.get("test"))
   }
 
@@ -65,7 +66,7 @@ object BuildConfigSpec extends SimpleTestSuite {
 
     val buildRaw = TomlUtils.parseBuildToml(Paths.get("."))(toml)
     val build = BuildConfig.processBuild(buildRaw.right.get, _ =>
-      Build(project = Project(scalaVersion = "2.12.8"), module = Map()))
+      Some(Build(project = Project(scalaVersion = "2.12.8"), module = Map())))
 
     assertEquals(
       build.module("example").test.get.targets,
@@ -86,7 +87,7 @@ object BuildConfigSpec extends SimpleTestSuite {
 
     val buildRaw = TomlUtils.parseBuildToml(Paths.get("."))(toml)
     val build = BuildConfig.processBuild(buildRaw.right.get, _ =>
-      Build(project = Project(scalaVersion = "2.12.8"), module = Map()))
+      Some(Build(project = Project(scalaVersion = "2.12.8"), module = Map())))
 
     assertEquals(
       build.module("example").jvm.get.scalaDeps,

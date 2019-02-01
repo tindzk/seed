@@ -9,6 +9,8 @@ import seed.model.Build.VersionTag
 import seed.model.{Build, Platform}
 import toml.{Codec, Value}
 
+import scala.util.Try
+
 object TomlUtils {
   object Codecs {
     implicit val platformCodec: Codec[Platform] = Codec {
@@ -41,28 +43,28 @@ object TomlUtils {
     }
   }
 
-  def parseFile[T](path: Path, f: String => Either[Codec.Error, T], description: String): T = {
-    val content = try FileUtils.readFileToString(path.toFile, "UTF-8") catch {
-      case _: Throwable =>
-        Log.error(s"The $description ${Ansi.italic(path.toString)} could not be loaded")
-        sys.exit(1)
-    }
+  def parseFile[T](path: Path, f: String => Either[Codec.Error, T], description: String, log: Log): Option[T] =
+    Try(FileUtils.readFileToString(path.toFile, "UTF-8")).toOption match {
+      case None =>
+        log.error(s"The $description ${Ansi.italic(path.toString)} could not be loaded")
+        None
 
-    f(content) match {
-      case Left((address, message)) =>
-        Log.error(s"The $description ${Ansi.italic(path.toString)} is malformed")
-        Log.error(s"${Ansi.bold("Message:")} $message")
+      case Some(content) =>
+        f(content) match {
+          case Left((address, message)) =>
+            log.error(s"The $description ${Ansi.italic(path.toString)} is malformed")
+            log.error(s"${Ansi.bold("Message:")} $message")
 
-        if (address.nonEmpty) {
-          val trace = address.map(Ansi.italic).mkString(" → ")
-          Log.error(s"${Ansi.bold("Trace:")} $trace")
+            if (address.nonEmpty) {
+              val trace = address.map(Ansi.italic).mkString(" → ")
+              log.error(s"${Ansi.bold("Trace:")} $trace")
+            }
+
+            None
+
+          case Right(c) => Some(c)
         }
-
-        sys.exit(1)
-
-      case Right(c) => c
     }
-  }
 
   def fixPath(projectPath: Path, path: Path): Path =
     if (path.toString.startsWith("/")) path
