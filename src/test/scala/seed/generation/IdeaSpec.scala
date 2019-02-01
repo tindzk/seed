@@ -45,10 +45,10 @@ object IdeaSpec extends SimpleTestSuite {
     val projectPath = Paths.get(".")
     val outputPath = Paths.get("/tmp")
     val packageConfig = PackageConfig(false, false, None, None)
-    val compilerDeps = ArtefactResolution.allCompilerDeps(build)
+    val compilerDeps0 = ArtefactResolution.allCompilerDeps(build)
     val (_, platformResolution, compilerResolution) =
       ArtefactResolution.resolution(seed.model.Config(), build, packageConfig,
-        optionalArtefacts = false, Set(), compilerDeps)
+        optionalArtefacts = false, Set(), compilerDeps0)
 
     Idea.build(projectPath, outputPath, build, platformResolution,
       compilerResolution, false)

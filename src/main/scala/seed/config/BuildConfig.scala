@@ -10,9 +10,7 @@ import seed.Log
 import seed.config.util.TomlUtils
 
 object BuildConfig {
-  def fixPath(projectPath: Path, path: Path): Path =
-    if (path.toString.startsWith("/")) path
-    else projectPath.resolve(path).normalize()
+  import TomlUtils.parseBuildToml
 
   def load(path: Path): (Path, Build) = {
     if (!Files.exists(path)) {
@@ -39,7 +37,7 @@ object BuildConfig {
     }
 
     val parsed = TomlUtils.parseFile(
-      projectFile, parseToml(projectPath), "build file")
+      projectFile, parseBuildToml(projectPath), "build file")
 
     (projectPath.normalize(), processBuild(parsed, { path =>
       val (_, build) = load(path)
@@ -49,16 +47,6 @@ object BuildConfig {
 
       build
     }))
-  }
-
-  def parseToml(projectPath: Path)(content: String) = {
-    import toml._
-    import toml.Codecs._
-    import seed.config.util.TomlUtils.Codecs._
-
-    implicit val pCodec = pathCodec(fixPath(projectPath, _))
-
-    Toml.parseAs[Build](content)
   }
 
   def processBuild(build: Build, parse: Path => Build): Build = {
@@ -160,6 +148,13 @@ object BuildConfig {
       .flatMap(_.scalaVersion)
       .getOrElse(project.scalaVersion)
 
+  def platformVersion(build: Build, module: Module, platform: Platform): String =
+    platform match {
+      case JVM => BuildConfig.scalaVersion(build.project, List(module))
+      case JavaScript => build.project.scalaJsVersion.get
+      case Native => build.project.scalaNativeVersion.get
+    }
+
   def isCrossBuild(module: Module): Boolean = module.targets.toSet.size > 1
 
   def targetName(build: Build, name: String, platform: Platform): String =
@@ -196,6 +191,13 @@ object BuildConfig {
   def collectJvmModuleDeps(build: Build, module: Module): List[String] =
     jvmModuleDeps(module).flatMap(m =>
       List(m) ++ collectJvmModuleDeps(build, build.module(m)))
+
+  def collectModuleDeps(build: Build, module: Module, platform: Platform): List[String] =
+    platform match {
+      case JVM => collectJvmModuleDeps(build, module)
+      case JavaScript => collectJsModuleDeps(build, module)
+      case Native => collectNativeModuleDeps(build, module)
+    }
 
   def collectJsClassPath(buildPath: Path,
                          build: Build,

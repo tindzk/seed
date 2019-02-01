@@ -1,12 +1,15 @@
 package seed.generation
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import minitest.SimpleTestSuite
 import org.apache.commons.io.FileUtils
+import seed.cli
+import seed.Cli.{Command, PackageConfig}
 import seed.artefact.{ArtefactResolution, Coursier}
+import seed.config.BuildConfig
 import seed.generation.util.ProcessHelper
-import seed.model.{Build, Platform}
+import seed.model.{Build, Config, Platform}
 
 import scala.concurrent.ExecutionContext.Implicits._
 
@@ -32,7 +35,7 @@ object BloopIntegrationSpec extends SimpleTestSuite {
     val resolvedIvyPath = Coursier.DefaultIvyPath
     val resolvedCachePath = Coursier.DefaultCachePath
 
-    val compilerDeps = ArtefactResolution.allCompilerDeps(build)
+    val compilerDeps0 = ArtefactResolution.allCompilerDeps(build)
     val platformDeps = ArtefactResolution.allPlatformDeps(build)
     val libraryDeps  = ArtefactResolution.allLibraryDeps(build)
 
@@ -40,7 +43,7 @@ object BloopIntegrationSpec extends SimpleTestSuite {
       Coursier.resolveAndDownload(platformDeps ++ libraryDeps, build.resolvers,
         resolvedIvyPath, resolvedCachePath, false)
     val compilerResolution =
-      compilerDeps.map(d =>
+      compilerDeps0.map(d =>
         Coursier.resolveAndDownload(d, build.resolvers, resolvedIvyPath,
           resolvedCachePath, false))
 
@@ -58,6 +61,10 @@ object BloopIntegrationSpec extends SimpleTestSuite {
       """object Main extends App { println("hello") }""",
       "UTF-8")
 
+    compileAndRun(projectPath)
+  }
+
+  def compileAndRun(projectPath: Path) = {
     def compile =
       ProcessHelper.runBloop(projectPath)("compile", "example").map { x =>
         assertEquals(x.contains("Compiled example-jvm"), true)
@@ -71,5 +78,16 @@ object BloopIntegrationSpec extends SimpleTestSuite {
         }
 
     for { _ <- compile; _ <- run } yield ()
+  }
+
+  testAsync("Build project with compiler plug-in") {
+    val (projectPath, build) = BuildConfig.load(
+      Paths.get("test/example-paradise"))
+    val buildPath = projectPath.resolve("build")
+    if (Files.exists(buildPath)) FileUtils.deleteDirectory(buildPath.toFile)
+    val packageConfig = PackageConfig(tmpfs = false, silent = false,
+      ivyPath = None, cachePath = None)
+    cli.Build.ui(Config(), projectPath, build, Command.Bloop(packageConfig))
+    compileAndRun(projectPath)
   }
 }

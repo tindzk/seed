@@ -1,0 +1,21 @@
+[project]
+scalaVersion   = "2.11.12"
+scalaJsVersion = "0.6.26"
+scalaOptions   = ["-encoding", "UTF-8", "-unchecked", "-deprecation", "-Xfuture"]
+
+# In order for macros to work, they need to be defined in a separate compilation
+# unit.
+[module.macros]
+root    = "macros"
+sources = ["macros"]
+targets = ["jvm", "js"]
+compilerDeps = [
+  ["org.scalamacros", "paradise", "2.1.1", "full"]
+]
+
+# This module will inherit the Macro Paradise dependency from `macros`.
+[module.example]
+root       = "example"
+sources    = ["example"]
+targets    = ["jvm", "js"]
+moduleDeps = ["macros"]

@@ -6,7 +6,7 @@ import org.apache.commons.io.FileUtils
 import seed.Log
 import seed.cli.util.Ansi
 import seed.model.Build.VersionTag
-import seed.model.Platform
+import seed.model.{Build, Platform}
 import toml.{Codec, Value}
 
 object TomlUtils {
@@ -62,5 +62,19 @@ object TomlUtils {
 
       case Right(c) => c
     }
+  }
+
+  def fixPath(projectPath: Path, path: Path): Path =
+    if (path.toString.startsWith("/")) path
+    else projectPath.resolve(path).normalize()
+
+  def parseBuildToml(projectPath: Path)(content: String): Either[Codec.Error, Build] = {
+    import toml._
+    import toml.Codecs._
+    import seed.config.util.TomlUtils.Codecs._
+
+    implicit val pCodec = pathCodec(fixPath(projectPath, _))
+
+    Toml.parseAs[Build](content)
   }
 }
