@@ -6,6 +6,7 @@ import minitest.SimpleTestSuite
 import java.nio.file.Paths
 
 import org.apache.commons.io.FileUtils
+import seed.config.util.TomlUtils
 import seed.model.Build
 import seed.model.Build.{Project, ScalaDep, VersionTag}
 import seed.model.Platform.{JVM, JavaScript}
@@ -62,7 +63,7 @@ object BuildConfigSpec extends SimpleTestSuite {
       |sources = ["js/test"]
     """.stripMargin
 
-    val buildRaw = BuildConfig.parseToml(Paths.get("."))(toml)
+    val buildRaw = TomlUtils.parseBuildToml(Paths.get("."))(toml)
     val build = BuildConfig.processBuild(buildRaw.right.get, _ =>
       Build(project = Project(scalaVersion = "2.12.8"), module = Map()))
 
@@ -83,7 +84,7 @@ object BuildConfigSpec extends SimpleTestSuite {
       |]
     """.stripMargin
 
-    val buildRaw = BuildConfig.parseToml(Paths.get("."))(toml)
+    val buildRaw = TomlUtils.parseBuildToml(Paths.get("."))(toml)
     val build = BuildConfig.processBuild(buildRaw.right.get, _ =>
       Build(project = Project(scalaVersion = "2.12.8"), module = Map()))
 

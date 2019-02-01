@@ -10,9 +10,7 @@ import seed.Log
 import seed.config.util.TomlUtils
 
 object BuildConfig {
-  def fixPath(projectPath: Path, path: Path): Path =
-    if (path.toString.startsWith("/")) path
-    else projectPath.resolve(path).normalize()
+  import TomlUtils.parseBuildToml
 
   def load(path: Path): (Path, Build) = {
     if (!Files.exists(path)) {
@@ -39,7 +37,7 @@ object BuildConfig {
     }
 
     val parsed = TomlUtils.parseFile(
-      projectFile, parseToml(projectPath), "build file")
+      projectFile, parseBuildToml(projectPath), "build file")
 
     (projectPath.normalize(), processBuild(parsed, { path =>
       val (_, build) = load(path)
@@ -49,16 +47,6 @@ object BuildConfig {
 
       build
     }))
-  }
-
-  def parseToml(projectPath: Path)(content: String) = {
-    import toml._
-    import toml.Codecs._
-    import seed.config.util.TomlUtils.Codecs._
-
-    implicit val pCodec = pathCodec(fixPath(projectPath, _))
-
-    Toml.parseAs[Build](content)
   }
 
   def processBuild(build: Build, parse: Path => Build): Build = {
