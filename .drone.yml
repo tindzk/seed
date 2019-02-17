@@ -7,9 +7,9 @@ steps:
     commands:
       - apk add --no-cache git
       - git fetch --tags
-      - git describe
-      - git describe > SEED
-      - echo -n $(git describe),latest > .tags
+      - git describe --tags
+      - git describe --tags > SEED
+      - echo -n $(git describe --tags),latest > .tags
   - name: test
     image: alpine:3.8
     commands:

@@ -8,7 +8,7 @@ def parseVersion(file: Path): Option[String] =
     .find(_.nonEmpty).map(_.trim)
 
 def seedVersion = parseVersion(Paths.get("SEED"))  // CI
-  .getOrElse(Seq("git", "describe").!!.trim)  // Local development
+  .getOrElse(Seq("git", "describe", "--tags").!!.trim)  // Local development
 def bloopVersion = parseVersion(Paths.get("BLOOP")).get
 def bloopCoursierVersion = parseVersion(Paths.get("COURSIER")).get
 
