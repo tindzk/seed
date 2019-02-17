@@ -36,8 +36,6 @@ steps:
         - BINTRAY_USERNAME
         - BINTRAY_API
     when:
-      branch:
-        - master
       event:
         include:
           - push
