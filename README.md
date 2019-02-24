@@ -148,7 +148,11 @@ This compiles the module to `build/` and runs it.
 * Project creation wizard
 * Packaging support
     * Copy over dependencies
-- Check for dependency updates
+* Server mode
+    * Expose a WebSocket server
+    * Clients can trigger linking of JavaScript/native modules
+    * Clients can subscribe to build events
+* Check for dependency updates
     * Choose library versions separately for each platform to avoid incompatibilities
 * Simple design
     * No distinction between managed/unmanaged/generated sources
@@ -599,7 +603,7 @@ Finally, this project can be embedded using the `include` setting in Seed.
 
 This approach is easier to manage in CI setups as Git modules track a specific commit, whereby the builds are reproducible. Git modules also work with transitive dependencies (`--recursive`).
 
-## Bloop
+## Usage
 Seed delegates the compilation phase to an external tool. Bloop is an intuitive build server that runs on the same machine as a background service. Its architectural design allows for shorter compilation cycles and lower overall memory consumption when working on multiple projects at the same time.
 
 After having run `seed bloop`, the following Bloop commands can be used:
@@ -612,6 +616,54 @@ bloop test <module>         # Run test cases
 ```
 
 For more detailed information, please refer to the official [Bloop user guide](https://scalacenter.github.io/bloop/).
+
+Also, run `seed --help` to acquaint yourself with all the available commands.
+
+### Linking
+After having created the Bloop project, you can link directly from Seed:
+
+* `seed link <module>`  This will link all platform modules
+* `seed link <module>:js`  This will link only the JavaScript module
+* `seed link --connect <module>`  Trigger linking on remote Seed instance
+
+### Server mode
+You can run Seed in server mode. By default, it will listen to JSON commands on the WebSocket server `localhost:8275`. It supports several commands:
+
+- Linking modules
+- Publishing build status events
+
+You could use the server as a message bus. You can trigger a link from the IDE or the command line. At the same time, there can be multiple event listeners subscribing to build status events. This is useful if you develop a Scala.js application and want to reload the website in the browser after each build.
+
+This can be achieved in three steps:
+
+1. Run `seed server` in the background
+2. If you use IntelliJ, configure "Run/Debug Configuration":
+  - Create template from "Bash"
+    - Script: `/home/user/bin/seed`
+    - Interpreter path: `/bin/sh`
+    - Program arguments: `link --connect <module>`
+    - Working directory: `<project path>`
+3. In your Scala.js application, run this code upon start-up:
+
+```scala
+/** Subscribe to build notifications. Whenever any module was linked, evaluate
+  * `onLinked`.
+  */
+def watch(onLinked: => Unit): Unit = {
+  val client = new WebSocket("ws://localhost:8275")
+  client.onopen = _ =>
+    client.send(JSON.stringify(new js.Object { val command = "buildEvents" }))
+  client.onmessage = message => {
+    val event =
+      JSON.parse(message.data.asInstanceOf[String]).event.asInstanceOf[String]
+    if (event == "linked") onLinked
+  }
+}
+
+watch(dom.window.location.reload())
+```
+
+Press Shift-F10 in IntelliJ to trigger the build. Bloop's output is forwarded and shown in the same window. Once the linking is done, the page in the browser will reload.
 
 ## IntelliJ IDEA
 Seed has the ability to generate IDEA configurations. It copes better with cross-platform projects than IDEA's sbt support. It has the additional benefit of being faster and having a lower memory consumption since no sbt instance needs to be spawned.

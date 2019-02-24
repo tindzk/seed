@@ -12,44 +12,45 @@ import seed.config.util.TomlUtils
 object BuildConfig {
   import TomlUtils.parseBuildToml
 
-  def load(path: Path): (Path, Build) = {
+  def load(path: Path, log: Log): Option[(Path, Build)] = {
     if (!Files.exists(path)) {
-      Log.error(s"Invalid path to build file provided: ${Ansi.italic(path.toString)}")
-      sys.exit(1)
+      log.error(s"Invalid path to build file provided: ${Ansi.italic(path.toString)}")
+      None
+    } else {
+      def parentOf(path: Path): Path = {
+        val p = path.getParent
+        if (p != null) p else path.toAbsolutePath.getParent
+      }
+
+      val (projectPath, projectFile) =
+        if (Files.isRegularFile(path)) (parentOf(path), path)
+        else (path, path.resolve("build.toml"))
+
+      log.info(s"Loading project ${Ansi.italic(projectFile.toString)}...")
+
+      if (!Files.exists(projectFile)) {
+        log.error(s"The file ${Ansi.italic(projectFile.toString)} could not be found")
+        log.error("You can create a new build file using:")
+        log.error(Ansi.foreground(ColourScheme.green2)("$ seed init"))
+        None
+      } else {
+        TomlUtils.parseFile(
+          projectFile, parseBuildToml(projectPath), "build file", log
+        ).map { parsed =>
+          (projectPath.normalize(), processBuild(parsed, { path =>
+            load(path, log).map { case (_, build) =>
+              parsed.module.keySet.intersect(build.module.keySet).foreach(name =>
+                log.error(s"Module name ${Ansi.italic(name)} is not unique"))
+
+              build
+            }
+          }))
+        }
+      }
     }
-
-    def parentOf(path: Path): Path = {
-      val p = path.getParent
-      if (p != null) p else path.toAbsolutePath.getParent
-    }
-
-    val (projectPath, projectFile) =
-      if (Files.isRegularFile(path)) (parentOf(path), path)
-      else (path, path.resolve("build.toml"))
-
-    Log.info(s"Loading project ${Ansi.italic(projectFile.toString)}...")
-
-    if (!Files.exists(projectFile)) {
-      Log.error(s"The file ${Ansi.italic(projectFile.toString)} could not be found")
-      Log.error("You can create a new build file using:")
-      Log.error(Ansi.foreground(ColourScheme.green2)("$ seed init"))
-      sys.exit(1)
-    }
-
-    val parsed = TomlUtils.parseFile(
-      projectFile, parseBuildToml(projectPath), "build file")
-
-    (projectPath.normalize(), processBuild(parsed, { path =>
-      val (_, build) = load(path)
-
-      parsed.module.keySet.intersect(build.module.keySet).foreach(name =>
-        Log.error(s"Module name ${Ansi.italic(name)} is not unique"))
-
-      build
-    }))
   }
 
-  def processBuild(build: Build, parse: Path => Build): Build = {
+  def processBuild(build: Build, parse: Path => Option[Build]): Build = {
     val parsed = build match { case p =>
       p.copy(module = p.module.mapValues { module =>
         val parentTargets = moduleTargets(module, module.targets)
@@ -65,7 +66,7 @@ object BuildConfig {
       })
     }
 
-    val imported = parsed.`import`.map(parse(_))
+    val imported = parsed.`import`.flatMap(parse(_))
 
     parsed.copy(
       project = parsed.project.copy(testFrameworks =
@@ -96,10 +97,10 @@ object BuildConfig {
   def buildTargets(build: Build): Set[Platform] =
     build.module.flatMap { case (_, module) => module.targets }.toSet
 
-  def checkModule(build: Build, name: String, module: Build.Module): Unit = {
-    def error(message: String): Unit = {
-      Log.error(message)
-      sys.exit(1)
+  def checkModule(build: Build, name: String, module: Build.Module, log: Log): Boolean = {
+    def error(message: String): Boolean = {
+      log.error(message)
+      false
     }
 
     val invalidModuleDeps =
@@ -141,6 +142,7 @@ object BuildConfig {
       error(s"`root` cannot be set on native test module $moduleName")
     else if (invalidModuleDeps.nonEmpty)
       error(s"Module dependencies of $moduleName not found in scope: ${invalidModuleDeps.mkString(", ")}")
+    else true
   }
 
   def scalaVersion(project: Project, stack: List[Module]): String =
@@ -159,6 +161,12 @@ object BuildConfig {
 
   def targetName(build: Build, name: String, platform: Platform): String =
     if (!isCrossBuild(build.module(name))) name else name + "-" + platform.id
+
+  def linkTargets(build: Build, module: String): List[String] = {
+    val m = build.module(module)
+    val p = m.targets.diff(List(JVM))
+    p.map(p => BuildConfig.targetName(build, module, p))
+  }
 
   def platformModule(build: Build, name: String, platform: Platform): Option[Module] =
     if (platform == JavaScript) build.module(name).js
