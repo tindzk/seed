@@ -2,18 +2,25 @@ package seed.build
 
 import java.nio.file.Paths
 
-import minitest.SimpleTestSuite
+import scala.concurrent.Future
+import scala.collection.mutable.ListBuffer
+
+import minitest.TestSuite
+
 import seed.Log
 import seed.cli.util.BloopCli
 import seed.generation.util.{ProjectGeneration, TestProcessHelper}
 import seed.model.{BuildEvent, Platform}
+import seed.generation.util.TestProcessHelper.ec
 
-import scala.collection.mutable.ListBuffer
-import scala.concurrent.ExecutionContext.Implicits._
-import scala.concurrent.{Future, Promise}
+object LinkSpec extends TestSuite[Unit] {
+  override def setupSuite(): Unit = TestProcessHelper.semaphore.acquire()
+  override def tearDownSuite(): Unit = TestProcessHelper.semaphore.release()
 
-object LinkSpec extends SimpleTestSuite {
-  testAsync("Link module and interpret Bloop events") {
+  override def setup(): Unit = ()
+  override def tearDown(env: Unit): Unit = ()
+
+  testAsync("Link module and interpret Bloop events") { _ =>
     val projectPath = Paths.get("test/module-link")
     val build = ProjectGeneration.generateBloopProject(projectPath)
 

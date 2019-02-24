@@ -2,18 +2,23 @@ package seed.generation
 
 import java.nio.file.{Files, Path, Paths}
 
-import minitest.SimpleTestSuite
+import minitest.TestSuite
 import org.apache.commons.io.FileUtils
 import seed.{Log, cli}
 import seed.Cli.{Command, PackageConfig}
 import seed.config.BuildConfig
 import seed.generation.util.TestProcessHelper
+import seed.generation.util.TestProcessHelper.ec
 import seed.model.Config
 
-import scala.concurrent.ExecutionContext.Implicits._
+object BloopIntegrationSpec extends TestSuite[Unit] {
+  override def setupSuite(): Unit = TestProcessHelper.semaphore.acquire()
+  override def tearDownSuite(): Unit = TestProcessHelper.semaphore.release()
 
-object BloopIntegrationSpec extends SimpleTestSuite {
-  testAsync("Generate and compile meta modules") {
+  override def setup(): Unit = ()
+  override def tearDown(env: Unit): Unit = ()
+
+  testAsync("Generate and compile meta modules") { _ =>
     val projectPath = Paths.get("test/meta-module")
     util.ProjectGeneration.generateBloopProject(projectPath)
     compileAndRun(projectPath)
@@ -35,7 +40,7 @@ object BloopIntegrationSpec extends SimpleTestSuite {
     for { _ <- compile; _ <- run } yield ()
   }
 
-  testAsync("Build project with compiler plug-in") {
+  testAsync("Build project with compiler plug-in") { _ =>
     val (projectPath, build) = BuildConfig.load(
       Paths.get("test/example-paradise"), Log).get
     val buildPath = projectPath.resolve("build")

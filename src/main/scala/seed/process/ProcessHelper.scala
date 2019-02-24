@@ -4,11 +4,12 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 
 import com.zaxxer.nuprocess.{NuAbstractProcessHandler, NuProcess, NuProcessBuilder}
-import seed.Log
-import seed.cli.util.{Ansi, BloopCli}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{Future, Promise}
+
+import seed.Log
+import seed.cli.util.{Ansi, BloopCli}
 
 sealed trait ProcessOutput
 object ProcessOutput {
@@ -64,7 +65,6 @@ object ProcessHelper {
   }
 
   def runBloop(cwd: Path,
-               silent: Boolean = false,
                onStdOut: String => Unit
               )(args: String*): Process = {
     val cmd = List("bloop") ++ args
@@ -75,18 +75,15 @@ object ProcessHelper {
     val pb = new NuProcessBuilder(cmd.asJava)
     pb.setProcessListener(new ProcessHandler(
       { case ProcessOutput.StdOut(output) =>
-        if (!silent) System.out.println(output)
         if (!BloopCli.skipOutput(output)) onStdOut(output)
       case ProcessOutput.StdErr(output) =>
-        if (!silent) System.err.println(output)
         if (!BloopCli.skipOutput(output)) onStdOut(output)
       },
-      pid => if (!silent) Log.info("PID: " + pid) else (),
-      { statusCode =>
-        if (!silent) Log.info("Status code: " + statusCode)
-        termination.success(statusCode)
-      }
-    ))
+      pid => Log.info("PID: " + pid),
+      { code =>
+        Log.info("Process exited with code: " + code)
+        termination.success(code)
+      }))
     if (cwd.toString != "") pb.setCwd(cwd)
     new Process(pb.start(), termination.future)
   }

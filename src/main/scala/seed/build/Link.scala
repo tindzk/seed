@@ -24,7 +24,7 @@ object Link {
     if (moduleNames.isEmpty) None
     else {
       val args = "link" +: ((if (!watch) List() else List("--watch")) ++ moduleNames)
-      Some(ProcessHelper.runBloop(projectPath, silent = true, onStdOut)(args: _*))
+      Some(ProcessHelper.runBloop(projectPath, onStdOut)(args: _*))
     }
   }
 }
