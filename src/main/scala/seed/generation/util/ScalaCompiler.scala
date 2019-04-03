@@ -13,10 +13,10 @@ object ScalaCompiler {
                       module: Module,
                       compilerResolution: List[Coursier.ResolutionResult],
                       artefact: Artefact,
-                      platform: Platform
+                      platform: Platform,
+                      compilerVer: String
                      ): Path = {
     val platformVer = BuildConfig.platformVersion(build, module, platform)
-    val compilerVer = BuildConfig.scalaVersion(build.project, List(module))
 
     compilerResolution.iterator.flatMap(resolution =>
       Coursier.artefactPath(resolution, artefact, platform,
@@ -28,7 +28,8 @@ object ScalaCompiler {
   def compilerPlugIns(build: Build,
                       module: Module,
                       compilerResolution: List[Coursier.ResolutionResult],
-                      platform: Platform): List[String] = {
+                      platform: Platform,
+                      compilerVer: String): List[String] = {
     val moduleDeps = BuildConfig.collectModuleDeps(build, module, platform)
     val modules = moduleDeps.map(build.module) :+ module
     val artefacts =
@@ -38,7 +39,7 @@ object ScalaCompiler {
       ) ++ modules.flatMap(_.compilerDeps.map(Artefact.fromDep))
 
     artefacts.map(a => resolveCompiler(
-      build, module, compilerResolution, a, platform)
+      build, module, compilerResolution, a, platform, compilerVer)
     ).map(p => "-Xplugin:" + p)
   }
 }

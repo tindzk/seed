@@ -109,7 +109,7 @@ object Bloop {
             scalaJsVersion.get, scalaVersion, scalaJsVersion.get).get
 
         val plugIns = util.ScalaCompiler.compilerPlugIns(build,
-          parentModule, compilerResolution, JavaScript)
+          parentModule, compilerResolution, JavaScript, scalaVersion)
 
         val resolvedDeps = Coursier.localArtefacts(
           resolution,
@@ -216,7 +216,7 @@ object Bloop {
         ).toMap
 
         val plugIns = util.ScalaCompiler.compilerPlugIns(build,
-          parentModule, compilerResolution, Native)
+          parentModule, compilerResolution, Native, scalaVersion)
 
         val resolvedDeps =
           Coursier.localArtefacts(resolution,
@@ -311,7 +311,7 @@ object Bloop {
           (javaDeps ++ scalaDeps).toSet)
 
         val plugIns = util.ScalaCompiler.compilerPlugIns(build,
-          parentModule, compilerResolution, JVM)
+          parentModule, compilerResolution, JVM, scalaVersion)
 
         val dependencies = if (test) List(name)
                            else (moduleDeps ++ jvm.moduleDeps).map(name => BuildConfig.targetName(build, name, JVM))

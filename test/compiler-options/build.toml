@@ -1,0 +1,17 @@
+[project]
+scalaVersion      = "2.12.4-bin-typelevel-4"
+scalaJsVersion    = "0.6.26"
+scalaOrganisation = "org.typelevel"
+scalaOptions      = ["-Yliteral-types"]
+
+[module.demo]
+root    = "shared"
+sources = ["shared/src/"]
+
+[module.demo.jvm]
+root    = "jvm"
+sources = ["jvm/src/"]
+
+[module.demo.js]
+root    = "js"
+sources = ["js/src/"]
