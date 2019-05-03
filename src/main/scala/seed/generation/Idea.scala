@@ -69,13 +69,18 @@ object Idea {
                    projectPath: Path,
                    buildPath: Path,
                    modulesPath: Path,
-                   librariesPath: Path): Unit = {
-    (resolvedDeps ++ resolvedTestDeps)
-      .foreach(dep => createLibrary(
+                   librariesPath: Path,
+                   scalaVersion: String): Unit = {
+    val filteredResolvedDeps = resolvedDeps.filter(l =>
+      !ArtefactResolution.isCompilerLibrary(l.libraryJar))
+    val filteredResolvedTestDeps = resolvedTestDeps.filter(l =>
+      !ArtefactResolution.isCompilerLibrary(l.libraryJar))
+
+    (filteredResolvedDeps ++ filteredResolvedTestDeps).foreach(dep =>
+      createLibrary(
         librariesPath, dep.libraryJar, dep.javaDocJar, dep.sourcesJar))
 
-    val scalaDep = build.project.scalaOrganisation + "-" +
-                   build.project.scalaVersion
+    val scalaDep = build.project.scalaOrganisation + "-" + scalaVersion
 
     val classPathOut     = buildPath.resolve(name).resolve("main")
     val testClassPathOut = buildPath.resolve(name).resolve("test")
@@ -89,8 +94,10 @@ object Idea {
       rootPath = normalisePath(ModuleDir, modulesPath)(root),
       sourcePaths = sources.map(normalisePath(ModuleDir, modulesPath)),
       testPaths = tests.map(normalisePath(ModuleDir, modulesPath)),
-      libraries = List(scalaDep) ++ resolvedDeps.map(_.libraryJar.getFileName.toString),
-      testLibraries = resolvedTestDeps.map(_.libraryJar.getFileName.toString),
+      libraries = List(scalaDep) ++
+                  filteredResolvedDeps.map(_.libraryJar.getFileName.toString),
+      testLibraries =
+        filteredResolvedTestDeps.map(_.libraryJar.getFileName.toString),
       moduleDeps = moduleDeps,
       output = Some(IdeaFile.Output(
         classPath = normalisePath(ModuleDir, modulesPath)(classPathOut),
@@ -99,23 +106,32 @@ object Idea {
     FileUtils.write(modulesPath.resolve(name + ".iml").toFile, xml, "UTF-8")
   }
 
-  def createCompilerLibrary(build: Build,
-                            resolution: List[Coursier.ResolutionResult],
-                            librariesPath: Path): Unit = {
-    val scalaCompiler = ArtefactResolution.resolveScalaCompiler(resolution,
-      build.project.scalaOrganisation, build.project.scalaVersion, List())
+  def createCompilerLibraries(build: Build,
+                              resolution: List[Coursier.ResolutionResult],
+                              librariesPath: Path): Unit = {
+    val scalaVersions = (build.module.values.toList.flatMap(module =>
+      module.jvm.flatMap(_.scalaVersion).toList ++
+      module.js.flatMap(_.scalaVersion).toList ++
+      module.native.flatMap(_.scalaVersion).toList ++
+      module.scalaVersion.toList
+    ) ++ List(build.project.scalaVersion)).distinct
 
-    val xml = IdeaFile.createLibrary(IdeaFile.Library(
-      name = build.project.scalaOrganisation + "-" + build.project.scalaVersion,
-      isScalaCompiler = true,
-      compilerClasses = scalaCompiler.compilerJars.map(_.toString),
-      classes = scalaCompiler.fullClassPath.map(_.toString),
-      javaDoc = List(),
-      sources = List()))
+    scalaVersions.foreach { scalaVersion =>
+      val scalaCompiler = ArtefactResolution.resolveScalaCompiler(resolution,
+        build.project.scalaOrganisation, scalaVersion, List())
 
-    val fileName = ideaName(build.project.scalaOrganisation) + "_" +
-                   ideaName(build.project.scalaVersion) + ".xml"
-    FileUtils.write(librariesPath.resolve(fileName).toFile, xml, "UTF-8")
+      val xml = IdeaFile.createLibrary(IdeaFile.Library(
+        name = build.project.scalaOrganisation + "-" + scalaVersion,
+        isScalaCompiler = true,
+        compilerClasses = scalaCompiler.compilerJars.map(_.toString),
+        classes = scalaCompiler.fullClassPath.map(_.toString),
+        javaDoc = List(),
+        sources = List()))
+
+      val fileName = ideaName(build.project.scalaOrganisation) + "_" +
+                     ideaName(scalaVersion) + ".xml"
+      FileUtils.write(librariesPath.resolve(fileName).toFile, xml, "UTF-8")
+    }
   }
 
   def createCompilerSettings(build: Build,
@@ -124,13 +140,24 @@ object Idea {
                              modules: List[String]): Unit = {
     // Group all modules by additional settings; create compiler configuration
     // for each unique set of parameters
-    val modulePlugIns = modules.filter(build.module.contains).map(m =>
+    val modulePlugIns = modules.filter(build.module.contains).map { m =>
+      val module = build.module(m)
+      val scalaVersion = BuildConfig.scalaVersion(build.project,
+        module.jvm.toList ++ List(module))
       m -> util.ScalaCompiler.compilerPlugIns(
-        build, build.module(m), compilerResolution, JVM))
+        build, build.module(m), compilerResolution, JVM, scalaVersion)
+    }
     val compilerSettings =
       modulePlugIns.groupBy(_._2).mapValues(_.map(_._1)).toList.map {
         case (settings, modules) =>
-          (build.project.scalaOptions ++ settings, modules)
+          val allModules = modules.flatMap { module =>
+            val targets = BuildConfig.moduleTargets(build.module(module), List())
+            val all = module +: targets.map(target =>
+              BuildConfig.targetName(build, module, target))
+            all.distinct
+          }
+
+          (build.project.scalaOptions ++ settings, allModules)
       }
 
     val xml = IdeaFile.createScalaCompiler(compilerSettings)
@@ -150,6 +177,7 @@ object Idea {
                   modulesPath: Path,
                   librariesPath: Path,
                   build: Build,
+                  compilerResolution: List[Coursier.ResolutionResult],
                   resolution: Coursier.ResolutionResult,
                   name: String,
                   module: Module
@@ -166,6 +194,9 @@ object Idea {
           Log.error(s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping...")
           List()
         } else {
+          val scalaVersion = BuildConfig.scalaVersion(build.project,
+            List(module.js.get, module))
+
           createModule(
             build = build,
             root = module.js.get.root.get,
@@ -178,7 +209,7 @@ object Idea {
                 ArtefactResolution.javaDepFromScalaDep(
                   dep, JavaScript,
                   build.project.scalaJsVersion.get,
-                  build.project.scalaVersion)
+                  scalaVersion)
               ).toSet,
               optionalArtefacts = true),
             resolvedTestDeps = module.test.toList.flatMap(test =>
@@ -187,7 +218,7 @@ object Idea {
                   ArtefactResolution.javaDepFromScalaDep(
                     dep, JavaScript,
                     build.project.scalaJsVersion.get,
-                    build.project.scalaVersion)
+                    scalaVersion)
                 ).toSet,
                 optionalArtefacts = true)),
             moduleDeps =
@@ -197,7 +228,8 @@ object Idea {
             projectPath = projectPath,
             buildPath = buildPath,
             modulesPath = modulesPath,
-            librariesPath = librariesPath)
+            librariesPath = librariesPath,
+            scalaVersion = scalaVersion)
 
           List(moduleName)
         }
@@ -213,6 +245,9 @@ object Idea {
           Log.error(s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping...")
           List()
         } else {
+          val scalaVersion = BuildConfig.scalaVersion(build.project,
+            List(module.jvm.get, module))
+
           createModule(
             build = build,
             root = module.jvm.get.root.get,
@@ -224,18 +259,14 @@ object Idea {
               collectJvmJavaDeps(build, module).toSet ++
               collectJvmScalaDeps(build, module).map(dep =>
                 ArtefactResolution.javaDepFromScalaDep(
-                  dep, JVM,
-                  build.project.scalaVersion,
-                  build.project.scalaVersion)
+                  dep, JVM, scalaVersion, scalaVersion)
               ).toSet,
               optionalArtefacts = true),
             resolvedTestDeps = module.test.toSet.flatMap(test =>
               Coursier.localArtefacts(resolution,
                 collectJvmScalaDeps(build, test).map(dep =>
                   ArtefactResolution.javaDepFromScalaDep(
-                    dep, JVM,
-                    build.project.scalaVersion,
-                    build.project.scalaVersion)
+                    dep, JVM, scalaVersion, scalaVersion)
                 ).toSet,
                 optionalArtefacts = true)
               ).toList,
@@ -246,7 +277,8 @@ object Idea {
             projectPath = projectPath,
             buildPath = buildPath,
             modulesPath = modulesPath,
-            librariesPath = librariesPath)
+            librariesPath = librariesPath,
+            scalaVersion = scalaVersion)
 
           List(moduleName)
         }
@@ -262,6 +294,9 @@ object Idea {
           Log.error(s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping...")
           List()
         } else {
+          val scalaVersion = BuildConfig.scalaVersion(build.project,
+            List(module.native.get, module))
+
           createModule(
             build = build,
             root = module.native.get.root.get,
@@ -274,8 +309,7 @@ object Idea {
               collectNativeDeps(build, module).map(dep =>
                 ArtefactResolution.javaDepFromScalaDep(
                   dep, Native,
-                  build.project.scalaNativeVersion.get,
-                  build.project.scalaVersion)
+                  build.project.scalaNativeVersion.get, scalaVersion)
               ).toSet,
               optionalArtefacts = true),
             resolvedTestDeps = module.test.toList.flatMap(test =>
@@ -283,8 +317,7 @@ object Idea {
                 collectNativeDeps(build, test).map(dep =>
                   ArtefactResolution.javaDepFromScalaDep(
                     dep, Native,
-                    build.project.scalaNativeVersion.get,
-                    build.project.scalaVersion)
+                    build.project.scalaNativeVersion.get, scalaVersion)
                 ).toSet,
                 optionalArtefacts = true)),
             moduleDeps =
@@ -294,7 +327,8 @@ object Idea {
             projectPath = projectPath,
             buildPath = buildPath,
             modulesPath = modulesPath,
-            librariesPath = librariesPath)
+            librariesPath = librariesPath,
+            scalaVersion = scalaVersion)
 
           List(moduleName)
         }
@@ -309,6 +343,9 @@ object Idea {
           Log.error(s"Module ${Ansi.italic(name)} does not specify root path, skipping...")
           List()
         } else {
+          val scalaVersion = BuildConfig.scalaVersion(build.project,
+            List(module))
+
           createModule(
             build = build,
             root = module.root.get,
@@ -319,18 +356,14 @@ object Idea {
               collectJvmJavaDeps(build, module).toSet ++
               collectJvmScalaDeps(build, module).map(dep =>
                 ArtefactResolution.javaDepFromScalaDep(
-                  dep, JVM,
-                  build.project.scalaVersion,
-                  build.project.scalaVersion)
+                  dep, JVM, scalaVersion, scalaVersion)
               ).toSet,
               optionalArtefacts = true),
             resolvedTestDeps = module.test.toSet.flatMap(test =>
               Coursier.localArtefacts(resolution,
                 collectJvmScalaDeps(build, test).map(dep =>
                   ArtefactResolution.javaDepFromScalaDep(
-                    dep, JVM,
-                    build.project.scalaVersion,
-                    build.project.scalaVersion)
+                    dep, JVM, scalaVersion, scalaVersion)
                 ).toSet,
                 optionalArtefacts = true)
             ).toList,
@@ -340,7 +373,8 @@ object Idea {
             projectPath = projectPath,
             buildPath = buildPath,
             modulesPath = modulesPath,
-            librariesPath = librariesPath)
+            librariesPath = librariesPath,
+            scalaVersion = scalaVersion)
 
           List(name)
         }
@@ -391,14 +425,14 @@ object Idea {
     Files.newDirectoryStream(librariesPath, "*.xml").iterator().asScala
       .foreach(Files.delete)
 
-    createCompilerLibrary(build, compilerResolution, librariesPath)
+    createCompilerLibraries(build, compilerResolution, librariesPath)
     FileUtils.write(ideaPath.resolve("misc.xml").toFile,
       IdeaFile.createJdk(jdkVersion = "1.8"), "UTF-8")
 
     val modules = build.module.toList.flatMap { case (name, module) =>
       buildModule(
         projectPath, buildPath, ideaPath, modulesPath, librariesPath, build,
-        resolution, name, module)
+        compilerResolution, resolution, name, module)
     }
 
     createCompilerSettings(build, compilerResolution, ideaPath, modules)

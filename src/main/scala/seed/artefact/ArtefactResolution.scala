@@ -209,6 +209,10 @@ object ArtefactResolution {
       .groupBy(_._1)
       .mapValues(_.map(_._2))
 
+  def isCompilerLibrary(library: Path): Boolean =
+    library.toString.contains("/scala-library/") ||
+    library.toString.contains("/scala-reflect/")
+
   def resolveScalaCompiler(resolutionResult: List[Coursier.ResolutionResult],
                            scalaOrganisation: String,
                            scalaVersion: String,
@@ -228,14 +232,10 @@ object ArtefactResolution {
     // Replace official scala-library and scala-reflect artefacts by
     // organisation-specific ones. This is needed for Typelevel Scala.
     val fullClassPath = libraries.map(_.libraryJar) ++
-                        classPath
-                          .filter(!_.toString.contains("/scala-library/"))
-                          .filter(!_.toString.contains("/scala-reflect/"))
+                        classPath.filter(!isCompilerLibrary(_))
 
     val compilerJars: List[Path] =
-      compiler.map(_.libraryJar)
-        .filter(!_.toString.contains("/scala-library/"))
-        .filter(!_.toString.contains("/scala-reflect/")) ++
+      compiler.map(_.libraryJar).filter(!isCompilerLibrary(_)) ++
       libraries.map(_.libraryJar)
 
     Resolution.ScalaCompiler(

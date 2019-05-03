@@ -18,17 +18,11 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   override def setup(): Unit = ()
   override def tearDown(env: Unit): Unit = ()
 
-  testAsync("Generate and compile meta modules") { _ =>
-    val projectPath = Paths.get("test/meta-module")
-    util.ProjectGeneration.generateBloopProject(projectPath)
-    compileAndRun(projectPath)
-  }
-
   def compileAndRun(projectPath: Path) = {
     def compile =
       TestProcessHelper.runBloop(projectPath)("compile", "example").map { x =>
-        assertEquals(x.contains("Compiled example-jvm"), true)
-        assertEquals(x.contains("Compiled example-js"), true)
+        assert(x.contains("Compiled example-jvm"))
+        assert(x.contains("Compiled example-js"))
       }
 
     def run =
@@ -40,6 +34,12 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     for { _ <- compile; _ <- run } yield ()
   }
 
+  testAsync("Generate and compile meta modules") { _ =>
+    val projectPath = Paths.get("test/meta-module")
+    util.ProjectGeneration.generateBloopProject(projectPath)
+    compileAndRun(projectPath)
+  }
+
   testAsync("Build project with compiler plug-in") { _ =>
     val (projectPath, build) = BuildConfig.load(
       Paths.get("test/example-paradise"), Log).get
@@ -49,5 +49,21 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       ivyPath = None, cachePath = None)
     cli.Build.ui(Config(), projectPath, build, Command.Bloop(packageConfig))
     compileAndRun(projectPath)
+  }
+
+  testAsync("Build modules with different Scala versions") { _ =>
+    val (projectPath, build) = BuildConfig.load(
+      Paths.get("test/multiple-scala-versions"), Log).get
+    val buildPath = projectPath.resolve("build")
+    if (Files.exists(buildPath)) FileUtils.deleteDirectory(buildPath.toFile)
+    val packageConfig = PackageConfig(tmpfs = false, silent = false,
+      ivyPath = None, cachePath = None)
+    cli.Build.ui(Config(), projectPath, build, Command.Bloop(packageConfig))
+    TestProcessHelper.runBloop(projectPath)("run", "module211", "module212")
+      .map { x =>
+        val lines = x.split("\n").toList
+        assert(lines.contains("2.11.11"))
+        assert(lines.contains("2.12.8"))
+      }
   }
 }

@@ -1,0 +1,13 @@
+[project]
+scalaVersion = "2.12.8"
+
+[module.module212.jvm]
+root = "module212"
+sources = ["module212/src"]
+scalaDeps = [["com.lihaoyi", "sourcecode", "0.1.5"]]
+
+[module.module211.jvm]
+scalaVersion = "2.11.11"
+root = "module211"
+sources = ["module211/src"]
+scalaDeps = [["com.lihaoyi", "sourcecode", "0.1.5"]]
