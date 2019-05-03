@@ -22,7 +22,7 @@ object LinkSpec extends TestSuite[Unit] {
 
   testAsync("Link module and interpret Bloop events") { _ =>
     val projectPath = Paths.get("test/module-link")
-    val build = ProjectGeneration.generateBloopProject(projectPath)
+    val build = ProjectGeneration.generateBloopCrossProject(projectPath)
 
     var events = ListBuffer[BuildEvent]()
     def onStdOut(output: String): Unit =

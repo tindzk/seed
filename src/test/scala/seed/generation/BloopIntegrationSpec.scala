@@ -36,7 +36,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
 
   testAsync("Generate and compile meta modules") { _ =>
     val projectPath = Paths.get("test/meta-module")
-    util.ProjectGeneration.generateBloopProject(projectPath)
+    util.ProjectGeneration.generateBloopCrossProject(projectPath)
     compileAndRun(projectPath)
   }
 
