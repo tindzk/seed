@@ -2,7 +2,7 @@ package seed.generation
 
 import java.nio.file.{Files, Path, Paths}
 
-import seed.config.BuildConfig.{collectJsClassPath, collectJsDeps, collectJvmClassPath, collectJvmScalaDeps, collectNativeClassPath, collectNativeDeps}
+import seed.config.BuildConfig.{collectJsClassPath, collectJsDeps, collectJvmClassPath, collectJvmScalaDeps, collectJvmJavaDeps, collectNativeClassPath, collectNativeDeps}
 import seed.artefact.{Coursier, ArtefactResolution}
 import seed.cli.util.Ansi
 import seed.model.Build.{Module, Project}
@@ -303,7 +303,7 @@ object Bloop {
         val scalaVersion = BuildConfig.scalaVersion(project,
           List(jvm, parentModule.jvm.getOrElse(Module()), parentModule))
 
-        val javaDeps = jvm.javaDeps
+        val javaDeps = parentModule.javaDeps ++ jvm.javaDeps
         val scalaDeps = (parentModule.scalaDeps ++ jvm.scalaDeps).map(dep =>
           ArtefactResolution.javaDepFromScalaDep(dep, JVM, scalaVersion,
             scalaVersion))
@@ -377,7 +377,10 @@ object Bloop {
       test = false)
     writeJvmModule(build, if (!isCrossBuild) name else name + "-jvm",
       projectPath, bloopPath, buildPath,
-      module.copy(scalaDeps = collectJvmScalaDeps(build, module)),
+      module.copy(
+        scalaDeps = collectJvmScalaDeps(build, module),
+        javaDeps = collectJvmJavaDeps(build, module)
+      ),
       collectJvmClassPath(buildPath, build, module),
       module.jvm, build.project, resolution, compilerResolution, test = false)
     writeNativeModule(build, if (!isCrossBuild) name else name + "-native",
@@ -417,6 +420,7 @@ object Bloop {
         module.copy(
           sources = test.sources,
           scalaDeps = collectJvmScalaDeps(build, module) ++ test.scalaDeps,
+          javaDeps = collectJvmJavaDeps(build, module) ++ test.javaDeps,
           targets = targets
         ),
         collectJvmClassPath(buildPath, build, module),
