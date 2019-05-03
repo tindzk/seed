@@ -19,7 +19,28 @@ steps:
       - blp-server &
       - ./build.sh
       - ./csbt test
-  - name: publish
+  - name: publish_prerelease
+    image: plugins/docker
+    environment:
+      BINTRAY_USERNAME:
+        from_secret: bintray_username
+      BINTRAY_API:
+        from_secret: bintray_api
+    settings:
+      repo: tindzk/seed
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      build_args_from_env:
+        - BINTRAY_USERNAME
+        - BINTRAY_API
+    when:
+      branch:
+        - master
+      event:
+        - push
+  - name: publish_release
     image: plugins/docker
     environment:
       BINTRAY_USERNAME:
@@ -37,11 +58,7 @@ steps:
         - BINTRAY_API
     when:
       event:
-        include:
-          - push
-          - tag
-        exclude:
-          - pull_request
+        - tag
   - name: benchmarks
     image: tindzk/seed:latest
     pull: always
