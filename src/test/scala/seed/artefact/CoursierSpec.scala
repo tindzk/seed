@@ -9,7 +9,7 @@ object CoursierSpec extends SimpleTestSuite {
     val dep = JavaDep("org.scala-js", "scalajs-dom_sjs0.6_2.12", "0.9.6")
     val resolution = Coursier.resolveAndDownload(Set(dep),
       Build.Resolvers(), Coursier.DefaultIvyPath,
-      Coursier.DefaultCachePath, optionalArtefacts = true)
+      Coursier.DefaultCachePath, optionalArtefacts = true, silent = true)
 
     val result =
       Coursier.localArtefacts(resolution, Set(dep), optionalArtefacts = true)

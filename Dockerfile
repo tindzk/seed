@@ -34,7 +34,7 @@ RUN blp-coursier fetch \
 
 RUN set -x && \
     ./build.sh && \
-    BINTRAY_USER=$BINTRAY_USERNAME BINTRAY_PASS=$BINTRAY_API ./csbt --add-coursier=true "; publishLocal; publish"
+    COURSIER_SBT_LAUNCHER_ADD_PLUGIN=true BINTRAY_USER=$BINTRAY_USERNAME BINTRAY_PASS=$BINTRAY_API ./csbt "; publishLocal; publish"
 
 RUN blp-coursier bootstrap tindzk:seed_2.12:$(cat SEED) -f -o seed
 
