@@ -18,7 +18,7 @@ steps:
       - export PATH=$(pwd)/bloop:$PATH
       - blp-server &
       - ./build.sh
-      - ./csbt test
+      - COURSIER_SBT_LAUNCHER_ADD_PLUGIN=true ./csbt test
   - name: publish_prerelease
     image: plugins/docker
     environment:

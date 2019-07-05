@@ -1,14 +1,15 @@
 package seed.artefact
 
-import java.io.{File, OutputStreamWriter}
+import java.io.File
 import java.nio.file.{Path, Paths}
 import java.util.concurrent.locks.ReentrantLock
 
-import coursier.Cache.Logger
-import coursier.core.{Classifier, ModuleName, Organization}
+import coursier._
 import coursier.ivy.IvyRepository
+import coursier.paths.CachePath
+import coursier.cache._
+import coursier.cache.loggers._
 import coursier.util.{Gather, Task}
-import coursier.{Artifact, Cache, CachePath, Dependency, Fetch, MavenRepository, Module, Resolution, TermDisplay}
 import seed.cli.util.Ansi
 import seed.model.Build.{JavaDep, Resolvers}
 import seed.model.Platform
@@ -27,14 +28,14 @@ object Coursier {
   case class ResolutionResult(resolution: Resolution,
                               artefacts: Map[ArtefactUrl, File])
 
-  private var logger: Option[Logger] = None
-
-  def initLogger(): Unit =
-    if (logger.isEmpty) {
-      val termDisplay = new TermDisplay(new OutputStreamWriter(System.err))
-      termDisplay.init()
-
-      logger = Some(termDisplay)
+  def withLogger[T](silent: Boolean)(f: CacheLogger => T): T =
+    if (silent) f(CacheLogger.nop)
+    else {
+      val logger = RefreshLogger.create(System.err, ProgressBarRefreshDisplay.create())
+      logger.init()
+      val result = f(logger)
+      logger.stop()
+      result
     }
 
   def hasDep(resolutionResult: Coursier.ResolutionResult, dep: JavaDep): Boolean =
@@ -43,19 +44,18 @@ object Coursier {
       d.module.name.value == dep.artefact &&
       d.version == dep.version)
 
-  def coursierDependencies(deps: Set[JavaDep]): Set[Dependency] =
-    deps.map(r => Dependency(Module(Organization(r.organisation), ModuleName(r.artefact)), r.version))
+  def coursierDependencies(deps: Set[JavaDep]): Seq[coursier.core.Dependency] =
+    deps.map(r => Dependency(Module(Organization(r.organisation), ModuleName(r.artefact)), r.version)).toList
 
   private val lock = new ReentrantLock()
 
-  def resolve(all: Set[JavaDep], resolvers: Resolvers, ivyPath: Path, cachePath: Path): Resolution =
+  def resolve(all: Set[JavaDep], resolvers: Resolvers, ivyPath: Path, cachePath: Path, silent: Boolean): Resolution =
     if (all.isEmpty) Resolution.empty
     else {
       val organisations = all.map(_.organisation).toList.sorted.map(Ansi.italic).mkString(", ")
       Log.debug(s"Resolving ${Ansi.bold(all.size.toString)} dependencies from $organisations...")
 
       val mapped = coursierDependencies(all)
-      val start  = Resolution(mapped)
 
       val ivy = resolvers.ivy.map { resolver =>
         val pattern = resolver.pattern.fold(coursier.ivy.Pattern.default)(p =>
@@ -78,9 +78,11 @@ object Coursier {
       val repositories = ivyRepository +:
                          (resolvers.maven.map(MavenRepository(_)) ++ ivy)
 
-      val fetch = Fetch.from(repositories, Cache.fetch[Task](
-        logger = logger, cache = cachePath.toFile))
-      val resolution = start.process.run(fetch).unsafeRun()
+      val resolution =
+        Resolve()
+          .withDependencies(mapped)
+          .withRepositories(repositories)
+          .run()
 
       val errors = resolution.errors
       if (errors.nonEmpty) {
@@ -91,16 +93,36 @@ object Coursier {
         sys.exit(1)
       }
 
+      withLogger(silent) { l =>
+        val fileCache = FileCache[Task]()
+          .withLocation(cachePath.toFile)
+          .withLogger(l)
+
+        val files = Fetch()
+          .withCache(fileCache)
+          .withDependencies(mapped)
+          .withRepositories(repositories)
+          .run()
+      }
+
       resolution
     }
 
   def localArtefacts(artefacts: Seq[Artefact],
-                     cache: Path): Map[ArtefactUrl, File] = {
-    val localArtefacts = Gather[Task].gather(
-      artefacts.map(artefact =>
-        Cache.file[Task](artefact, logger = logger, cache = cache.toFile)
-          .run.map(result => artefact.url -> result))
-    ).unsafeRun()
+                     cache: Path,
+                     silent: Boolean
+                    ): Map[ArtefactUrl, File] = {
+    val localArtefacts = withLogger(silent) { l =>
+      val fileCache = FileCache[Task]()
+        .withLocation(cache.toFile)
+        .withLogger(l)
+
+      Gather[Task].gather(
+        artefacts.map { artefact =>
+          fileCache.file(artefact).run.map(artefact.url -> _)
+        }
+      ).unsafeRun()
+    }
 
     if (localArtefacts.exists(_._2.isLeft))
       Log.error("Failed to download: " + localArtefacts.filter(_._2.isLeft))
@@ -117,15 +139,16 @@ object Coursier {
                          resolvers: Resolvers,
                          ivyPath: Path,
                          cachePath: Path,
-                         optionalArtefacts: Boolean): ResolutionResult = {
+                         optionalArtefacts: Boolean,
+                         silent: Boolean): ResolutionResult = {
     lock.lock()
-    val resolution = resolve(deps, resolvers, ivyPath, cachePath)
+    val resolution = resolve(deps, resolvers, ivyPath, cachePath, silent)
     val artefacts = resolution.dependencyArtifacts(
       Some(overrideClassifiers(
         sources = optionalArtefacts,
         javaDoc = optionalArtefacts))).map(_._3).toList
 
-    val result = ResolutionResult(resolution, localArtefacts(artefacts, cachePath))
+    val result = ResolutionResult(resolution, localArtefacts(artefacts, cachePath, silent))
     lock.unlock()
     result
   }
@@ -167,14 +190,14 @@ object Coursier {
       .filter(x =>
         x.exists(x => x._1 == Classifier.empty && x._2.url.endsWith(".jar"))
       ).map { a =>
-        val jar = a.find(_._1 == Classifier.empty).get._2.url
-        val doc = a.find(_._1 == Classifier.javadoc).map(_._2.url)
-        val src = a.find(_._1 == Classifier.sources).map(_._2.url)
+        val jar = result.artefacts(a.find(_._1 == Classifier.empty).get._2.url)
+        val doc = a.find(_._1 == Classifier.javadoc).map(_._2.url).flatMap(result.artefacts.get)
+        val src = a.find(_._1 == Classifier.sources).map(_._2.url).flatMap(result.artefacts.get)
 
         model.Resolution.Artefact(
-          libraryJar = result.artefacts(jar).toPath,
-          javaDocJar = doc.map(result.artefacts(_).toPath),
-          sourcesJar = src.map(result.artefacts(_).toPath))
+          libraryJar = jar.toPath,
+          javaDocJar = doc.map(_.toPath),
+          sourcesJar = src.map(_.toPath))
       }
 
   /** Resolves path to JAR file of requested artefact */

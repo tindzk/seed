@@ -250,7 +250,6 @@ object ArtefactResolution {
                  compilerDeps: List[Set[JavaDep]],
                 ) = {
     val silent = packageConfig.silent || seedConfig.resolution.silent
-    if (!silent) Coursier.initLogger()
 
     import packageConfig._
     val resolvedIvyPath = ivyPath.getOrElse(seedConfig.resolution.ivyPath)
@@ -264,7 +263,7 @@ object ArtefactResolution {
 
     def resolve(deps: Set[JavaDep]) =
       Coursier.resolveAndDownload(deps, build.resolvers, resolvedIvyPath,
-        resolvedCachePath, optionalArtefacts)
+        resolvedCachePath, optionalArtefacts, silent)
 
     Log.info("Resolving platform artefacts...")
 

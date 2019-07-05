@@ -26,11 +26,12 @@ object ProjectGeneration {
 
     val resolution =
       Coursier.resolveAndDownload(platformDeps ++ libraryDeps, build.resolvers,
-        resolvedIvyPath, resolvedCachePath, false)
+        resolvedIvyPath, resolvedCachePath, optionalArtefacts = false,
+        silent = true)
     val compilerResolution =
       compilerDeps0.map(d =>
         Coursier.resolveAndDownload(d, build.resolvers, resolvedIvyPath,
-          resolvedCachePath, false))
+          resolvedCachePath, optionalArtefacts = false, silent = true))
 
     build.module.foreach { case (id, module) =>
       Bloop.buildModule(
