@@ -2,7 +2,6 @@ package seed.artefact
 
 import java.io.File
 import java.nio.file.{Path, Paths}
-import java.util.concurrent.locks.ReentrantLock
 
 import coursier._
 import coursier.ivy.IvyRepository
@@ -46,8 +45,6 @@ object Coursier {
 
   def coursierDependencies(deps: Set[JavaDep]): Seq[coursier.core.Dependency] =
     deps.map(r => Dependency(Module(Organization(r.organisation), ModuleName(r.artefact)), r.version)).toList
-
-  private val lock = new ReentrantLock()
 
   def resolve(all: Set[JavaDep], resolvers: Resolvers, ivyPath: Path, cachePath: Path, silent: Boolean): Resolution =
     if (all.isEmpty) Resolution.empty
@@ -141,16 +138,13 @@ object Coursier {
                          cachePath: Path,
                          optionalArtefacts: Boolean,
                          silent: Boolean): ResolutionResult = {
-    lock.lock()
     val resolution = resolve(deps, resolvers, ivyPath, cachePath, silent)
     val artefacts = resolution.dependencyArtifacts(
       Some(overrideClassifiers(
         sources = optionalArtefacts,
         javaDoc = optionalArtefacts))).map(_._3).toList
 
-    val result = ResolutionResult(resolution, localArtefacts(artefacts, cachePath, silent))
-    lock.unlock()
-    result
+    ResolutionResult(resolution, localArtefacts(artefacts, cachePath, silent))
   }
 
   def resolveSubset(resolution: Resolution,
