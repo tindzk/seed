@@ -9,10 +9,20 @@ import seed.model.{Build, Platform}
 import seed.Log
 import seed.config.util.TomlUtils
 
+import scala.collection.mutable
+
 object BuildConfig {
   import TomlUtils.parseBuildToml
 
-  def load(path: Path, log: Log): Option[(Path, Build)] = {
+  case class Result(build: Build, projectPath: Path, moduleProjectPaths: Map[String, Path])
+
+  def load(path: Path, log: Log): Option[Result] =
+    loadInternal(path, log).filter(result =>
+      result.build.module.toList.forall { case (name, module) =>
+        checkModule(result.build, name, module, log)
+      })
+
+  private def loadInternal(path: Path, log: Log): Option[Result] = {
     if (!Files.exists(path)) {
       log.error(s"Invalid path to build file provided: ${Ansi.italic(path.toString)}")
       None
@@ -37,20 +47,21 @@ object BuildConfig {
         TomlUtils.parseFile(
           projectFile, parseBuildToml(projectPath), "build file", log
         ).map { parsed =>
-          (projectPath.normalize(), processBuild(parsed, { path =>
-            load(path, log).map { case (_, build) =>
+          val (build, moduleProjectPaths) = processBuild(parsed, projectPath, { path =>
+            loadInternal(path, log).map { case Result(build, projectPath, moduleProjectPaths) =>
               parsed.module.keySet.intersect(build.module.keySet).foreach(name =>
                 log.error(s"Module name ${Ansi.italic(name)} is not unique"))
-
-              build
+              (build, moduleProjectPaths)
             }
-          }))
+          })
+
+          Result(build, projectPath.normalize(), moduleProjectPaths)
         }
       }
     }
   }
 
-  def processBuild(build: Build, parse: Path => Option[Build]): Build = {
+  def processBuild(build: Build, projectPath: Path, parse: Path => Option[(Build, Map[String, Path])]): (Build, Map[String, Path]) = {
     val parsed = build match { case p =>
       p.copy(module = p.module.mapValues { module =>
         val parentTargets = moduleTargets(module, module.targets)
@@ -68,13 +79,19 @@ object BuildConfig {
 
     val imported = parsed.`import`.flatMap(parse(_))
 
-    parsed.copy(
+    val result = parsed.copy(
       project = parsed.project.copy(testFrameworks =
         (parsed.project.testFrameworks ++
-         imported.flatMap(_.project.testFrameworks)
+         imported.flatMap(_._1.project.testFrameworks)
         ).distinct
       ),
-      module = parsed.module ++ imported.flatMap(_.module))
+      module = parsed.module ++ imported.flatMap(_._1.module))
+
+    val moduleProjectPaths =
+      imported.flatMap(_._2).toMap ++
+      parsed.module.keys.map(m => m -> projectPath).toMap
+
+    (result, moduleProjectPaths)
   }
 
   def moduleTargets(module: Build.Module,
@@ -105,10 +122,22 @@ object BuildConfig {
 
     val invalidModuleDeps =
       module.moduleDeps.filter(!build.module.isDefinedAt(_))
+    val invalidTargetModules =
+      module
+        .target
+        .toList
+        .flatMap(_._2.`class`)
+        .map(_.module.module)
+        .filter(!build.module.isDefinedAt(_))
+    val invalidTargetModules2 =
+      module
+        .target
+        .keys
+        .filter(id => Platform.All.keys.exists(_.id == id))
 
     val moduleName = Ansi.italic(name)
 
-    if (module.targets.isEmpty)
+    if (module.targets.isEmpty && module.target.isEmpty)
       error(s"No target platforms were set on module $moduleName. Example: ${Ansi.italic("""targets = ["js"]""")}")
     else if (module.sources.isEmpty && module.js.exists(_.sources.isEmpty))
       error(s"Source paths must be set on root or JavaScript module $moduleName")
@@ -142,6 +171,10 @@ object BuildConfig {
       error(s"`root` cannot be set on native test module $moduleName")
     else if (invalidModuleDeps.nonEmpty)
       error(s"Module dependencies of $moduleName not found in scope: ${invalidModuleDeps.mkString(", ")}")
+    else if (invalidTargetModules.nonEmpty)
+      error(s"Invalid module(s) referenced in $moduleName: ${invalidTargetModules.mkString(", ")}")
+    else if (invalidTargetModules2.nonEmpty)
+      error(s"A target module in `$moduleName` has the same name as a Scala platform")
     else true
   }
 
@@ -162,10 +195,16 @@ object BuildConfig {
   def targetName(build: Build, name: String, platform: Platform): String =
     if (!isCrossBuild(build.module(name))) name else name + "-" + platform.id
 
+  def buildTargets(build: Build, module: String): List[String] = {
+    val m = build.module(module)
+    val p = m.targets
+    p.map(p => targetName(build, module, p))
+  }
+
   def linkTargets(build: Build, module: String): List[String] = {
     val m = build.module(module)
     val p = m.targets.diff(List(JVM))
-    p.map(p => BuildConfig.targetName(build, module, p))
+    p.map(p => targetName(build, module, p))
   }
 
   def platformModule(build: Build, name: String, platform: Platform): Option[Module] =
@@ -207,6 +246,11 @@ object BuildConfig {
       case Native => collectNativeModuleDeps(build, module)
     }
 
+  def collectModuleDeps(build: Build, module: Module): List[String] =
+    Platform.All.keys.toList
+      .flatMap(p => collectModuleDeps(build, module, p))
+      .distinct
+
   def collectJsClassPath(buildPath: Path,
                          build: Build,
                          module: Module): List[Path] =
@@ -244,10 +288,10 @@ object BuildConfig {
     module.javaDeps ++ module.jvm.map(_.javaDeps).getOrElse(List()) ++
     jvmModuleDeps(module).flatMap(m => collectJvmJavaDeps(build, build.module(m)))
 
-  def tmpfsPath(projectPath: Path): Path = {
+  def tmpfsPath(projectPath: Path, log: Log = Log): Path = {
     val name = projectPath.toAbsolutePath.getFileName.toString
-    Log.info("Build path set to tmpfs")
-    Log.warn(s"Please ensure that there is no other project with the name ${Ansi.italic(name)} that also compiles to tmpfs")
+    log.info("Build path set to tmpfs")
+    log.warn(s"Please ensure that there is no other project with the name ${Ansi.italic(name)} that also compiles to tmpfs")
     Paths.get("/tmp").resolve("build-" + name)
   }
 }

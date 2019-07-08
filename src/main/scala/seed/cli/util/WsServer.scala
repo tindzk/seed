@@ -28,7 +28,7 @@ class WsServer(address: InetSocketAddress,
   }
   override def onError(conn: WebSocket, ex: Exception): Unit = ex.printStackTrace()
   override def onStart(): Unit = setConnectionLostTimeout(100)
-  override def onMessage(conn: WebSocket, message: String): Unit = {
+  override def onMessage(conn: WebSocket, message: String): Unit = try {
     decode[WsCommand](message) match {
       case Left(e) =>
         Log.error("Could not process message from " + clientIp(conn) + ": " + e)
@@ -37,6 +37,8 @@ class WsServer(address: InetSocketAddress,
         Log.debug("Message from " + clientIp(conn) + ": " + c)
         evalCommand(this, conn, c)
     }
+  } catch {
+    case t: Throwable => t.printStackTrace()
   }
   override def onMessage(conn: WebSocket, message: ByteBuffer): Unit = {}
 }

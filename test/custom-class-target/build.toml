@@ -1,0 +1,13 @@
+[project]
+scalaVersion = "2.13.0"
+
+[module.utils.jvm]
+sources = ["utils"]
+
+[module.utils.target.gen-sources]
+class = ["utils:jvm", "GenerateSources"]
+await = true
+
+[module.demo.jvm]
+moduleDeps = ["utils"]
+sources = ["demo"]

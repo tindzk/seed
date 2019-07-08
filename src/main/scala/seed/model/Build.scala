@@ -42,6 +42,15 @@ object Build {
                       versionTag: VersionTag = VersionTag.PlatformBinary
                      ) extends Dep
 
+  case class PlatformModule(module: String, platform: Platform)
+  case class ModuleClass(module: PlatformModule, main: String)
+
+  case class Target(root: Option[Path] = None,
+                    command: Option[String] = None,
+                    watchCommand: Option[String] = None,
+                    `class`: Option[ModuleClass] = None,
+                    await: Boolean = false)
+
   case class Project(scalaVersion: String,
                      scalaJsVersion: Option[String] = None,
                      scalaNativeVersion: Option[String] = None,
@@ -77,7 +86,9 @@ object Build {
                     test: Option[Module] = None,
                     js: Option[Module] = None,
                     jvm: Option[Module] = None,
-                    native: Option[Module] = None)
+                    native: Option[Module] = None,
+
+                    target: Map[String, Build.Target] = Map())
 
   case class IvyResolver(url: String, pattern: Option[String] = None)
 

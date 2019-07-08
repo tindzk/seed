@@ -380,8 +380,37 @@ object Idea {
         }
       }
 
+    val customTargets = module.target.toList.flatMap { case (targetName, target) =>
+      Log.info(s"Create project for custom target ${Ansi.italic(name)}:$targetName...")
+
+      if (target.root.isEmpty) {
+        Log.error(s"Module ${Ansi.italic(name)}:$targetName does not specify root path, skipping...")
+        List()
+      } else {
+        val scalaVersion = BuildConfig.scalaVersion(build.project, List(module))
+        val moduleName = name + "-" + targetName
+
+        createModule(
+          build = build,
+          root = target.root.get,
+          name = moduleName,
+          sources = List(),
+          tests = List(),
+          resolvedDeps = List(),
+          resolvedTestDeps = List(),
+          moduleDeps = List(),
+          projectPath = projectPath,
+          buildPath = buildPath,
+          modulesPath = modulesPath,
+          librariesPath = librariesPath,
+          scalaVersion = scalaVersion)
+
+        List(moduleName)
+      }
+    }
+
     val platforms = js ++ jvm ++ native
-    shared ++ platforms
+    shared ++ platforms ++ customTargets
   }
 
   def writeModules(projectPath: Path,

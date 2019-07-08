@@ -3,7 +3,7 @@ package seed.config
 import java.io.File
 
 import minitest.SimpleTestSuite
-import java.nio.file.Paths
+import java.nio.file.{Files, Paths}
 
 import org.apache.commons.io.FileUtils
 import seed.Log
@@ -23,8 +23,10 @@ object BuildConfigSpec extends SimpleTestSuite {
         |sources = ["src"]
       """.stripMargin, "UTF-8")
 
-    val (projectPath, _) = BuildConfig.load(Paths.get("/tmp/a.toml"), Log).get
+    val BuildConfig.Result(_, projectPath, moduleProjectPaths) =
+      BuildConfig.load(Paths.get("/tmp/a.toml"), Log).get
     assertEquals(projectPath, Paths.get("/tmp"))
+    assertEquals(moduleProjectPaths, Map("example" -> Paths.get("/tmp")))
   }
 
   test("Resolve relative project path") {
@@ -37,8 +39,40 @@ object BuildConfigSpec extends SimpleTestSuite {
         |sources = ["src"]
       """.stripMargin, "UTF-8")
 
-    val (projectPath, _) = BuildConfig.load(Paths.get("test/a.toml"), Log).get
+    val BuildConfig.Result(_, projectPath, moduleProjectPaths) =
+      BuildConfig.load(Paths.get("test/a.toml"), Log).get
     assertEquals(projectPath, Paths.get("test"))
+    assertEquals(moduleProjectPaths, Map("example" -> Paths.get("test")))
+  }
+
+  test("Import module") {
+    Files.createDirectories(Paths.get("/tmp/seed-root/child"))
+
+    FileUtils.write(new File("/tmp/seed-root/child/build.toml"),
+      """
+        |[project]
+        |scalaVersion = "2.12.8"
+        |
+        |[module.child.jvm]
+        |sources = ["src"]
+      """.stripMargin, "UTF-8")
+
+    FileUtils.write(new File("/tmp/seed-root/build.toml"),
+      """
+        |import = ["child"]
+        |
+        |[project]
+        |scalaVersion = "2.12.8"
+        |
+        |[module.root.jvm]
+        |sources = ["src"]
+      """.stripMargin, "UTF-8")
+
+    val BuildConfig.Result(_, projectPath, moduleProjectPaths) =
+      BuildConfig.load(Paths.get("/tmp/seed-root"), Log).get
+    assertEquals(moduleProjectPaths, Map(
+      "root"  -> Paths.get("/tmp/seed-root"),
+      "child" -> Paths.get("/tmp/seed-root/child")))
   }
 
   test("Set target platforms on test modules") {
@@ -65,8 +99,8 @@ object BuildConfigSpec extends SimpleTestSuite {
     """.stripMargin
 
     val buildRaw = TomlUtils.parseBuildToml(Paths.get("."))(toml)
-    val build = BuildConfig.processBuild(buildRaw.right.get, _ =>
-      Some(Build(project = Project(scalaVersion = "2.12.8"), module = Map())))
+    val (build, _) = BuildConfig.processBuild(buildRaw.right.get, Paths.get("."), _ =>
+      Some((Build(project = Project(scalaVersion = "2.12.8"), module = Map()), Map())))
 
     assertEquals(
       build.module("example").test.get.targets,
@@ -86,8 +120,8 @@ object BuildConfigSpec extends SimpleTestSuite {
     """.stripMargin
 
     val buildRaw = TomlUtils.parseBuildToml(Paths.get("."))(toml)
-    val build = BuildConfig.processBuild(buildRaw.right.get, _ =>
-      Some(Build(project = Project(scalaVersion = "2.12.8"), module = Map())))
+    val (build, _) = BuildConfig.processBuild(buildRaw.right.get, Paths.get("."), _ =>
+      Some(Build(project = Project(scalaVersion = "2.12.8"), module = Map()), Map()))
 
     assertEquals(
       build.module("example").jvm.get.scalaDeps,

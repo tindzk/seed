@@ -4,9 +4,7 @@ import java.nio.file.Paths
 
 import scala.concurrent.Future
 import scala.collection.mutable.ListBuffer
-
 import minitest.TestSuite
-
 import seed.Log
 import seed.cli.util.BloopCli
 import seed.generation.util.{ProjectGeneration, TestProcessHelper}
@@ -28,8 +26,9 @@ object LinkSpec extends TestSuite[Unit] {
     def onStdOut(output: String): Unit =
       BloopCli.parseStdOut(build)(output).foreach(events += _)
 
-    val process = Link.link(build, projectPath, List("example" -> None),
-      false, Log, onStdOut)
+    val process = BloopCli.link(
+      build, projectPath, List("example-js"), watch = false, Log, onStdOut)
+
     assert(process.isDefined)
     TestProcessHelper.scheduleTermination(process.get)
 

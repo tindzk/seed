@@ -5,7 +5,7 @@ import java.nio.file.{Path, Paths}
 import org.apache.commons.io.FileUtils
 import seed.Log
 import seed.cli.util.Ansi
-import seed.model.Build.VersionTag
+import seed.model.Build.{PlatformModule, VersionTag}
 import seed.model.{Build, Platform}
 import toml.{Codec, Value}
 
@@ -40,6 +40,23 @@ object TomlUtils {
     def pathCodec(f: Path => Path): Codec[Path] = Codec {
       case (Value.Str(path), _, _) => Right(f(Paths.get(path)))
       case (value, _, _) => Left((List(), s"Path expected, $value provided"))
+    }
+
+    implicit val platformModuleCodec: Codec[PlatformModule] = Codec {
+      case (Value.Str(platformModule), _, _) =>
+        val parts = platformModule.split(":")
+        if (parts.length != 2)
+          Left((List(), s"Expected format: ${Ansi.italic("<module>:<platform>")}"))
+        else {
+          val (name, target) = (parts(0), parts(1))
+
+          Platform.All.keys.find(_.id == target) match {
+            case None      => Left((List(), s"Invalid platform ${Ansi.italic(target)} provided"))
+            case Some(tgt) => Right(PlatformModule(name, tgt))
+          }
+        }
+
+      case (value, _, _) => Left((List(), s"String (<module>:<platform>) expected, $value provided"))
     }
   }
 
