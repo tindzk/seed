@@ -56,7 +56,8 @@ object Build {
                      scalaNativeVersion: Option[String] = None,
                      scalaOptions: List[String] = List(),
                      scalaOrganisation: String = Organisation.Lightbend.packageName,
-                     testFrameworks: List[String] = List())
+                     testFrameworks: List[String] = List(),
+                     compilerDeps: List[ScalaDep] = List())
 
   case class Module(scalaVersion: Option[String] = None,
                     root: Option[Path] = None,
