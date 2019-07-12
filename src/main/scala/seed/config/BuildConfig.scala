@@ -192,6 +192,9 @@ object BuildConfig {
 
   def isCrossBuild(module: Module): Boolean = module.targets.toSet.size > 1
 
+  def hasTarget(build: Build, name: String, platform: Platform): Boolean =
+    build.module(name).targets.contains(platform)
+
   def targetName(build: Build, name: String, platform: Platform): String =
     if (!isCrossBuild(build.module(name))) name else name + "-" + platform.id
 

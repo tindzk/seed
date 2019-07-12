@@ -2,6 +2,7 @@ package seed.generation
 
 import java.nio.file.{Files, Path, Paths}
 
+import bloop.config.ConfigEncoderDecoders
 import minitest.TestSuite
 import org.apache.commons.io.FileUtils
 import seed.{Log, cli}
@@ -108,6 +109,18 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   }
 
   testAsync("Build project with custom command target") { _ =>
-    buildCustomTarget("custom-command-target")
+    buildCustomTarget("custom-command-target").map { _ =>
+      val path = Paths.get(s"test/custom-command-target/.bloop/demo.json")
+      val content = FileUtils.readFileToString(path.toFile, "UTF-8")
+
+      import io.circe.parser._
+      val result = decode[bloop.config.Config.File](content)(
+        ConfigEncoderDecoders.allDecoder
+      ).right.get
+
+      // Should not include "utils" dependency since it does not have any
+      // Scala sources and no Bloop module.
+      assertEquals(result.project.dependencies, List())
+    }
   }
 }
