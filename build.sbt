@@ -46,6 +46,7 @@ libraryDependencies ++= Seq(
   "commons-io"         %  "commons-io"     % "2.6",
   "com.zaxxer"         %  "nuprocess"      % "1.2.4",
   "org.java-websocket" %  "Java-WebSocket" % "1.4.0",
+  "org.slf4j"          %  "slf4j-simple"   % "2.0.0-alpha0",
   "io.monix"           %% "minitest"       % "2.5.0" % "test",
 
   scalaOrganization.value % "scala-reflect" % scalaVersion.value
