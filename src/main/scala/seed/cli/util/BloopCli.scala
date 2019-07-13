@@ -1,7 +1,12 @@
 package seed.cli.util
 
-import seed.config.BuildConfig
-import seed.{Log, model}
+import java.nio.file.Path
+
+import seed.Log
+import seed.model.Build
+import seed.process.ProcessHelper
+
+import seed.model
 import seed.model.BuildEvent
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.model.Platform
@@ -13,29 +18,6 @@ object BloopCli {
     * See https://github.com/scalacenter/bloop/pull/639/files
     */
   def skipOutput(output: String): Boolean = output.contains("\u001b[H\u001b[2J")
-
-  def bloopModuleNames(build: model.Build,
-                       module: String,
-                       platform: Option[Platform],
-                       log: Log
-                      ): List[String] =
-    (module, platform) match {
-      case (name, None) =>
-        BuildConfig.linkTargets(build, name)
-        if (build.module.isDefinedAt(name)) BuildConfig.linkTargets(build, name)
-        else {
-          log.error(s"Invalid module provided: $name")
-          List()
-        }
-
-      case (name, Some(p)) =>
-        if (build.module.isDefinedAt(name))
-          List(BuildConfig.targetName(build, name, p))
-        else {
-          log.error(s"Invalid module provided: $name")
-          List()
-        }
-    }
 
   def parseBloopModule(build: model.Build, bloopName: String): (String, Platform) =
     if (bloopName.endsWith("-js")) (bloopName.dropRight("-js".length), JavaScript)
@@ -65,4 +47,30 @@ object BloopCli {
       Some(BuildEvent.Failed(module))
     } else None
   }
+
+  def compile(build: Build,
+              projectPath: Path,
+              bloopModules: List[String],
+              watch: Boolean,
+              log: Log,
+              onStdOut: String => Unit
+             ): Option[ProcessHelper.Process] =
+    if (bloopModules.isEmpty) None
+    else {
+      val args = "compile" +: ((if (!watch) List() else List("--watch")) ++ bloopModules)
+      Some(ProcessHelper.runBloop(projectPath, onStdOut)(args: _*))
+    }
+
+  def link(build: Build,
+           projectPath: Path,
+           bloopModules: List[String],
+           watch: Boolean,
+           log: Log,
+           onStdOut: String => Unit
+          ): Option[ProcessHelper.Process] =
+    if (bloopModules.isEmpty) None
+    else {
+      val args = "link" +: ((if (!watch) List() else List("--watch")) ++ bloopModules)
+      Some(ProcessHelper.runBloop(projectPath, onStdOut)(args: _*))
+    }
 }

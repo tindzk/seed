@@ -117,10 +117,14 @@ object Bloop {
             ArtefactResolution.javaDepFromScalaDep(
               dep, JavaScript, scalaJsVersion.get, scalaVersion)
           ).toSet)
-        val dependencies = if (test) List(name)
-                           else (moduleDeps ++ js.moduleDeps).map(name => BuildConfig.targetName(build, name, JavaScript))
-        val classesDir   = buildPath.resolve(bloopName)
-        val classPath    = resolvedDeps.map(_.libraryJar) ++
+        val dependencies =
+          if (test) List(name)
+          else (moduleDeps ++ js.moduleDeps)
+            .filter(name => BuildConfig.hasTarget(build, name, JavaScript))
+            .map(name => BuildConfig.targetName(build, name, JavaScript))
+
+        val classesDir = buildPath.resolve(bloopName)
+        val classPath  = resolvedDeps.map(_.libraryJar) ++
           (if (test) List(buildPath.resolve(name))
            else List()
           ) ++ parentClassPaths ++ List(resolveLibrary(Artefact.ScalaJsLibrary))
@@ -225,10 +229,14 @@ object Bloop {
                 scalaNativeVersion.get, scalaVersion)
             ).toSet)
 
-        val dependencies = if (test) List(name)
-        else (moduleDeps ++ native.moduleDeps).map(name => BuildConfig.targetName(build, name, Native))
-        val classesDir   = buildPath.resolve(bloopName)
-        val classPath    = resolvedDeps.map(_.libraryJar) ++
+        val dependencies =
+          if (test) List(name)
+          else (moduleDeps ++ native.moduleDeps)
+            .filter(name => BuildConfig.hasTarget(build, name, Native))
+            .map(name => BuildConfig.targetName(build, name, Native))
+
+        val classesDir = buildPath.resolve(bloopName)
+        val classPath  = resolvedDeps.map(_.libraryJar) ++
                            (if (test) List(buildPath.resolve(name))
                             else List()
                            ) ++ parentClassPaths ++
@@ -313,11 +321,14 @@ object Bloop {
         val plugIns = util.ScalaCompiler.compilerPlugIns(build,
           parentModule, compilerResolution, JVM, scalaVersion)
 
-        val dependencies = if (test) List(name)
-                           else (moduleDeps ++ jvm.moduleDeps).map(name => BuildConfig.targetName(build, name, JVM))
-        val classesDir   = buildPath.resolve(bloopName)
+        val dependencies =
+          if (test) List(name)
+          else (moduleDeps ++ jvm.moduleDeps)
+            .filter(name => BuildConfig.hasTarget(build, name, JVM))
+            .map(name => BuildConfig.targetName(build, name, JVM))
 
-        val classPath = resolvedDeps.map(_.libraryJar) ++
+        val classesDir = buildPath.resolve(bloopName)
+        val classPath  = resolvedDeps.map(_.libraryJar) ++
                         (if (test)
                           List(buildPath.resolve(name))
                          else List()) ++ parentClassPaths

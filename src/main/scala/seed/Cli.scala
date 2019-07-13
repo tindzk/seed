@@ -27,6 +27,11 @@ object Cli {
     case class Server(packageConfig: PackageConfig,
                       webSocket: WebSocketConfig
                      ) extends Command
+    case class Build(packageConfig: PackageConfig,
+                     webSocket: Option[WebSocketConfig],
+                     watch: Boolean,
+                     modules: List[String]
+                    ) extends Command
     case class Link(packageConfig: PackageConfig,
                     webSocket: Option[WebSocketConfig],
                     watch: Boolean,
@@ -40,13 +45,13 @@ object Cli {
                        module: String
                       ) extends Command
 
-    sealed trait Build extends Command {
+    sealed trait Generate extends Command {
       def packageConfig: PackageConfig
     }
 
-    case class Idea(packageConfig: PackageConfig)  extends Build
-    case class Bloop(packageConfig: PackageConfig) extends Build
-    case class All(packageConfig: PackageConfig)   extends Build
+    case class Idea(packageConfig: PackageConfig)  extends Generate
+    case class Bloop(packageConfig: PackageConfig) extends Generate
+    case class All(packageConfig: PackageConfig)   extends Generate
   }
 
   case class Config(configPath: Option[Path], buildPath: Path, command: Command)
@@ -87,6 +92,13 @@ object Cli {
     webSocketListenArg
   ).to[Command.Server]
 
+  val buildCommand = (
+    packageConfigArg and
+    webSocketConnectArg and
+    flag("--watch") and
+    repeatedAtLeastOnceFree[String]
+  ).to[Command.Build]
+
   val linkCommand = (
     packageConfigArg and
     webSocketConnectArg and
@@ -118,6 +130,7 @@ object Cli {
       "all" -> packageConfigArg.to[Command.All],
 
       "server" -> serverCommand,
+      "build" -> buildCommand,
       "link" -> linkCommand,
       "buildEvents" -> buildEventsCommand,
       "update" -> flag("--pre-releases").to[Command.Update],
@@ -139,6 +152,7 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
     ${italic("idea")}          Create IDEA project in the directory ${Ansi.italic(".idea")}
     ${italic("all")}           Create Bloop and IDEA projects
     ${italic("server")}        Run Seed in server mode
+    ${italic("build")}         Build module(s)
     ${italic("link")}          Link module(s)
     ${italic("buildEvents")}   Subscribe to build events on Seed server
     ${italic("update")}        Check library dependencies for updates
@@ -158,6 +172,16 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
 
   ${bold("Command:")} ${underlined("server")} [--listen=${webSocketDefaultConnection.format}]
     ${italic("--listen")}     Host and port on which WebSocket server listens
+
+  ${bold("Command:")} ${underlined("build")} [--connect[=${webSocketDefaultConnection.format}]] [--watch] [--tmpfs] <modules>
+    ${italic("--connect")}     Run build command on remote Seed server
+    ${italic("--watch")}       Build upon source changes (cannot be combined with ${Ansi.italic("--connect")})
+    ${italic("<modules>")}     One or multiple space-separated modules. The syntax of a module is: ${italic("<name>")} or ${italic("<name>:<platform>")}
+                  ${italic("Examples:")}
+                  - app          Compile all available platforms of module ${Ansi.italic("app")}
+                  - app:js       Only compile JavaScript platform of module ${Ansi.italic("app")}
+                  - app:native   Only compile Native platform of module ${Ansi.italic("app")}
+                  - app:<target> Only build ${Ansi.italic("<target>")} of the module ${Ansi.italic("app")}
 
   ${bold("Command:")} ${underlined("link")} [--connect[=${webSocketDefaultConnection.format}]] [--watch] <modules>
     ${italic("--connect")}     Run link command on remote Seed server
@@ -223,19 +247,24 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
         case Success(Config(configPath, buildPath, command: Command.Package)) =>
           import command._
           val config = SeedConfig.load(configPath)
-          val (projectPath, build) = BuildConfig.load(buildPath, Log)
-            .getOrElse(sys.exit(1))
+          val BuildConfig.Result(build, projectPath, _) =
+            BuildConfig.load(buildPath, Log).getOrElse(sys.exit(1))
           cli.Package.ui(config, projectPath, build, module, output, libs,
             packageConfig)
+        case Success(Config(configPath, buildPath, command: Command.Generate)) =>
+          val config = SeedConfig.load(configPath)
+          val BuildConfig.Result(build, projectPath, _) =
+            BuildConfig.load(buildPath, Log).getOrElse(sys.exit(1))
+          cli.Generate.ui(config, projectPath, build, command)
+        case Success(Config(configPath, _, command: Command.Server)) =>
+          val config = SeedConfig.load(configPath)
+          cli.Server.ui(config, command)
         case Success(Config(configPath, buildPath, command: Command.Build)) =>
           val config = SeedConfig.load(configPath)
-          val (projectPath, build) = BuildConfig.load(buildPath, Log)
-            .getOrElse(sys.exit(1))
-          cli.Build.ui(config, projectPath, build, command)
-        case Success(Config(_, _, command: Command.Server)) =>
-          cli.Server.ui(command)
-        case Success(Config(_, buildPath, command: Command.Link)) =>
-          cli.Link.ui(buildPath, command)
+          cli.Build.ui(buildPath, config, command)
+        case Success(Config(configPath, buildPath, command: Command.Link)) =>
+          val config = SeedConfig.load(configPath)
+          cli.Link.ui(buildPath, config, command)
         case Success(Config(_, _, command: Command.BuildEvents)) =>
           cli.BuildEvents.ui(command)
         case Failure(e) =>

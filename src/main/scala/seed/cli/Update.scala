@@ -40,7 +40,7 @@ object Update {
     }
 
   def ui(path: Path, stable: Boolean): Unit = {
-    val (projectPath, build) = BuildConfig.load(path, Log)
+    val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(path, Log)
       .getOrElse(sys.exit(1))
 
     val buildArtefacts = ArtefactResolution.allLibraryArtefacts(build)

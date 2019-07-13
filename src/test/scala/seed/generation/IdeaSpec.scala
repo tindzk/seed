@@ -1,7 +1,7 @@
 package seed.generation
 
 import minitest.SimpleTestSuite
-import java.nio.file.Paths
+import java.nio.file.{Files, Paths}
 
 import org.apache.commons.io.FileUtils
 import seed.Cli.{Command, PackageConfig}
@@ -37,12 +37,14 @@ object IdeaSpec extends SimpleTestSuite {
             targets = List(JVM),
             jvm = Some(Module(
               root = Some(Paths.get("a")),
-              sources = List(Paths.get("a/src"))))),
+              sources = List(Paths.get("a/src")))),
+            target = Map("assets" -> Build.Target())),
           "b" -> Module(
             targets = List(JVM),
             jvm = Some(Module(
               root = Some(Paths.get("b")),
-              sources = List(Paths.get("b/src")))))))
+              sources = List(Paths.get("b/src")))),
+            target = Map("assets" -> Build.Target(Some(Paths.get("b/assets")))))))
 
     val projectPath = Paths.get(".")
     val outputPath = Paths.get("/tmp")
@@ -54,14 +56,24 @@ object IdeaSpec extends SimpleTestSuite {
 
     Idea.build(projectPath, outputPath, build, platformResolution,
       compilerResolution, false)
+
+    assertEquals(
+      Files.exists(
+        outputPath.resolve(".idea").resolve("modules").resolve("a-assets.iml")
+      ), false)
+
+    assertEquals(
+      Files.exists(
+        outputPath.resolve(".idea").resolve("modules").resolve("b-assets.iml")
+      ), true)
   }
 
   test("Generate project with custom compiler options") {
-    val (projectPath, build) = BuildConfig.load(
+    val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(
       Paths.get("test/compiler-options"), Log).get
     val packageConfig = PackageConfig(tmpfs = false, silent = false,
       ivyPath = None, cachePath = None)
-    cli.Build.ui(Config(), projectPath, build, Command.Idea(packageConfig))
+    cli.Generate.ui(Config(), projectPath, build, Command.Idea(packageConfig))
 
     val ideaPath = projectPath.resolve(".idea")
 
@@ -79,11 +91,11 @@ object IdeaSpec extends SimpleTestSuite {
   }
 
   test("Generate project with different Scala versions") {
-    val (projectPath, build) = BuildConfig.load(
+    val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(
       Paths.get("test/multiple-scala-versions"), Log).get
     val packageConfig = PackageConfig(tmpfs = false, silent = false,
       ivyPath = None, cachePath = None)
-    cli.Build.ui(Config(), projectPath, build, Command.Idea(packageConfig))
+    cli.Generate.ui(Config(), projectPath, build, Command.Idea(packageConfig))
 
     val ideaPath = projectPath.resolve(".idea")
 

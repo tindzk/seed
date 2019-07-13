@@ -64,27 +64,56 @@ object ProcessHelper {
     }
   }
 
-  def runBloop(cwd: Path,
-               onStdOut: String => Unit
-              )(args: String*): Process = {
-    val cmd = List("bloop") ++ args
-    Log.info(s"Running ${Ansi.italic(cmd.mkString(" "))} in ${Ansi.italic(cwd.toString)}...")
+  def runCommmand(cwd: Path,
+                  cmd: List[String],
+                  modulePath: Option[String] = None,
+                  buildPath: Option[String] = None,
+                  log: String => Unit
+                 ): Process = {
+    log(s"Running command '${Ansi.italic(cmd.mkString(" "))}'...")
+    log(s"    Working directory: ${Ansi.italic(cwd.toString)}")
 
     val termination = Promise[Int]()
 
     val pb = new NuProcessBuilder(cmd.asJava)
+
+    modulePath.foreach { mp =>
+      pb.environment().put("MODULE_PATH", mp)
+      log(s"    Module path: ${Ansi.italic(mp)}")
+    }
+
+    buildPath.foreach { bp =>
+      pb.environment().put("BUILD_PATH", bp)
+      log(s"    Build path: ${Ansi.italic(bp)}")
+    }
+
     pb.setProcessListener(new ProcessHandler(
-      { case ProcessOutput.StdOut(output) =>
-        if (!BloopCli.skipOutput(output)) onStdOut(output)
-      case ProcessOutput.StdErr(output) =>
-        if (!BloopCli.skipOutput(output)) onStdOut(output)
+      {
+        case ProcessOutput.StdOut(output) => log(output)
+        case ProcessOutput.StdErr(output) => log(output)
       },
-      pid => Log.info("PID: " + pid),
+      pid => log("PID: " + pid),
       { code =>
-        Log.info("Process exited with code: " + code)
+        log("Process exited with code: " + code)
         termination.success(code)
       }))
+
     if (cwd.toString != "") pb.setCwd(cwd)
     new Process(pb.start(), termination.future)
   }
+
+  def runBloop(cwd: Path,
+               log: String => Unit,
+               modulePath: Option[String] = None,
+               buildPath: Option[String] = None
+              )(args: String*): Process =
+    runCommmand(cwd, List("bloop") ++ args, modulePath, buildPath,
+      output => if (!BloopCli.skipOutput(output)) log(output))
+
+  def runShell(cwd: Path,
+               command: String,
+               buildPath: String,
+               log: String => Unit
+              ): Process =
+    runCommmand(cwd, List("/bin/sh", "-c", command), None, Some(buildPath), log)
 }

@@ -135,6 +135,9 @@ This compiles the module to `build/` and runs it.
 * IDE project generation for IntelliJ IDEA
     * Avoids overhead of sbt/Gradle/Maven projects
     * Better integration of cross-platform projects
+* Custom build targets to run external commands or main classes
+    * Generate code
+    * Build non-Scala artefacts
 * Organised file structure
     * There is only one build folder per project (as opposed to `target` folders for every module in sbt)
     * Custom project source structures are easily configured, e.g. `src/` and `test/` instead of the more lengthy `src/{main,test}/scala/`
@@ -150,13 +153,13 @@ This compiles the module to `build/` and runs it.
     * Copy over dependencies
 * Server mode
     * Expose a WebSocket server
-    * Clients can trigger linking of JavaScript/native modules
+    * Clients can trigger compilation and linking of modules
     * Clients can subscribe to build events
 * Check for dependency updates
     * Choose library versions separately for each platform to avoid incompatibilities
 * Simple design
     * No distinction between managed/unmanaged/generated sources
-    * No ability to write tasks or custom code
+    * No ability to define tasks
     * No plug-in infrastructure
     * Tiny code base
 
@@ -449,6 +452,75 @@ Setting `moduleDeps` to `core`, gives `webapp` and `server` access to its compil
 
 `bloop compile webapp` triggers the compilation of `core-js` whereas `bloop compile server` would compile `core-jvm`.
 
+### Custom build targets
+You can specify custom targets on a module, for example to build artefacts (HTML, CSS) or to generate code that dependent modules will compile. A target can run shell commands and main classes.
+
+As an example, we could generate CSS artefacts from SCSS using [Gulp](https://gulpjs.com/). The corresponding entry for spawning the Gulp process would look as follows:
+
+```toml
+[module.template.target.scss]
+root    = "scss"
+command = "yarn run gulp"
+```
+
+Since we specified `root`, it will also generate a IDEA module named `template-scss`. We could build the target explicitly with `seed build template:scss`, or simply `seed build template`. If the module `template` has regular Scala targets, the latter would compile their sources too along with all custom targets.
+
+Note that you will have to either use `seed build` or `seed link` since Bloop commands are not aware of your build targets.
+
+When you depend on a module in `moduleDeps`, all of its targets are inherited. Any module that transitively depends on `template`, will run the target command when building.
+
+The current working directory is the path to the module's build file. The environment variable `BUILD_PATH` will point to the build path of the root project. You can access it in the command itself:
+
+```toml
+[module.template.target.fonts]
+root    = "fonts"
+command = "cp -Rv fonts $BUILD_PATH"
+```
+
+
+By default, the process execution is asynchronous. If you need the process to complete first before continuing with the compilation process, you can override the `await` setting which is set to `false` by default:
+
+```
+[module.template.target.gen-scala]
+await   = true
+command = "..."
+```
+
+If your command has support for a watch mode, you can additionally specify a `watchCommand`:
+
+```toml
+[module.template.target.scss]
+root         = "scss"
+command      = "yarn run gulp"
+watchCommand = "yarn run gulp default watch"
+```
+
+The watch command is used when the user specifies `--watch`:
+
+* `seed build template:scss --watch`
+* `seed link template:scss --watch`
+
+If `--watch` is not provided, Seed will spawn the `command` instead. Note that the `watchCommand` ignores `await` and is always run asynchronously.
+
+Besides spawning commands, you can run any main class defined in the project. For example, to generate a JavaScript file, you could define:
+
+```toml
+[module.layouts.target.js-bundle]
+root = "layouts"
+
+class = { module = "keyboard:jvm", main = "keyboard.Bundle" }
+
+# or shorter:
+# class = ["keyboard:jvm", "keyboard.Bundle"]
+```
+
+In addition to `BUILD_PATH`, we also set the environment variable `MODULE_PATH` when running classes. The module path is the root path of the Seed project which contains the referenced module. This environment variable is not set for commands since their current working directory will point to the module path.
+
+For two equivalent examples of using code generation, please refer to these links:
+
+* [Class target](test/custom-class-target/)
+* [Command target](test/custom-command-target/)
+
 ### Compiler plug-ins
 A module can add Scala plug-ins with `compilerDeps`. The setting behaves like `scalaDeps`, but also adds the `-Xplugin` parameter to the Scala compiler when the module is compiled. A minimal example looks as follows:
 
@@ -619,11 +691,21 @@ For more detailed information, please refer to the official [Bloop user guide](h
 
 Also, run `seed --help` to acquaint yourself with all the available commands.
 
-### Linking
-After having created the Bloop project, you can link directly from Seed:
+### Compiling and Linking
+After having created the Bloop project, you can compile and link it directly from Seed:
+* `seed build <module>`  This will compile all platform modules
+* `seed link <module>`   This will link all platform modules which support linking (JavaScript and Native)
 
-* `seed link <module>`  This will link all platform modules
-* `seed link <module>:js`  This will link only the JavaScript module
+You can select a specific platform:
+* `seed build <module>:js`  This will compile only the JavaScript module
+* `seed link <module>:js`   This will link only the JavaScript module
+
+If you defined a [custom build target](#custom-build-targets), you can use the same syntax to build it:
+* `seed build <module>:<target>`
+
+If you run Seed in [server mode](#server-mode), you can connect to your remote Seed instance using the `--connect` parameter:
+
+* `seed build --connect <module>` Trigger compilation on remote Seed instance
 * `seed link --connect <module>`  Trigger linking on remote Seed instance
 
 ### Server mode
@@ -783,7 +865,7 @@ This benchmark tested the compilation speed of JVM and JavaScript for Scala 2.12
 
 ## Limitations
 ### Plug-ins
-Seed does not offer any capability for plug-ins or running custom code. To model the equivalent of sbt's tasks in Seed, you could write [Ammonite](http://ammonite.io/) scripts or define separate modules and run these via Bloop.
+Seed does not offer any capability for writing plug-ins. If you would like to react to build events, you could use Seed in the server mode. To model the equivalent of sbt's tasks in Seed, you can define a separate module with [custom build targets](#custom-build-targets).
 
 If some settings of the build are dynamic, you could write a script to generate TOML files from a template. A use case would be to cross-compile your modules for different Scala versions. Cross-compilation between Scala versions may require code changes. It is thinkable to have the `build.toml` point to the latest supported Scala version and have scripts that downgrade the sources, e.g. using a tool like [scalafix](https://scalacenter.github.io/scalafix/).
 

@@ -1,0 +1,10 @@
+[project]
+scalaVersion = "2.13.0"
+
+[module.utils.target.gen-sources]
+command = "echo 'object Generated { val constant = 42 }' > demo/Generated.scala"
+await = true
+
+[module.demo.jvm]
+moduleDeps = ["utils"]
+sources = ["demo"]
