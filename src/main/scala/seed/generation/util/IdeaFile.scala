@@ -1,5 +1,7 @@
 package seed.generation.util
 
+import seed.generation.Bloop
+
 import pine._
 
 /** XML writers for IDEA files */
@@ -14,9 +16,10 @@ object IdeaFile {
                     moduleDeps: List[String],
                     output: Option[Output])
 
+  case class CompilerInfo(version: String, compilerClasses: List[String])
+
   case class Library(name: String,
-                     isScalaCompiler: Boolean,
-                     compilerClasses: List[String],
+                     compilerInfo: Option[CompilerInfo],
                      classes: List[String],
                      javaDoc: List[String],
                      sources: List[String])
@@ -83,11 +86,20 @@ object IdeaFile {
   }
 
   def createLibrary(library: Library): String = {
-    val tpe = if (library.isScalaCompiler) Some("Scala") else None
-    val compilerPaths = library.compilerClasses
-      .map(path => xml"""<root url="file://$path" />""")
+    val tpe = library.compilerInfo.map(_ => "Scala")
+    val languageLevel =
+      library.compilerInfo.map { case CompilerInfo(version, _) =>
+        val level = "Scala_" + Bloop.majorMinorVersion(version)
+          .replaceAllLiterally(".", "_")
+        xml"""<language-level>$level</language-level>"""
+      }.toList
+    val compilerPaths = library.compilerInfo.fold(List[pine.Tag[Singleton]]())(
+      _.compilerClasses.map(path => xml"""<root url="file://$path" />"""))
     val properties = if (compilerPaths.isEmpty) List() else List(xml"""
-      <properties><compiler-classpath>$compilerPaths</compiler-classpath></properties>
+      <properties>
+        $languageLevel
+        <compiler-classpath>$compilerPaths</compiler-classpath>
+      </properties>
     """)
     val classes = library.classes.map(path => xml"""<root url="jar://$path!/" />""")
     val javaDoc = library.javaDoc.map(path => xml"""<root url="jar://$path!/" />""")
