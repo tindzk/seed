@@ -6,7 +6,7 @@
 # Build stage
 #
 
-FROM alpine:3.8 as build
+FROM alpine:3.10 as build
 
 ARG BINTRAY_USERNAME
 ARG BINTRAY_API
@@ -42,7 +42,7 @@ RUN blp-coursier bootstrap tindzk:seed_2.12:$(cat SEED) -f -o seed
 # Run stage
 #
 
-FROM alpine:3.8
+FROM alpine:3.10
 
 # Python is needed for the Bloop front-end
 # Node.js is needed for running Scala.js programs
