@@ -3,7 +3,7 @@ name: default
 
 steps:
   - name: version
-    image: alpine:3.8
+    image: alpine:3.10
     commands:
       - apk add --no-cache git
       - git fetch --tags
@@ -11,7 +11,7 @@ steps:
       - git describe --tags > SEED
       - echo -n $(git describe --tags),latest > .tags
   - name: test
-    image: alpine:3.8
+    image: alpine:3.10
     commands:
       - apk add --no-cache openjdk8 python curl nodejs
       - curl -L https://github.com/scalacenter/bloop/releases/download/v$(cat BLOOP)/install.py | python - -d bloop
