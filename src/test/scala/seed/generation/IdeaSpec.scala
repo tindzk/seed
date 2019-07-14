@@ -108,6 +108,19 @@ object IdeaSpec extends SimpleTestSuite {
     assertEquals(profileNodes.head.attr("modules"),
       Some("module212,module211"))
 
+    val scalaLibrary2_11_11 =
+      pine.XmlParser.fromString(FileUtils.readFileToString(
+        ideaPath.resolve("libraries").resolve("org_scala_lang_2_11_11.xml").toFile,
+        "UTF-8"))
+    val scalaLibrary2_12_8 =
+      pine.XmlParser.fromString(FileUtils.readFileToString(
+        ideaPath.resolve("libraries").resolve("org_scala_lang_2_12_8.xml").toFile,
+        "UTF-8"))
+    assertEquals(scalaLibrary2_11_11.byTagAll["language-level"].map(_.toText),
+      List("Scala_2_11"))
+    assertEquals(scalaLibrary2_12_8.byTagAll["language-level"].map(_.toText),
+      List("Scala_2_12"))
+
     val module211 =
       pine.XmlParser.fromString(FileUtils.readFileToString(
         ideaPath.resolve("modules").resolve("module211.iml").toFile,

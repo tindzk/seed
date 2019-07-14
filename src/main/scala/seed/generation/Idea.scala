@@ -31,8 +31,7 @@ object Idea {
                    ): Unit = {
     val xml = IdeaFile.createLibrary(IdeaFile.Library(
       libraryJar.getFileName.toString,
-      isScalaCompiler = false,
-      compilerClasses = List(),
+      compilerInfo = None,
       classes = List(libraryJar.toAbsolutePath.toString),
       javaDoc = javaDocJar.toList.map(_.toAbsolutePath.toString),
       sources = sourcesJar.toList.map(_.toAbsolutePath.toString)))
@@ -122,8 +121,8 @@ object Idea {
 
       val xml = IdeaFile.createLibrary(IdeaFile.Library(
         name = build.project.scalaOrganisation + "-" + scalaVersion,
-        isScalaCompiler = true,
-        compilerClasses = scalaCompiler.compilerJars.map(_.toString),
+        compilerInfo = Some(IdeaFile.CompilerInfo(
+          scalaVersion, scalaCompiler.compilerJars.map(_.toString))),
         classes = scalaCompiler.fullClassPath.map(_.toString),
         javaDoc = List(),
         sources = List()))
