@@ -1,18 +1,19 @@
 package seed.generation
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path}
 
 import scala.collection.JavaConverters._
 import org.apache.commons.io.FileUtils
 import seed.config.BuildConfig.{collectJsDeps, collectJsModuleDeps, collectJvmJavaDeps, collectJvmModuleDeps, collectJvmScalaDeps, collectNativeDeps, collectNativeModuleDeps}
-import seed.artefact.{Coursier, ArtefactResolution}
+import seed.artefact.{ArtefactResolution, Coursier}
 import seed.cli.util.Ansi
-import seed.generation.util.IdeaFile
+import seed.generation.util.{IdeaFile, PathUtil}
 import seed.model.{Build, Resolution}
 import seed.model.Build.Module
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.Log
 import seed.config.BuildConfig
+import seed.generation.util.PathUtil.normalisePath
 
 object Idea {
   val ModuleDir  = "$MODULE_DIR$"
@@ -40,22 +41,6 @@ object Idea {
     FileUtils.write(
       librariesPath.resolve(ideaName(libraryJar.getFileName.toString) + ".xml")
         .toFile, xml, "UTF-8")
-  }
-
-  def normalisePath(pathVariable: String, root: Path)(path: Path): String = {
-    val canonicalRoot = root.toFile.getCanonicalPath
-    val canonicalPath = path.toFile.getCanonicalPath
-
-    val rootElems = canonicalRoot.split("/").toList
-    val pathElems = canonicalPath.split("/").toList
-    val common = pathElems.zip(rootElems).takeWhile { case (a, b) => a == b }
-
-    if (common.length == 1) canonicalPath
-    else {
-      val levels = rootElems.length - common.length
-      val relativePath = (0 until levels).map(_ => "../").mkString
-      pathVariable + "/" + relativePath + pathElems.drop(common.length).mkString("/")
-    }
   }
 
   def createModule(build      : Build,
@@ -430,13 +415,10 @@ object Idea {
             resolution: Coursier.ResolutionResult,
             compilerResolution: List[Coursier.ResolutionResult],
             tmpfs: Boolean): Unit = {
-    val baseBuildPath =
-      if (tmpfs) BuildConfig.tmpfsPath(projectPath)
-      else Paths.get("build")
+    val buildPath = PathUtil.buildPath(projectPath, tmpfs)
+    val ideaBuildPath = buildPath.resolve("idea")
 
-    val buildPath = baseBuildPath.resolve("idea")
-
-    Log.info(s"Build path: ${Ansi.italic(buildPath.toString)}")
+    Log.info(s"Build path: ${Ansi.italic(ideaBuildPath.toString)}")
 
     val ideaPath      = outputPath.resolve(".idea")
     val modulesPath   = ideaPath.resolve("modules")
@@ -460,7 +442,7 @@ object Idea {
 
     val modules = build.module.toList.flatMap { case (name, module) =>
       buildModule(
-        projectPath, buildPath, ideaPath, modulesPath, librariesPath, build,
+        projectPath, ideaBuildPath, ideaPath, modulesPath, librariesPath, build,
         compilerResolution, resolution, name, module)
     }
 

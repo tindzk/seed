@@ -1,15 +1,15 @@
 package seed.cli
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.Path
 
 import seed.Log
 import seed.config.BuildConfig
+import seed.generation.util.PathUtil
 import seed.model
 import seed.process.ProcessHelper
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
-
 import scala.concurrent.ExecutionContext.Implicits.global
 
 object BuildTarget {
@@ -46,9 +46,7 @@ object BuildTarget {
 
     val allTargets = (targets ++ inheritedTargets).distinct
 
-    val buildPath =
-      if (tmpfs) BuildConfig.tmpfsPath(projectPath, log).resolve("bloop")
-      else Paths.get("build")
+    val buildPath = PathUtil.buildPath(projectPath, tmpfs, log)
 
     log.info(s"Build path: $buildPath")
 

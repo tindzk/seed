@@ -14,8 +14,10 @@ object ProjectGeneration {
 
     val bloopPath = projectPath.resolve(".bloop")
     val buildPath = projectPath.resolve("build")
+    val bloopBuildPath = buildPath.resolve("bloop")
 
-    Set(bloopPath, buildPath).foreach(Files.createDirectories(_))
+    Set(bloopPath, buildPath, bloopBuildPath)
+      .foreach(Files.createDirectories(_))
 
     val resolvedIvyPath = Coursier.DefaultIvyPath
     val resolvedCachePath = Coursier.DefaultCachePath
@@ -38,6 +40,7 @@ object ProjectGeneration {
         projectPath,
         bloopPath,
         buildPath,
+        bloopBuildPath,
         build,
         resolution,
         compilerResolution,

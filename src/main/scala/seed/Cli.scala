@@ -156,8 +156,8 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
     ${italic("link")}          Link module(s)
     ${italic("buildEvents")}   Subscribe to build events on Seed server
     ${italic("update")}        Check library dependencies for updates
-    ${italic("package")}       Create JAR package for given module and its dependent modules
-                  Also sets the main class from the configuration file
+    ${italic("package")}       Create JAR package for given module and its dependencies
+                  Also sets the main class from the build file
                   Specify --libs to copy all library dependencies for distribution
 
   ${bold("Parameters:")}
@@ -176,7 +176,7 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
   ${bold("Command:")} ${underlined("build")} [--connect[=${webSocketDefaultConnection.format}]] [--watch] [--tmpfs] <modules>
     ${italic("--connect")}     Run build command on remote Seed server
     ${italic("--watch")}       Build upon source changes (cannot be combined with ${Ansi.italic("--connect")})
-    ${italic("<modules>")}     One or multiple space-separated modules. The syntax of a module is: ${italic("<name>")} or ${italic("<name>:<platform>")}
+    ${italic("<modules>")}     One or multiple space-separated modules. The syntax of a module is: ${italic("<name>")} or ${italic("<name>:<target>")}
                   ${italic("Examples:")}
                   - app          Compile all available platforms of module ${Ansi.italic("app")}
                   - app:js       Only compile JavaScript platform of module ${Ansi.italic("app")}
@@ -205,8 +205,8 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
 
   ${bold("Command:")} ${underlined("package")} [--tmpfs] [--libs] [--output=<path>] <module>
     ${italic("--tmpfs")}       Read build directory in tmpfs
-    ${italic("--libs")}        Copy libraries and reference them in the JAR's class path.
-    ${italic("--output")}      Output path (default: ${Ansi.italic("dist/")})
+    ${italic("--libs")}        Copy libraries and reference them in the JAR's class path
+    ${italic("--output")}      Output path (default: ${Ansi.italic("build/dist/")})
     ${italic("<module>")}      Module to package""")
   }
 
