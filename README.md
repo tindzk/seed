@@ -1,4 +1,5 @@
 # Seed
+[![Gitter](https://badges.gitter.im/seed-scala/community.svg)](https://gitter.im/seed-scala/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 [![Build Status](http://ci.sparse.tech/api/badges/tindzk/seed/status.svg)](http://ci.sparse.tech/tindzk/seed)
 [![](https://images.microbadger.com/badges/image/tindzk/seed.svg)](https://microbadger.com/images/tindzk/seed)
 [![](https://images.microbadger.com/badges/version/tindzk/seed.svg)](https://microbadger.com/images/tindzk/seed)
