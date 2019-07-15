@@ -2,14 +2,15 @@ package seed.generation
 
 import java.nio.file.{Files, Path, Paths}
 
-import seed.config.BuildConfig.{collectJsClassPath, collectJsDeps, collectJvmClassPath, collectJvmScalaDeps, collectJvmJavaDeps, collectNativeClassPath, collectNativeDeps}
-import seed.artefact.{Coursier, ArtefactResolution}
+import seed.config.BuildConfig.{collectJsClassPath, collectJsDeps, collectJvmClassPath, collectJvmJavaDeps, collectJvmScalaDeps, collectNativeClassPath, collectNativeDeps}
+import seed.artefact.{ArtefactResolution, Coursier}
 import seed.cli.util.Ansi
 import seed.model.Build.{Module, Project}
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.model.{Artefact, Build, Resolution}
 import seed.Log
 import seed.config.BuildConfig
+import seed.generation.util.PathUtil
 
 object Bloop {
   import bloop.config.Config
@@ -366,6 +367,7 @@ object Bloop {
   def buildModule(projectPath: Path,
                   bloopPath: Path,
                   buildPath: Path,
+                  bloopBuildPath: Path,
                   build: Build,
                   resolution: Coursier.ResolutionResult,
                   compilerResolution: List[Coursier.ResolutionResult],
@@ -379,25 +381,25 @@ object Bloop {
       moduleOutputPath(buildPath, module.native, name + ".run")
 
     writeJsModule(build, if (!isCrossBuild) name else name + "-js",
-      projectPath, bloopPath, buildPath, Some(jsOutputPath),
+      projectPath, bloopPath, bloopBuildPath, Some(jsOutputPath),
       module.copy(scalaDeps = collectJsDeps(build, module)),
-      collectJsClassPath(buildPath, build, module),
+      collectJsClassPath(bloopBuildPath, build, module),
       module.js, build.project, resolution, compilerResolution,
       jsdom = module.js.exists(_.jsdom),
       emitSourceMaps = module.js.exists(_.emitSourceMaps),
       test = false)
     writeJvmModule(build, if (!isCrossBuild) name else name + "-jvm",
-      projectPath, bloopPath, buildPath,
+      projectPath, bloopPath, bloopBuildPath,
       module.copy(
         scalaDeps = collectJvmScalaDeps(build, module),
         javaDeps = collectJvmJavaDeps(build, module)
       ),
-      collectJvmClassPath(buildPath, build, module),
+      collectJvmClassPath(bloopBuildPath, build, module),
       module.jvm, build.project, resolution, compilerResolution, test = false)
     writeNativeModule(build, if (!isCrossBuild) name else name + "-native",
-      projectPath, bloopPath, buildPath, Some(nativeOutputPath),
+      projectPath, bloopPath, bloopBuildPath, Some(nativeOutputPath),
       module.copy(scalaDeps = collectNativeDeps(build, module)),
-      collectJvmClassPath(buildPath, build, module),
+      collectJvmClassPath(bloopBuildPath, build, module),
       module.native, build.project, resolution, compilerResolution, test = false)
 
     module.test.foreach { test =>
@@ -406,35 +408,35 @@ object Bloop {
       val emitSourceMaps = test.js.exists(_.emitSourceMaps)
 
       writeJsModule(build, if (!isCrossBuild) name else name + "-js",
-        projectPath, bloopPath, buildPath, None,
+        projectPath, bloopPath, bloopBuildPath, None,
         module.copy(
           sources = test.sources,
           scalaDeps = collectJsDeps(build, module) ++ test.scalaDeps,
           targets = targets
         ),
-        collectJsClassPath(buildPath, build, module),
+        collectJsClassPath(bloopBuildPath, build, module),
         test.js, build.project, resolution, compilerResolution, jsdom,
         emitSourceMaps, test = true)
 
       writeNativeModule(build, if (!isCrossBuild) name else name + "-native",
-        projectPath, bloopPath, buildPath, None,
+        projectPath, bloopPath, bloopBuildPath, None,
         module.copy(
           sources = test.sources,
           scalaDeps = collectNativeDeps(build, module) ++ test.scalaDeps,
           targets = targets
         ),
-        collectNativeClassPath(buildPath, build, module),
+        collectNativeClassPath(bloopBuildPath, build, module),
         test.native, build.project, resolution, compilerResolution, test = true)
 
       writeJvmModule(build, if (!isCrossBuild) name else name + "-jvm",
-        projectPath, bloopPath, buildPath,
+        projectPath, bloopPath, bloopBuildPath,
         module.copy(
           sources = test.sources,
           scalaDeps = collectJvmScalaDeps(build, module) ++ test.scalaDeps,
           javaDeps = collectJvmJavaDeps(build, module) ++ test.javaDeps,
           targets = targets
         ),
-        collectJvmClassPath(buildPath, build, module),
+        collectJvmClassPath(bloopBuildPath, build, module),
         test.jvm, build.project, resolution, compilerResolution, test = true)
 
       if (isCrossBuild)
@@ -443,7 +445,7 @@ object Bloop {
           name = name + "-test",
           bloopPath = bloopPath,
           dependencies = targets.map(t => name + "-" + t.id + "-test"),
-          classesDir = buildPath,
+          classesDir = bloopBuildPath,
           classPath = List(),
           sources = List(),
           scalaCompiler = None,
@@ -458,7 +460,7 @@ object Bloop {
         name = name,
         bloopPath = bloopPath,
         dependencies = module.targets.map(t => name + "-" + t.id),
-        classesDir = buildPath,
+        classesDir = bloopBuildPath,
         classPath = List(),
         sources = List(),
         scalaCompiler = None,
@@ -467,26 +469,19 @@ object Bloop {
         platform = None)
   }
 
-  def getBuildPath(projectPath: Path, tmpfs: Boolean): Path = {
-    val baseBuildPath =
-      if (tmpfs) BuildConfig.tmpfsPath(projectPath)
-      else projectPath.resolve("build")
-
-    baseBuildPath.resolve("bloop")
-  }
-
   def build(projectPath: Path,
             build: Build,
             resolution: Coursier.ResolutionResult,
             compilerResolution: List[Coursier.ResolutionResult],
             tmpfs: Boolean): Unit = {
     val bloopPath = projectPath.resolve(".bloop")
-    val buildPath = getBuildPath(projectPath, tmpfs)
+    val buildPath = PathUtil.buildPath(projectPath, tmpfs)
+    val bloopBuildPath = buildPath.resolve("bloop")
 
     Log.info(s"Build path: ${Ansi.italic(buildPath.toString)}")
 
     if (!Files.exists(bloopPath)) Files.createDirectory(bloopPath)
-    if (!Files.exists(buildPath)) Files.createDirectories(buildPath)
+    if (!Files.exists(bloopBuildPath)) Files.createDirectories(bloopBuildPath)
 
     import scala.collection.JavaConverters._
     Files.newDirectoryStream(bloopPath, "*.json").iterator().asScala
@@ -494,7 +489,7 @@ object Bloop {
 
     build.module.foreach { case (name, module) =>
       Log.info(s"Building module ${Ansi.italic(name)}...")
-      buildModule(projectPath, bloopPath, buildPath, build,
+      buildModule(projectPath, bloopPath, buildPath, bloopBuildPath, build,
         resolution, compilerResolution, name, module)
     }
 

@@ -290,11 +290,4 @@ object BuildConfig {
   def collectJvmJavaDeps(build: Build, module: Module): List[JavaDep] =
     module.javaDeps ++ module.jvm.map(_.javaDeps).getOrElse(List()) ++
     jvmModuleDeps(module).flatMap(m => collectJvmJavaDeps(build, build.module(m)))
-
-  def tmpfsPath(projectPath: Path, log: Log = Log): Path = {
-    val name = projectPath.toAbsolutePath.getFileName.toString
-    log.info("Build path set to tmpfs")
-    log.warn(s"Please ensure that there is no other project with the name ${Ansi.italic(name)} that also compiles to tmpfs")
-    Paths.get("/tmp").resolve("build-" + name)
-  }
 }

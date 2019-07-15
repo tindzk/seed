@@ -8,6 +8,7 @@ import seed.Cli.{Command, PackageConfig}
 import seed.{Log, cli}
 import seed.artefact.ArtefactResolution
 import seed.config.BuildConfig
+import seed.generation.util.PathUtil
 import seed.model.Build.{Module, Project}
 import seed.model.Platform.JVM
 import seed.model.{Build, Config}
@@ -15,16 +16,16 @@ import seed.model.{Build, Config}
 object IdeaSpec extends SimpleTestSuite {
   test("Normalise paths") {
     assertEquals(
-      Idea.normalisePath(Idea.ModuleDir, Paths.get("/tmp"))(Paths.get("/tmp")),
+      PathUtil.normalisePath(Idea.ModuleDir, Paths.get("/tmp"))(Paths.get("/tmp")),
       "$MODULE_DIR$/")
 
     assertEquals(
-      Idea.normalisePath(Idea.ModuleDir, Paths.get("/tmp/.idea/modules"))(
+      PathUtil.normalisePath(Idea.ModuleDir, Paths.get("/tmp/.idea/modules"))(
         Paths.get("/tmp/src")
       ), "$MODULE_DIR$/../../src")
 
     assertEquals(
-      Idea.normalisePath(Idea.ModuleDir, Paths.get(".idea/modules"))(Paths.get("/tmp/build")),
+      PathUtil.normalisePath(Idea.ModuleDir, Paths.get(".idea/modules"))(Paths.get("/tmp/build")),
       "/tmp/build")
   }
 

@@ -1,13 +1,12 @@
 package seed.cli
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path}
 
 import scala.collection.JavaConverters._
-
 import seed.artefact.{ArtefactResolution, Coursier}
 import seed.cli.util.Ansi
 import seed.config.BuildConfig
-import seed.generation.Bloop
+import seed.generation.util.PathUtil
 import seed.model
 import seed.model.Build.JavaDep
 import seed.model.Config
@@ -24,9 +23,10 @@ object Package {
          packageConfig: Cli.PackageConfig
         ): Unit = {
     val tmpfs = packageConfig.tmpfs || seedConfig.build.tmpfs
-    val buildPath = Bloop.getBuildPath(projectPath, tmpfs)
+    val buildPath = PathUtil.buildPath(projectPath, tmpfs)
+    val bloopBuildPath = buildPath.resolve("bloop")
     val platform = JVM
-    val outputPath = output.getOrElse(Paths.get("dist"))
+    val outputPath = output.getOrElse(buildPath.resolve("dist"))
 
     build.module.get(module) match {
       case None => Log.error(s"Module ${Ansi.italic(module)} does not exist")
@@ -35,9 +35,9 @@ object Package {
           List(module) ++ BuildConfig.collectJvmModuleDeps(build, resolvedModule)
         ).map { name =>
           if (BuildConfig.isCrossBuild(build.module(name)))
-            buildPath.resolve(name + "-" + platform.id)
+            bloopBuildPath.resolve(name + "-" + platform.id)
           else
-            buildPath.resolve(name)
+            bloopBuildPath.resolve(name)
         }
 
         val notFound = paths.find(p => !Files.exists(p))
