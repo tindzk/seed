@@ -69,7 +69,7 @@ object Link {
 
           val bloop = util.BloopCli.link(
             build, projectPath, linkModules, watch, log, onStdOut(build)
-          ).fold(Future.unit)(_.termination.map(_ => ()))
+          ).fold(Future.unit)(_.success)
 
           Future.sequence(futures :+ bloop).map(_ => ())
         }

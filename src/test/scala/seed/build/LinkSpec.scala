@@ -30,19 +30,16 @@ object LinkSpec extends TestSuite[Unit] {
       build, projectPath, List("example-js"), watch = false, Log, onStdOut)
 
     assert(process.isDefined)
-    TestProcessHelper.scheduleTermination(process.get)
 
     for {
-      code <- process.get.termination
-      _ <- Future {
-        require(process.get.killed || code == 0)
-        require(events.length == 3)
-        require(events(0) == BuildEvent.Compiling("example", Platform.JavaScript))
-        require(events(1) == BuildEvent.Compiled("example", Platform.JavaScript))
-        require(events(2).isInstanceOf[BuildEvent.Linked])
-        require(events(2).asInstanceOf[BuildEvent.Linked]
-          .path.endsWith("test/module-link/build/example.js"))
-      }
-    } yield ()
+      _ <- process.get.success
+    } yield {
+      require(events.length == 3)
+      require(events(0) == BuildEvent.Compiling("example", Platform.JavaScript))
+      require(events(1) == BuildEvent.Compiled("example", Platform.JavaScript))
+      require(events(2).isInstanceOf[BuildEvent.Linked])
+      require(events(2).asInstanceOf[BuildEvent.Linked]
+        .path.endsWith("test/module-link/build/example.js"))
+    }
   }
 }

@@ -1,0 +1,9 @@
+[project]
+scalaVersion = "2.13.0"
+
+[module.utils.target.gen-sources]
+command = "exit 1"
+
+[module.demo.jvm]
+moduleDeps = ["utils"]
+sources = ["demo"]
