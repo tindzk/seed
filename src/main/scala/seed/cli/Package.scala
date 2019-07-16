@@ -22,14 +22,16 @@ object Package {
          libs: Boolean,
          packageConfig: Cli.PackageConfig
         ): Unit = {
+    val log = Log(seedConfig)
+
     val tmpfs = packageConfig.tmpfs || seedConfig.build.tmpfs
-    val buildPath = PathUtil.buildPath(projectPath, tmpfs)
+    val buildPath = PathUtil.buildPath(projectPath, tmpfs, log)
     val bloopBuildPath = buildPath.resolve("bloop")
     val platform = JVM
     val outputPath = output.getOrElse(buildPath.resolve("dist"))
 
     build.module.get(module) match {
-      case None => Log.error(s"Module ${Ansi.italic(module)} does not exist")
+      case None => log.error(s"Module ${Ansi.italic(module)} does not exist")
       case Some(resolvedModule) =>
         val paths = (
           List(module) ++ BuildConfig.collectJvmModuleDeps(build, resolvedModule)
@@ -42,9 +44,9 @@ object Package {
 
         val notFound = paths.find(p => !Files.exists(p))
         if (notFound.isDefined)
-          Log.error(s"${Ansi.italic(notFound.get.toString)} does not exist. Build the module with `bloop compile <module name>` first")
+          log.error(s"${Ansi.italic(notFound.get.toString)} does not exist. Build the module with `bloop compile <module name>` first")
         else if (paths.isEmpty)
-          Log.error(s"No build paths were found")
+          log.error(s"No build paths were found")
         else {
           val files = paths.sorted.flatMap(path =>
             Files.list(path).iterator().asScala.toList
@@ -55,9 +57,9 @@ object Package {
 
           val mainClass = jvmModule.mainClass
           if (mainClass.isEmpty)
-            Log.warn(s"No main class was set in build file for module ${Ansi.italic(module)}")
+            log.warn(s"No main class was set in build file for module ${Ansi.italic(module)}")
           else
-            Log.info(s"Main class is ${Ansi.italic(mainClass.get)}")
+            log.info(s"Main class is ${Ansi.italic(mainClass.get)}")
 
           val classPath =
             if (!libs) List()
@@ -75,7 +77,7 @@ object Package {
               val (resolvedDepPath, libraryResolution, platformResolution) =
                 ArtefactResolution.resolution(seedConfig, build,
                   packageConfig, optionalArtefacts = false, libraryDeps,
-                  List(platformDeps))
+                  List(platformDeps), log)
               val resolvedLibraryDeps = Coursier.localArtefacts(
                 libraryResolution, libraryDeps)
 
@@ -85,13 +87,13 @@ object Package {
               val resolvedDeps = (resolvedLibraryDeps ++ resolvedPlatformDeps)
                 .distinct.sortBy(_.libraryJar)
 
-              Log.info(s"Copying ${Ansi.bold(resolvedDeps.length.toString)} libraries to ${Ansi.italic(outputPath.toString)}...")
+              log.info(s"Copying ${Ansi.bold(resolvedDeps.length.toString)} libraries to ${Ansi.italic(outputPath.toString)}...")
               resolvedDeps.foreach { dep =>
                 val target = outputPath.resolve(resolvedDepPath.relativize(dep.libraryJar))
                 if (Files.exists(target))
-                  Log.debug(s"Skipping ${dep.libraryJar.toString} as it exists already.")
+                  log.debug(s"Skipping ${dep.libraryJar.toString} as it exists already.")
                 else {
-                  Log.debug(s"Copying ${dep.libraryJar.toString}...")
+                  log.debug(s"Copying ${dep.libraryJar.toString}...")
 
                   if (!Files.exists(target.getParent))
                     Files.createDirectories(target.getParent)
@@ -99,14 +101,14 @@ object Package {
                 }
               }
 
-              Log.info(s"Adding libraries to class path...")
+              log.info(s"Adding libraries to class path...")
               resolvedDeps.map(p => resolvedDepPath.relativize(p.libraryJar).toString)
             }
 
           if (!Files.exists(outputPath)) Files.createDirectories(outputPath)
           val outputJar = outputPath.resolve(module + ".jar")
           Files.deleteIfExists(outputJar)
-          seed.generation.Package.create(files, outputJar, mainClass, classPath)
+          seed.generation.Package.create(files, outputJar, mainClass, classPath, log)
       }
     }
   }

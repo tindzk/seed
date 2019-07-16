@@ -24,7 +24,7 @@ object BuildConfigSpec extends SimpleTestSuite {
       """.stripMargin, "UTF-8")
 
     val BuildConfig.Result(_, projectPath, moduleProjectPaths) =
-      BuildConfig.load(Paths.get("/tmp/a.toml"), Log).get
+      BuildConfig.load(Paths.get("/tmp/a.toml"), Log.urgent).get
     assertEquals(projectPath, Paths.get("/tmp"))
     assertEquals(moduleProjectPaths, Map("example" -> Paths.get("/tmp")))
   }
@@ -40,7 +40,7 @@ object BuildConfigSpec extends SimpleTestSuite {
       """.stripMargin, "UTF-8")
 
     val BuildConfig.Result(_, projectPath, moduleProjectPaths) =
-      BuildConfig.load(Paths.get("test/a.toml"), Log).get
+      BuildConfig.load(Paths.get("test/a.toml"), Log.urgent).get
     assertEquals(projectPath, Paths.get("test"))
     assertEquals(moduleProjectPaths, Map("example" -> Paths.get("test")))
   }
@@ -69,7 +69,7 @@ object BuildConfigSpec extends SimpleTestSuite {
       """.stripMargin, "UTF-8")
 
     val BuildConfig.Result(_, projectPath, moduleProjectPaths) =
-      BuildConfig.load(Paths.get("/tmp/seed-root"), Log).get
+      BuildConfig.load(Paths.get("/tmp/seed-root"), Log.urgent).get
     assertEquals(moduleProjectPaths, Map(
       "root"  -> Paths.get("/tmp/seed-root"),
       "child" -> Paths.get("/tmp/seed-root/child")))

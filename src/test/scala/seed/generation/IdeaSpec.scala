@@ -53,10 +53,10 @@ object IdeaSpec extends SimpleTestSuite {
     val compilerDeps0 = ArtefactResolution.allCompilerDeps(build)
     val (_, platformResolution, compilerResolution) =
       ArtefactResolution.resolution(seed.model.Config(), build, packageConfig,
-        optionalArtefacts = false, Set(), compilerDeps0)
+        optionalArtefacts = false, Set(), compilerDeps0, Log.urgent)
 
     Idea.build(projectPath, outputPath, build, platformResolution,
-      compilerResolution, false)
+      compilerResolution, false, Log.silent)
 
     assertEquals(
       Files.exists(
@@ -71,10 +71,11 @@ object IdeaSpec extends SimpleTestSuite {
 
   test("Generate project with custom compiler options") {
     val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(
-      Paths.get("test/compiler-options"), Log).get
+      Paths.get("test/compiler-options"), Log.urgent).get
     val packageConfig = PackageConfig(tmpfs = false, silent = false,
       ivyPath = None, cachePath = None)
-    cli.Generate.ui(Config(), projectPath, build, Command.Idea(packageConfig))
+    cli.Generate.ui(Config(), projectPath, build, Command.Idea(packageConfig),
+      Log.urgent)
 
     val ideaPath = projectPath.resolve(".idea")
 
@@ -93,10 +94,11 @@ object IdeaSpec extends SimpleTestSuite {
 
   test("Generate project with different Scala versions") {
     val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(
-      Paths.get("test/multiple-scala-versions"), Log).get
+      Paths.get("test/multiple-scala-versions"), Log.urgent).get
     val packageConfig = PackageConfig(tmpfs = false, silent = false,
       ivyPath = None, cachePath = None)
-    cli.Generate.ui(Config(), projectPath, build, Command.Idea(packageConfig))
+    cli.Generate.ui(Config(), projectPath, build, Command.Idea(packageConfig),
+      Log.urgent)
 
     val ideaPath = projectPath.resolve(".idea")
 

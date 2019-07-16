@@ -2,7 +2,7 @@ package seed.cli
 
 import java.nio.file.Path
 
-import seed.model
+import seed.{Log, model}
 import seed.Cli.Command
 import seed.generation.{Bloop, Idea}
 import seed.artefact.ArtefactResolution
@@ -11,7 +11,8 @@ object Generate {
   def ui(seedConfig: model.Config,
          projectPath: Path,
          build: model.Build,
-         command: Command.Generate
+         command: Command.Generate,
+         log: Log
         ): Unit = {
     val compilerDeps = ArtefactResolution.allCompilerDeps(build)
     val platformDeps = ArtefactResolution.allPlatformDeps(build)
@@ -26,12 +27,12 @@ object Generate {
     val (_, platformResolution, compilerResolution) =
       ArtefactResolution.resolution(seedConfig, build, command.packageConfig,
         optionalArtefacts = isIdea, platformDeps ++ libraryDeps,
-        compilerDeps)
+        compilerDeps, log)
 
     val tmpfs = command.packageConfig.tmpfs || seedConfig.build.tmpfs
     if (isBloop) Bloop.build(projectPath, build, platformResolution,
-      compilerResolution, tmpfs)
+      compilerResolution, tmpfs, log)
     if (isIdea) Idea.build(projectPath, projectPath, build, platformResolution,
-      compilerResolution, tmpfs)
+      compilerResolution, tmpfs, log)
   }
 }

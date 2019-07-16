@@ -212,23 +212,22 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
 
   def main(args: Array[String]): Unit =
     if (args.isEmpty) {
-      Log.error("Invalid command.")
-      Log.error("")
+      val log = Log(SeedConfig.load(None))
 
-      Log.error("Create new Seed project file:")
-      Log.error(Ansi.foreground(ColourScheme.green2)("$ seed init"))
-      Log.error("")
+      log.error("No command provided.")
+      log.newLine()
 
-      Log.error("Generate new Bloop configuration:")
-      Log.error(Ansi.foreground(ColourScheme.green2)("$ seed bloop"))
-      Log.error("")
+      log.info( "Create new Seed project file:")
+      log.debug(Ansi.foreground(ColourScheme.green2)("seed init"))
 
-      Log.error("Generate new IDEA configuration:")
-      Log.error(Ansi.foreground(ColourScheme.green2)("$ seed idea"))
-      Log.error("")
+      log.info("Generate new Bloop configuration:")
+      log.debug(Ansi.foreground(ColourScheme.green2)("seed bloop"))
 
-      Log.error("List all available commands:")
-      Log.error(Ansi.foreground(ColourScheme.green2)("$ seed help"))
+      log.info("Generate new IDEA configuration:")
+      log.debug(Ansi.foreground(ColourScheme.green2)("seed idea"))
+
+      log.info("List all available commands:")
+      log.debug(Ansi.foreground(ColourScheme.green2)("seed help"))
 
       sys.exit(1)
     } else {
@@ -237,40 +236,53 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
           help()
           sys.exit(0)
         case Success(Config(_, _, Command.Version)) =>
-          Log.info(Ansi.bold("Seed v" + BuildInfo.Version +
+          val log = Log(SeedConfig.load(None))
+          log.info(Ansi.bold("Seed v" + BuildInfo.Version +
                              " for Bloop v" + BuildInfo.Bloop + "+ " +
                              "and Coursier v" + BuildInfo.Coursier))
-        case Success(Config(_, buildPath, Command.Init)) =>
-          cli.Scaffold.ui(buildPath)
-        case Success(Config(_, buildPath, Command.Update(preRelease))) =>
-          cli.Update.ui(buildPath, !preRelease)
+        case Success(Config(configPath, buildPath, Command.Init)) =>
+          val config = SeedConfig.load(configPath)
+          val log = Log(config)
+          new cli.Scaffold(log).ui(buildPath)
+        case Success(Config(configPath, buildPath, Command.Update(preRelease))) =>
+          val config = SeedConfig.load(configPath)
+          val log = Log(config)
+          cli.Update.ui(buildPath, !preRelease, log)
         case Success(Config(configPath, buildPath, command: Command.Package)) =>
           import command._
           val config = SeedConfig.load(configPath)
+          val log = Log(config)
           val BuildConfig.Result(build, projectPath, _) =
-            BuildConfig.load(buildPath, Log).getOrElse(sys.exit(1))
+            BuildConfig.load(buildPath, log).getOrElse(sys.exit(1))
           cli.Package.ui(config, projectPath, build, module, output, libs,
             packageConfig)
         case Success(Config(configPath, buildPath, command: Command.Generate)) =>
           val config = SeedConfig.load(configPath)
+          val log = Log(config)
           val BuildConfig.Result(build, projectPath, _) =
-            BuildConfig.load(buildPath, Log).getOrElse(sys.exit(1))
-          cli.Generate.ui(config, projectPath, build, command)
+            BuildConfig.load(buildPath, log).getOrElse(sys.exit(1))
+          cli.Generate.ui(config, projectPath, build, command, log)
         case Success(Config(configPath, _, command: Command.Server)) =>
           val config = SeedConfig.load(configPath)
-          cli.Server.ui(config, command)
+          val log = Log(config)
+          cli.Server.ui(config, command, log)
         case Success(Config(configPath, buildPath, command: Command.Build)) =>
           val config = SeedConfig.load(configPath)
-          cli.Build.ui(buildPath, config, command)
+          val log = Log(config)
+          cli.Build.ui(buildPath, config, command, log)
         case Success(Config(configPath, buildPath, command: Command.Link)) =>
           val config = SeedConfig.load(configPath)
-          cli.Link.ui(buildPath, config, command)
-        case Success(Config(_, _, command: Command.BuildEvents)) =>
-          cli.BuildEvents.ui(command)
+          val log = Log(config)
+          cli.Link.ui(buildPath, config, command, log)
+        case Success(Config(configPath, _, command: Command.BuildEvents)) =>
+          val config = SeedConfig.load(configPath)
+          val log = Log(config)
+          cli.BuildEvents.ui(command, log)
         case Failure(e) =>
           help()
           println()
-          Log.error(e.getMessage)
+          val log = Log(SeedConfig.load(None))
+          log.error(e.getMessage)
           sys.exit(1)
       }
     }

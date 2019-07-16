@@ -248,6 +248,7 @@ object ArtefactResolution {
                  optionalArtefacts: Boolean,
                  platformDeps: Set[JavaDep],
                  compilerDeps: List[Set[JavaDep]],
+                 log: Log
                 ) = {
     val silent = packageConfig.silent || seedConfig.resolution.silent
 
@@ -255,21 +256,21 @@ object ArtefactResolution {
     val resolvedIvyPath = ivyPath.getOrElse(seedConfig.resolution.ivyPath)
     val resolvedCachePath = cachePath.getOrElse(seedConfig.resolution.cachePath)
 
-    Log.info("Configured resolvers:")
-    Log.info("  - " + resolvedIvyPath + " (Ivy)")
-    Log.info("  - " + resolvedCachePath + " (Coursier)")
-    build.resolvers.ivy.foreach(ivy => Log.info("  - " + Ansi.italic(ivy.url) + " (Ivy)"))
-    build.resolvers.maven.foreach(maven => Log.info("  - " + Ansi.italic(maven) + " (Maven)"))
+    log.info("Configured resolvers:")
+    log.detail("- " + Ansi.italic(resolvedIvyPath.toString) + " (Ivy)")
+    log.detail("- " + Ansi.italic(resolvedCachePath.toString) + " (Coursier)")
+    build.resolvers.ivy.foreach(ivy => log.detail("- " + Ansi.italic(ivy.url) + " (Ivy)"))
+    build.resolvers.maven.foreach(maven => log.detail("- " + Ansi.italic(maven) + " (Maven)"))
 
     def resolve(deps: Set[JavaDep]) =
       Coursier.resolveAndDownload(deps, build.resolvers, resolvedIvyPath,
-        resolvedCachePath, optionalArtefacts, silent)
+        resolvedCachePath, optionalArtefacts, silent, log)
 
-    Log.info("Resolving platform artefacts...")
+    log.info("Resolving platform artefacts...")
 
     val platformResolution = resolve(platformDeps)
 
-    Log.info("Resolving compiler artefacts...")
+    log.info("Resolving compiler artefacts...")
 
     // Resolve Scala compilers separately because Coursier merges dependencies
     // with different versions

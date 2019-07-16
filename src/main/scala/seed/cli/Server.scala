@@ -7,7 +7,7 @@ import io.circe.syntax._
 import io.circe.{Decoder, DecodingFailure, Encoder, Json}
 import org.java_websocket.WebSocket
 import seed.Log
-import seed.cli.util.{BloopCli, WsServer}
+import seed.cli.util.{Ansi, BloopCli, WsServer}
 import seed.model
 import seed.Cli.Command
 import seed.model.Config
@@ -16,11 +16,11 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits._
 
-sealed trait WsCommand
+sealed abstract class WsCommand(val description: String)
 object WsCommand {
-  case class Link(build: Path, modules: List[String]) extends WsCommand
-  case class Build(build: Path, targets: List[String]) extends WsCommand
-  case object BuildEvents extends WsCommand
+  case class Link(build: Path, modules: List[String]) extends WsCommand("Link")
+  case class Build(build: Path, targets: List[String]) extends WsCommand("Build")
+  case object BuildEvents extends WsCommand("Build events")
 
   implicit val decodeLink: Decoder[Link] = json =>
     for {
@@ -69,23 +69,24 @@ object WsCommand {
 object Server {
   private val buildEventClients = mutable.HashSet[WebSocket]()
 
-  def ui(config: Config, command: Command.Server): Unit = {
+  def ui(config: Config, command: Command.Server, log: Log): Unit = {
     val wsConfig = command.webSocket
     val webSocket = new WsServer(
       new InetSocketAddress(wsConfig.host, wsConfig.port), onDisconnect,
-      evalCommand(config))
+      evalCommand(config, log), log)
     webSocket.start()
-    Log.info(s"WebSocket server started on ${wsConfig.host}:${wsConfig.port}")
   }
 
-  def onStdOut(wsServer: WsServer, wsClient: WebSocket, build: model.Build)
-              (message: String): Unit = {
+  def onStdOut(wsServer: WsServer, wsClient: WebSocket, build: model.Build,
+               serverLog: Log
+              )(message: String): Unit = {
     wsClient.send(message)
 
     if (buildEventClients.nonEmpty) {
       val event = BloopCli.parseStdOut(build)(message)
       event.foreach { ev =>
-        Log.debug(s"Broadcasting event to ${buildEventClients.size} clients...")
+        serverLog.debug(
+          s"Broadcasting event to ${buildEventClients.size} clients...")
         wsServer.broadcast(ev.asJson.noSpaces, buildEventClients.toList.asJava)
       }
     }
@@ -93,31 +94,32 @@ object Server {
 
   def onDisconnect(wsClient: WebSocket): Unit = buildEventClients -= wsClient
 
-  def evalCommand(config: Config)(
+  def evalCommand(config: Config, serverLog: Log)(
     wsServer: WsServer, wsClient: WebSocket, command: WsCommand
   ): Unit = {
     import config.build.tmpfs
 
-    val log = new Log(wsClient.send)
+    val clientLog = new Log(
+      wsClient.send, identity, serverLog.level, serverLog.unicode)
     command match {
       case WsCommand.BuildEvents => buildEventClients += wsClient
       case WsCommand.Build(buildPath, targets) =>
         seed.cli.Build.build(
-          buildPath, targets, watch = false, tmpfs, log,
-          build => onStdOut(wsServer, wsClient, build)
+          buildPath, targets, watch = false, tmpfs, clientLog,
+          build => onStdOut(wsServer, wsClient, build, serverLog)
         ) match {
           case Left(errors) =>
-            errors.foreach(log.error)
+            errors.foreach(clientLog.error)
             wsClient.close()
           case Right(future) => future.foreach(_ => wsClient.close())
         }
       case WsCommand.Link(buildPath, modules) =>
         seed.cli.Link.link(
-          buildPath, modules, watch = false, tmpfs, log,
-          build => onStdOut(wsServer, wsClient, build)
+          buildPath, modules, watch = false, tmpfs, clientLog,
+          build => onStdOut(wsServer, wsClient, build, serverLog)
         ) match {
           case Left(errors) =>
-            errors.foreach(log.error)
+            errors.foreach(clientLog.error)
             wsClient.close()
           case Right(future) => future.foreach(_ => wsClient.close())
         }

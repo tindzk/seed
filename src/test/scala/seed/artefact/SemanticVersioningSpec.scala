@@ -1,11 +1,15 @@
 package seed.artefact
 
 import minitest.SimpleTestSuite
+import seed.Log
 import seed.artefact.SemanticVersioning._
 
 import scala.util.Random
 
 object SemanticVersioningSpec extends SimpleTestSuite {
+  private val versionOrdering =
+    new SemanticVersioning(Log.urgent).versionOrdering
+
   test("Parse semantic versions") {
     assertEquals(parseVersion("1"), Some(Version(1)))
     assertEquals(parseVersion("1.0.0-beta"),

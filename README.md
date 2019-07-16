@@ -146,9 +146,9 @@ This compiles the module to `build/` and runs it.
     * Default paths were chosen not to conflict in any way
 * Can be used in CIs like [Drone](https://drone.io/) using pre-built Docker image
 * UX
-    * Colour support
-    * Readable console output
+    * True colour output
     * User-friendly messages
+    * Unicode characters
 * Project creation wizard
 * Packaging support
     * Copy over dependencies
@@ -642,6 +642,21 @@ ivyPath = "/home/user/.ivy2/local"
 # Artefact cache path
 # Can be also set with --cache-path
 cachePath = "/home/user/.cache/coursier/v1"
+```
+
+The default values are indicated.
+
+### CLI settings
+In the `cli` section, you can find output-related configuration settings:
+
+```toml
+[cli]
+# Log level
+# Possible values: debug, detail, warn, info, error, silent
+level = "debug"
+
+# Use Unicode characters to indicate log levels
+unicode = true
 ```
 
 The default values are indicated.

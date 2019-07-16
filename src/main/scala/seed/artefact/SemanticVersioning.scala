@@ -89,6 +89,10 @@ object SemanticVersioning {
   }
 
   private val comparator = new NaturalOrderComparator
+}
+
+class SemanticVersioning(log: Log) {
+  import SemanticVersioning._
 
   val versionOrdering = new Ordering[String] {
     override def compare(x: String, y: String): Int = {
@@ -103,7 +107,7 @@ object SemanticVersioning {
               v2.preReleaseVersion))
         case (v1, _) =>
           val version = if (v1.isEmpty) x else y
-          Log.error(s"Could not parse version '$version'. Falling back to comparison by natural ordering...")
+          log.error(s"Could not parse version '$version'. Falling back to comparison by natural ordering...")
 
           // Fall back to natural ordering comparison
           comparator.compare(x, y)

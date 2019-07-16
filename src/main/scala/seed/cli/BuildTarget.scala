@@ -3,6 +3,7 @@ package seed.cli
 import java.nio.file.Path
 
 import seed.Log
+import seed.cli.util.Ansi
 import seed.config.BuildConfig
 import seed.generation.util.PathUtil
 import seed.model
@@ -22,7 +23,7 @@ object BuildTarget {
                   ): List[Future[Unit]] = {
     def format(module: String, target: String): String = module + ":" + target
     def formatAll(targets: List[(String, String)]): String =
-      targets.map { case (m, t) => format(m, t) }.mkString(", ")
+      targets.map { case (m, t) => Ansi.italic(format(m, t)) }.mkString(", ")
 
     val targets = modules.flatMap {
       case util.Target.Parsed(m, Some(Right(t))) => List(m.name -> t.name)
@@ -50,7 +51,7 @@ object BuildTarget {
     log.info(s"Build path: $buildPath")
 
     allTargets.map { case (m, t) =>
-      val customLog = log.prefix(s"[${format(m, t)}]: ")
+      val customLog = log.prefix(Ansi.bold(s"[${format(m, t)}]: "))
 
       val modulePath = moduleProjectPaths(m)
       val target     = build.module(m).target(t)

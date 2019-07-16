@@ -164,7 +164,8 @@ object Idea {
                   compilerResolution: List[Coursier.ResolutionResult],
                   resolution: Coursier.ResolutionResult,
                   name: String,
-                  module: Module
+                  module: Module,
+                  log: Log
                  ): List[String] = {
     val isCrossBuild = module.targets.toSet.size > 1
 
@@ -172,10 +173,10 @@ object Idea {
       if (!module.js.exists(_.sources.nonEmpty)) List()
       else {
         val moduleName = if (!isCrossBuild) name else name + "-js"
-        Log.info(s"Creating JavaScript project ${Ansi.italic(moduleName)}...")
+        log.info(s"Creating JavaScript project ${Ansi.italic(moduleName)}...")
 
         if (module.js.get.root.isEmpty) {
-          Log.error(s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping...")
+          log.error(s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping...")
           List()
         } else {
           val scalaVersion = BuildConfig.scalaVersion(build.project,
@@ -223,10 +224,10 @@ object Idea {
       if (!module.jvm.exists(_.sources.nonEmpty)) List()
       else {
         val moduleName = if (!isCrossBuild) name else name + "-jvm"
-        Log.info(s"Creating JVM project ${Ansi.italic(moduleName)}...")
+        log.info(s"Creating JVM project ${Ansi.italic(moduleName)}...")
 
         if (module.jvm.get.root.isEmpty) {
-          Log.error(s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping...")
+          log.error(s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping...")
           List()
         } else {
           val scalaVersion = BuildConfig.scalaVersion(build.project,
@@ -272,10 +273,10 @@ object Idea {
       if (!module.native.exists(_.sources.nonEmpty)) List()
       else {
         val moduleName = if (!isCrossBuild) name else name + "-native"
-        Log.info(s"Creating native project ${Ansi.italic(moduleName)}...")
+        log.info(s"Creating native project ${Ansi.italic(moduleName)}...")
 
         if (module.native.get.root.isEmpty) {
-          Log.error(s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping...")
+          log.error(s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping...")
           List()
         } else {
           val scalaVersion = BuildConfig.scalaVersion(build.project,
@@ -321,10 +322,10 @@ object Idea {
     val shared =
       if (module.sources.isEmpty) List()
       else {
-        Log.info(s"Create shared project ${Ansi.italic(name)}...")
+        log.info(s"Create shared project ${Ansi.italic(name)}...")
 
         if (module.root.isEmpty) {
-          Log.error(s"Module ${Ansi.italic(name)} does not specify root path, skipping...")
+          log.error(s"Module ${Ansi.italic(name)} does not specify root path, skipping...")
           List()
         } else {
           val scalaVersion = BuildConfig.scalaVersion(build.project,
@@ -365,10 +366,10 @@ object Idea {
       }
 
     val customTargets = module.target.toList.flatMap { case (targetName, target) =>
-      Log.info(s"Create project for custom target ${Ansi.italic(name)}:$targetName...")
+      log.info(s"Create project for custom target ${Ansi.italic(name)}:$targetName...")
 
       if (target.root.isEmpty) {
-        Log.error(s"Module ${Ansi.italic(name)}:$targetName does not specify root path, skipping...")
+        log.error(s"Module ${Ansi.italic(name)}:$targetName does not specify root path, skipping...")
         List()
       } else {
         val scalaVersion = BuildConfig.scalaVersion(build.project, List(module))
@@ -413,11 +414,12 @@ object Idea {
             build: Build,
             resolution: Coursier.ResolutionResult,
             compilerResolution: List[Coursier.ResolutionResult],
-            tmpfs: Boolean): Unit = {
-    val buildPath = PathUtil.buildPath(projectPath, tmpfs)
+            tmpfs: Boolean,
+            log: Log): Unit = {
+    val buildPath = PathUtil.buildPath(projectPath, tmpfs, log)
     val ideaBuildPath = buildPath.resolve("idea")
 
-    Log.info(s"Build path: ${Ansi.italic(ideaBuildPath.toString)}")
+    log.info(s"Build path: ${Ansi.italic(ideaBuildPath.toString)}")
 
     val ideaPath      = outputPath.resolve(".idea")
     val modulesPath   = ideaPath.resolve("modules")
@@ -442,12 +444,12 @@ object Idea {
     val modules = build.module.toList.flatMap { case (name, module) =>
       buildModule(
         projectPath, ideaBuildPath, ideaPath, modulesPath, librariesPath, build,
-        compilerResolution, resolution, name, module)
+        compilerResolution, resolution, name, module, log)
     }
 
     createCompilerSettings(build, compilerResolution, ideaPath, modules)
     writeModules(projectPath, ideaPath, modulesPath, modules)
 
-    Log.info("IDEA project has been created")
+    log.info("IDEA project has been created")
   }
 }

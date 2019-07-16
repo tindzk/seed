@@ -12,14 +12,15 @@ import seed.model.Platform.{JavaScript, Native}
 object Update {
   def compareVersion(description: fansi.Str,
                      oldVersion: String,
-                     version: Option[String]): Unit =
+                     version: Option[String],
+                     log: Log): Unit =
     version match {
       case None =>
         println(ColourScheme.red1.toFansi(fansi.Str("⇎ ") ++ description ++
                                           " does not exist anymore"))
 
       case Some(newVersion) =>
-        val change = SemanticVersioning.versionOrdering.compare(oldVersion, newVersion)
+        val change = new SemanticVersioning(log).versionOrdering.compare(oldVersion, newVersion)
         val versionChange = fansi.Str("(") ++ fansi.Bold.On(oldVersion) ++
                             " → " ++ fansi.Bold.On(newVersion) ++ ")"
 
@@ -39,13 +40,13 @@ object Update {
         }
     }
 
-  def ui(path: Path, stable: Boolean): Unit = {
-    val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(path, Log)
+  def ui(path: Path, stable: Boolean, log: Log): Unit = {
+    val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(path, log)
       .getOrElse(sys.exit(1))
 
     val buildArtefacts = ArtefactResolution.allLibraryArtefacts(build)
 
-    val (compilerVersions, platformVersions, libraryArtefacts) = Scaffold.checkVersions(
+    val (compilerVersions, platformVersions, libraryArtefacts) = new Scaffold(log).checkVersions(
       build.project.scalaOrganisation, BuildConfig.buildTargets(build),
       buildArtefacts.mapValues(_.map(Artefact.fromDep)), stable)
 
@@ -63,7 +64,7 @@ object Update {
 
       compareVersion(
         fansi.Bold.On(platform.caption + ":") ++ " Scala compiler",
-        oldCompilerVersion, newCompilerVersion)
+        oldCompilerVersion, newCompilerVersion, log)
 
       if (platform == JavaScript) {
         val oldPlatformVersion = build.project.scalaJsVersion.get
@@ -71,14 +72,14 @@ object Update {
 
         compareVersion(
           fansi.Bold.On(platform.caption + ":") ++ " Scala.js plug-in",
-          oldPlatformVersion, newPlatformVersion)
+          oldPlatformVersion, newPlatformVersion, log)
       } else if (platform == Native) {
         val oldPlatformVersion = build.project.scalaNativeVersion.get
         val newPlatformVersion = platformVersions.get(platform)
 
         compareVersion(
           fansi.Bold.On(platform.caption + ":") ++ " Scala Native plug-in",
-          oldPlatformVersion, newPlatformVersion)
+          oldPlatformVersion, newPlatformVersion, log)
       }
     }
 
@@ -103,7 +104,7 @@ object Update {
           fansi.Underlined.On(dep.artefact)
         val newVersion = latestArtefacts.get(Artefact.fromDep(dep)).flatten
 
-        compareVersion(description, dep.version, newVersion)
+        compareVersion(description, dep.version, newVersion, log)
       }
 
       if (i != buildArtefacts.size - 1) println()

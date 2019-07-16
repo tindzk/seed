@@ -30,6 +30,7 @@ object ColourScheme {
 
   val blue1 = Colour.parseHex("#5F819D")
   val blue2 = Colour.parseHex("#81A2BE")
+  val blue3 = Colour.parseHex("#92aec7")
 }
 
 object Ansi {
@@ -42,7 +43,7 @@ object Ansi {
   def background(colour: Colour)(text: String): String =
     escM("48", "2", colour.r.toString, colour.g.toString, colour.b.toString) + text + escM("49")
 
-  def bold      (text: String): String = escM("1") + text + escM("0")
-  def italic    (text: String): String = escM("3") + text + escM("0")
-  def underlined(text: String): String = escM("4") + text + escM("0")
+  def bold      (text: String): String = escM("1") + text + escM("22")
+  def italic    (text: String): String = escM("3") + text + escM("23")
+  def underlined(text: String): String = escM("4") + text + escM("24")
 }

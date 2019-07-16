@@ -4,7 +4,7 @@ import java.net.URI
 import java.nio.file.Path
 
 import seed.Log
-import seed.cli.util.WsClient
+import seed.cli.util.{Ansi, WsClient}
 import seed.config.BuildConfig
 import seed.model
 import seed.model.Config
@@ -12,37 +12,35 @@ import seed.Cli.Command
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
-
 import scala.concurrent.ExecutionContext.Implicits.global
 
 object Link {
-  def ui(buildPath: Path, seedConfig: Config, command: Command.Link): Unit = {
+  def ui(buildPath: Path, seedConfig: Config, command: Command.Link, log: Log): Unit =
     command.webSocket match {
       case Some(connection) =>
         if (command.watch)
-          Log.error("--watch cannot be combined with --connect")
+          log.error("--watch cannot be combined with --connect")
         else {
           val uri = s"ws://${connection.host}:${connection.port}"
-          Log.debug(s"Connecting to $uri...")
+          log.debug(s"Connecting to ${Ansi.italic(uri)}...")
           val client = new WsClient(new URI(uri), { () =>
             import io.circe.syntax._
             val build =
               if (buildPath.isAbsolute) buildPath else buildPath.toAbsolutePath
             (WsCommand.Link(build, command.modules): WsCommand).asJson.noSpaces
-          })
+          }, log)
           client.connect()
         }
 
       case None =>
         val tmpfs = command.packageConfig.tmpfs || seedConfig.build.tmpfs
-        link(buildPath, command.modules, command.watch, tmpfs, Log, _ => println) match {
+        link(buildPath, command.modules, command.watch, tmpfs, log, _ => println) match {
           case Left(errors) =>
-            errors.foreach(Log.error)
+            errors.foreach(log.error)
             sys.exit(1)
           case Right(future) => Await.result(future, Duration.Inf)
         }
     }
-  }
 
   def link(buildPath: Path,
            modules: List[String],

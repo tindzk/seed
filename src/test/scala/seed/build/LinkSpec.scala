@@ -27,7 +27,7 @@ object LinkSpec extends TestSuite[Unit] {
       BloopCli.parseStdOut(build)(output).foreach(events += _)
 
     val process = BloopCli.link(
-      build, projectPath, List("example-js"), watch = false, Log, onStdOut)
+      build, projectPath, List("example-js"), watch = false, Log.urgent, onStdOut)
 
     assert(process.isDefined)
 

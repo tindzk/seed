@@ -14,7 +14,8 @@ object Package {
   def create(source: List[(Path, String)],
              target: Path,
              mainClass: Option[String],
-             classPath: List[String]): Unit = {
+             classPath: List[String],
+             log: Log): Unit = {
     val manifest = new Manifest()
     val mainAttributes = manifest.getMainAttributes
     mainAttributes.put(Attributes.Name.MANIFEST_VERSION, "1.0")
@@ -25,10 +26,10 @@ object Package {
     val targetFile = new JarOutputStream(
       new FileOutputStream(target.toFile), manifest)
     source.foreach { case (path, jarPath) =>
-      Log.debug(s"Packaging ${Ansi.italic(path.toString)}...")
+      log.debug(s"Packaging ${Ansi.italic(path.toString)}...")
       add(path.toFile, jarPath, targetFile)
     }
-    Log.info(s"Written $target")
+    log.info(s"Written $target")
     targetFile.close()
   }
 

@@ -3,6 +3,7 @@ package seed.generation.util
 import java.nio.file.{Files, Path}
 
 import org.apache.commons.io.FileUtils
+import seed.Log
 import seed.artefact.{ArtefactResolution, Coursier}
 import seed.generation.Bloop
 import seed.model.Build.JavaDep
@@ -29,11 +30,11 @@ object ProjectGeneration {
     val resolution =
       Coursier.resolveAndDownload(platformDeps ++ libraryDeps, build.resolvers,
         resolvedIvyPath, resolvedCachePath, optionalArtefacts = false,
-        silent = true)
+        silent = true, Log.urgent)
     val compilerResolution =
       compilerDeps0.map(d =>
         Coursier.resolveAndDownload(d, build.resolvers, resolvedIvyPath,
-          resolvedCachePath, optionalArtefacts = false, silent = true))
+          resolvedCachePath, optionalArtefacts = false, silent = true, Log.urgent))
 
     build.module.foreach { case (id, module) =>
       Bloop.buildModule(
@@ -45,7 +46,8 @@ object ProjectGeneration {
         resolution,
         compilerResolution,
         id,
-        module)
+        module,
+        Log.urgent)
     }
   }
 

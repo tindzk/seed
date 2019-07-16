@@ -49,23 +49,25 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
 
   testAsync("Build project with compiler plug-in") { _ =>
     val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(
-      Paths.get("test/example-paradise"), Log).get
+      Paths.get("test/example-paradise"), Log.urgent).get
     val buildPath = projectPath.resolve("build")
     if (Files.exists(buildPath)) FileUtils.deleteDirectory(buildPath.toFile)
     val packageConfig = PackageConfig(tmpfs = false, silent = false,
       ivyPath = None, cachePath = None)
-    cli.Generate.ui(Config(), projectPath, build, Command.Bloop(packageConfig))
+    cli.Generate.ui(Config(), projectPath, build, Command.Bloop(packageConfig),
+      Log.urgent)
     compileAndRun(projectPath)
   }
 
   testAsync("Build modules with different Scala versions") { _ =>
     val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(
-      Paths.get("test/multiple-scala-versions"), Log).get
+      Paths.get("test/multiple-scala-versions"), Log.urgent).get
     val buildPath = projectPath.resolve("build")
     if (Files.exists(buildPath)) FileUtils.deleteDirectory(buildPath.toFile)
     val packageConfig = PackageConfig(tmpfs = false, silent = false,
       ivyPath = None, cachePath = None)
-    cli.Generate.ui(Config(), projectPath, build, Command.Bloop(packageConfig))
+    cli.Generate.ui(Config(), projectPath, build, Command.Bloop(packageConfig),
+      Log.urgent)
     TestProcessHelper.runBloop(projectPath)("run", "module211", "module212")
       .map { x =>
         val lines = x.split("\n").toList
@@ -78,22 +80,23 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     val path = Paths.get(s"test/$name")
 
     val BuildConfig.Result(build, projectPath, _) =
-      BuildConfig.load(path, Log).get
+      BuildConfig.load(path, Log.urgent).get
     val buildPath = projectPath.resolve("build")
     if (Files.exists(buildPath)) FileUtils.deleteDirectory(buildPath.toFile)
     val generatedFile = projectPath.resolve("demo").resolve("Generated.scala")
     if (Files.exists(generatedFile)) Files.delete(generatedFile)
     val packageConfig = PackageConfig(tmpfs = false, silent = false,
       ivyPath = None, cachePath = None)
-    cli.Generate.ui(Config(), projectPath, build, Command.Bloop(packageConfig))
+    cli.Generate.ui(Config(), projectPath, build, Command.Bloop(packageConfig),
+      Log.urgent)
 
     val result = seed.cli.Build.build(
       path,
       List("demo"),
       watch = false,
       tmpfs = false,
-      Log,
-      _ => println)
+      if (expectFailure) Log.silent else Log.urgent,
+      _ => _ => ())
 
     val future = result.right.get
 
