@@ -7,6 +7,7 @@ import minitest.TestSuite
 import org.apache.commons.io.FileUtils
 import seed.{Log, cli}
 import seed.Cli.{Command, PackageConfig}
+import seed.cli.util.Exit
 import seed.config.BuildConfig
 import seed.generation.util.TestProcessHelper
 import seed.generation.util.TestProcessHelper.ec
@@ -16,6 +17,8 @@ import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 
 object BloopIntegrationSpec extends TestSuite[Unit] {
+  Exit.TestCases = true
+
   override def setupSuite(): Unit = TestProcessHelper.semaphore.acquire()
   override def tearDownSuite(): Unit = TestProcessHelper.semaphore.release()
 
@@ -71,7 +74,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       }
   }
 
-  def buildCustomTarget(name: String): Future[Unit] = {
+  def buildCustomTarget(name: String, expectFailure: Boolean = false): Future[Unit] = {
     val path = Paths.get(s"test/$name")
 
     val BuildConfig.Result(build, projectPath, _) =
@@ -94,14 +97,17 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
 
     val future = result.right.get
 
-    Await.result(future, 30.seconds)
+    if (expectFailure) future.failed.map(_ => ())
+    else {
+      Await.result(future, 30.seconds)
 
-    assert(Files.exists(generatedFile))
+      assert(Files.exists(generatedFile))
 
-    TestProcessHelper.runBloop(projectPath)("run", "demo")
-      .map { x =>
-        assertEquals(x.split("\n").count(_ == "42"), 1)
-      }
+      TestProcessHelper.runBloop(projectPath)("run", "demo")
+        .map { x =>
+          assertEquals(x.split("\n").count(_ == "42"), 1)
+        }
+    }
   }
 
   testAsync("Build project with custom class target") { _ =>
@@ -122,5 +128,9 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       // Scala sources and no Bloop module.
       assertEquals(result.project.dependencies, List())
     }
+  }
+
+  testAsync("Build project with failing custom command target") { _ =>
+    buildCustomTarget("custom-command-target-fail", expectFailure = true)
   }
 }

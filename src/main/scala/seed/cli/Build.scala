@@ -68,7 +68,7 @@ object Build {
 
           val bloop = util.BloopCli.compile(
             build, projectPath, buildModules, watch, log, onStdOut(build)
-          ).fold(Future.unit)(_.termination.map(_ => ()))
+          ).fold(Future.unit)(_.success)
 
           Future.sequence(futures :+ bloop).map(_ => ())
         }

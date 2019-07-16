@@ -58,7 +58,7 @@ object BloopCli {
     if (bloopModules.isEmpty) None
     else {
       val args = "compile" +: ((if (!watch) List() else List("--watch")) ++ bloopModules)
-      Some(ProcessHelper.runBloop(projectPath, onStdOut)(args: _*))
+      Some(ProcessHelper.runBloop(projectPath, log, onStdOut)(args: _*))
     }
 
   def link(build: Build,
@@ -71,6 +71,6 @@ object BloopCli {
     if (bloopModules.isEmpty) None
     else {
       val args = "link" +: ((if (!watch) List() else List("--watch")) ++ bloopModules)
-      Some(ProcessHelper.runBloop(projectPath, onStdOut)(args: _*))
+      Some(ProcessHelper.runBloop(projectPath, log, onStdOut)(args: _*))
     }
 }

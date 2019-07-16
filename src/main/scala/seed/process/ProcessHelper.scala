@@ -4,12 +4,11 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 
 import com.zaxxer.nuprocess.{NuAbstractProcessHandler, NuProcess, NuProcessBuilder}
+import seed.Log
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{Future, Promise}
-
-import seed.Log
-import seed.cli.util.{Ansi, BloopCli}
+import seed.cli.util.{Ansi, BloopCli, Exit}
 
 sealed trait ProcessOutput
 object ProcessOutput {
@@ -49,11 +48,11 @@ class ProcessHandler(onLog: ProcessOutput => Unit,
 
 object ProcessHelper {
   /**
-    * @param nuProcess   Underlying NuProcess instance
-    * @param termination Future that terminates with status code
+    * @param nuProcess  Underlying NuProcess instance
+    * @param success    Future that terminates upon successful completion
     */
   class Process(private val nuProcess: NuProcess,
-                val termination: Future[Int]) {
+                val success: Future[Unit]) {
     private var _killed = false
 
     def isRunning: Boolean = nuProcess.isRunning
@@ -68,34 +67,39 @@ object ProcessHelper {
                   cmd: List[String],
                   modulePath: Option[String] = None,
                   buildPath: Option[String] = None,
-                  log: String => Unit
+                  log: Log,
+                  onStdOut: String => Unit
                  ): Process = {
-    log(s"Running command '${Ansi.italic(cmd.mkString(" "))}'...")
-    log(s"    Working directory: ${Ansi.italic(cwd.toString)}")
+    log.info(s"Running command '${Ansi.italic(cmd.mkString(" "))}'...")
+    log.debug(s"    Working directory: ${Ansi.italic(cwd.toString)}")
 
-    val termination = Promise[Int]()
+    val termination = Promise[Unit]()
 
     val pb = new NuProcessBuilder(cmd.asJava)
 
     modulePath.foreach { mp =>
       pb.environment().put("MODULE_PATH", mp)
-      log(s"    Module path: ${Ansi.italic(mp)}")
+      log.debug(s"    Module path: ${Ansi.italic(mp)}")
     }
 
     buildPath.foreach { bp =>
       pb.environment().put("BUILD_PATH", bp)
-      log(s"    Build path: ${Ansi.italic(bp)}")
+      log.debug(s"    Build path: ${Ansi.italic(bp)}")
     }
 
     pb.setProcessListener(new ProcessHandler(
       {
-        case ProcessOutput.StdOut(output) => log(output)
-        case ProcessOutput.StdErr(output) => log(output)
+        case ProcessOutput.StdOut(output) => onStdOut(output)
+        case ProcessOutput.StdErr(output) => log.error(output)
       },
-      pid => log("PID: " + pid),
-      { code =>
-        log("Process exited with code: " + code)
-        termination.success(code)
+      pid => log.debug("PID: " + pid),
+      code => {
+        log.debug("Exit code: " + code)
+        if (code == 0) termination.success(())
+        else {
+          log.error(s"Process exited with non-zero exit code")
+          termination.failure(Exit.error())
+        }
       }))
 
     if (cwd.toString != "") pb.setCwd(cwd)
@@ -103,17 +107,20 @@ object ProcessHelper {
   }
 
   def runBloop(cwd: Path,
-               log: String => Unit,
+               log: Log,
+               onStdOut: String => Unit,
                modulePath: Option[String] = None,
                buildPath: Option[String] = None
               )(args: String*): Process =
     runCommmand(cwd, List("bloop") ++ args, modulePath, buildPath,
-      output => if (!BloopCli.skipOutput(output)) log(output))
+      log, output => if (!BloopCli.skipOutput(output)) onStdOut(output))
 
   def runShell(cwd: Path,
                command: String,
                buildPath: String,
-               log: String => Unit
+               log: Log,
+               onStdOut: String => Unit
               ): Process =
-    runCommmand(cwd, List("/bin/sh", "-c", command), None, Some(buildPath), log)
+    runCommmand(cwd, List("/bin/sh", "-c", command), None, Some(buildPath), log,
+      onStdOut)
 }
