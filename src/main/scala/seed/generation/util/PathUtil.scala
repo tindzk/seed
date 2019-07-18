@@ -1,6 +1,6 @@
 package seed.generation.util
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import seed.Log
 import seed.cli.util.Ansi
@@ -31,4 +31,8 @@ object PathUtil {
       pathVariable + "/" + relativePath + pathElems.drop(common.length).mkString("/")
     }
   }
+
+  def buildFilePath(userPath: Path): Path =
+    if (!Files.isDirectory(userPath)) userPath
+    else userPath.resolve("build.toml")
 }

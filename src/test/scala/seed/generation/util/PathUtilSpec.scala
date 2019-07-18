@@ -16,4 +16,16 @@ object PathUtilSpec extends SimpleTestSuite {
       PathUtil.buildPath(projectPath, tmpfs = true, Log.urgent),
       Paths.get("/tmp/build-compiler-options"))
   }
+
+  test("Build file path") {
+    assertEquals(
+      PathUtil.buildFilePath(Paths.get("/tmp")),
+      Paths.get("/tmp", "build.toml"))
+    assertEquals(
+      PathUtil.buildFilePath(Paths.get("/tmp", "build.toml")),
+      Paths.get("/tmp", "build.toml"))
+    assertEquals(
+      PathUtil.buildFilePath(Paths.get("/tmp", "test.toml")),
+      Paths.get("/tmp", "test.toml"))
+  }
 }
