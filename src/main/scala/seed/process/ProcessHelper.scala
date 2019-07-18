@@ -71,7 +71,7 @@ object ProcessHelper {
                   onStdOut: String => Unit
                  ): Process = {
     log.info(s"Running command '${Ansi.italic(cmd.mkString(" "))}'...")
-    log.debug(s"    Working directory: ${Ansi.italic(cwd.toString)}")
+    log.detail(s"Working directory: ${Ansi.italic(cwd.toString)}")
 
     val termination = Promise[Unit]()
 
@@ -79,12 +79,12 @@ object ProcessHelper {
 
     modulePath.foreach { mp =>
       pb.environment().put("MODULE_PATH", mp)
-      log.debug(s"    Module path: ${Ansi.italic(mp)}")
+      log.detail(s"Module path: ${Ansi.italic(mp)}")
     }
 
     buildPath.foreach { bp =>
       pb.environment().put("BUILD_PATH", bp)
-      log.debug(s"    Build path: ${Ansi.italic(bp)}")
+      log.detail(s"Build path: ${Ansi.italic(bp)}")
     }
 
     pb.setProcessListener(new ProcessHandler(

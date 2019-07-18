@@ -18,13 +18,8 @@ object TestProcessHelper {
 
   def runBloop(cwd: Path)(args: String*): Future[String] = {
     val sb = new StringBuilder
-    val process = ProcessHelper.runBloop(cwd,
-      Log,
-      { out =>
-        Log.info(s"Process output: $out")
-        sb.append(out + "\n")
-      })(args: _*)
-
+    val process = ProcessHelper.runBloop(cwd, Log.urgent,
+      out => sb.append(out + "\n"))(args: _*)
     process.success.map(_ => sb.toString)
   }
 }

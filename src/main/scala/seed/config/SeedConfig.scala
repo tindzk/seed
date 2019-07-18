@@ -19,8 +19,10 @@ object SeedConfig {
 
     implicit val pCodec = pathCodec(identity)
 
+    val log = Log(Config())
+
     def parse(path: Path) =
-      TomlUtils.parseFile(path, Toml.parseAs[Config](_), "Seed configuration", Log)
+      TomlUtils.parseFile(path, Toml.parseAs[Config](_), "Seed configuration", log)
         .getOrElse(sys.exit(1))
 
     userConfigPath match {
@@ -30,7 +32,7 @@ object SeedConfig {
       case Some(path) =>
         if (Files.exists(path)) parse(path)
         else {
-          Log.error(s"Invalid path to Seed configuration file provided: ${Ansi.italic(path.toString)}")
+          log.error(s"Invalid path to Seed configuration file provided: ${Ansi.italic(path.toString)}")
           sys.exit(1)
         }
     }

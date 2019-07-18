@@ -15,56 +15,56 @@ import toml._
 
 import scala.util.{Success, Try}
 
-object Scaffold {
+class Scaffold(log: Log) {
   val console = System.console()
 
   def readInput[T](default: T, f: String => Option[T]): T = {
     val input = console.readLine().trim
     if (input.isEmpty) default else f(input).getOrElse {
-      Log.info("Try again")
+      log.info("Try again")
       readInput(default, f)
     }
   }
 
   def askModuleName(): String = {
-    Log.info(s"${Ansi.italic("Module name?")} [default: ${Ansi.underlined("example")}]")
+    log.info(s"${Ansi.italic("Module name?")} [default: ${Ansi.underlined("example")}]")
     readInput("example", x =>
       if (x.forall(_.isLetterOrDigit)) Some(x)
       else {
-        Log.error("The name may only consist of letters or digits")
+        log.error("The name may only consist of letters or digits")
         None
       })
   }
 
   def askStable(): Boolean = {
-    Log.info(s"${Ansi.italic("Do you want to use:")} 1) stable releases or 2) pre-releases? [default: ${Ansi.underlined("1")}]")
+    log.info(s"${Ansi.italic("Do you want to use:")} 1) stable releases or 2) pre-releases? [default: ${Ansi.underlined("1")}]")
     readInput[Boolean](true, input =>
       Try(input.toInt) match {
         case Success(1) => Some(true)
         case Success(2) => Some(false)
         case _          =>
-          Log.error(s"Invalid number provided")
+          log.error(s"Invalid number provided")
           None
       })
   }
 
   def askOrganisation(): Organisation = {
-    Log.info(s"${Ansi.italic("Do you want to use:")} 1) Lightbend or 2) Typelevel Scala? [default: ${Ansi.underlined("1")}]")
+    log.info(s"${Ansi.italic("Do you want to use:")} 1) Lightbend or 2) Typelevel Scala? [default: ${Ansi.underlined("1")}]")
     readInput[Organisation](Organisation.Lightbend, input =>
       Try(input.toInt) match {
         case Success(1) => Some(Organisation.Lightbend)
         case Success(2) => Some(Organisation.Typelevel)
         case _          =>
-          Log.error(s"Invalid number provided")
+          log.error(s"Invalid number provided")
           None
       })
   }
 
   def askPlatforms() = {
-    Log.info(s"${Ansi.italic("Which platform(s) do you want to support?")} [default: ${Ansi.underlined("1,2")}]")
-    Log.info(s" 1. JVM")
-    Log.info(s" 2. JavaScript")
-    Log.info(s" 3. Native (experimental)")
+    log.info(s"${Ansi.italic("Which platform(s) do you want to support?")} [default: ${Ansi.underlined("1,2")}]")
+    log.info(s" 1. JVM")
+    log.info(s" 2. JavaScript")
+    log.info(s" 3. Native (experimental)")
 
     readInput[Set[Platform]](Set(JVM, JavaScript), input => {
       val result = input.split(",").map(u => Try(u.toInt)).map {
@@ -72,10 +72,10 @@ object Scaffold {
         case Success(2) => Some(JavaScript)
         case Success(3) => Some(Native)
         case Success(i) =>
-          Log.error(s"Invalid number provided: $i")
+          log.error(s"Invalid number provided: $i")
           None
         case _          =>
-          Log.error(s"Invalid number provided")
+          log.error(s"Invalid number provided")
           None
       }
 
@@ -84,11 +84,11 @@ object Scaffold {
   }
 
   def askTestFrameworks() = {
-    Log.info(s"${Ansi.italic("Which test framework(s) do you need?")} [default: ${Ansi.underlined("none")}]")
-    Log.info(s" 1. minitest")
-    Log.info(s" 2. ScalaTest")
-    Log.info(s" 3. ScalaCheck")
-    Log.info(s" 4. µTest")
+    log.info(s"${Ansi.italic("Which test framework(s) do you need?")} [default: ${Ansi.underlined("none")}]")
+    log.info(s" 1. minitest")
+    log.info(s" 2. ScalaTest")
+    log.info(s" 3. ScalaCheck")
+    log.info(s" 4. µTest")
 
     import TestFramework._
     readInput[Set[TestFramework]](Set(), input => {
@@ -98,10 +98,10 @@ object Scaffold {
         case Success(3) => Some(ScalaCheck)
         case Success(4) => Some(Utest)
         case Success(i) =>
-          Log.error(s"Invalid number provided: $i")
+          log.error(s"Invalid number provided: $i")
           None
         case _          =>
-          Log.error(s"Invalid number provided")
+          log.error(s"Invalid number provided")
           None
       }
 
@@ -125,7 +125,7 @@ object Scaffold {
       val versionTuples = libraries.flatMap(_._2).collect {
         case (p, platformVersion, compilerVersion) if p == platform =>
           (platformVersion, compilerVersion)
-      }.toList.distinct.sortBy(_._1)(SemanticVersioning.versionOrdering)
+      }.toList.distinct.sortBy(_._1)(new SemanticVersioning(log).versionOrdering)
 
       val platformCompilerVersions =
         compilerVersions(platform).map(MavenCentral.trimCompilerVersion).toSet
@@ -156,9 +156,9 @@ object Scaffold {
 
     compilerArtefacts.map { case (platform, artefact) =>
       if (artefact.versionTag.isEmpty)
-        platform -> MavenCentral.fetchCompilerVersions(artefact, stable)
+        platform -> MavenCentral.fetchCompilerVersions(artefact, stable, log)
       else
-        platform -> MavenCentral.fetchPlatformCompilerVersions(artefact, stable)
+        platform -> MavenCentral.fetchPlatformCompilerVersions(artefact, stable, log)
     }
   }
 
@@ -167,13 +167,13 @@ object Scaffold {
                                    compilerVersions: Map[Platform, List[String]],
                                    stable: Boolean
                                   ): Map[Platform, (PlatformVersion, CompilerVersion)] = {
-    Log.info("Fetching version matrix for libraries...")
+    log.info("Fetching version matrix for libraries...")
     val libraries = artefacts.map { artefact =>
-      val artefacts = MavenCentral.fetchLibraryArtefacts(artefact, stable)
+      val artefacts = MavenCentral.fetchLibraryArtefacts(artefact, stable, log)
       artefact -> artefacts
     }.toMap
 
-    Log.info("Resolving platform and compiler versions...")
+    log.info("Resolving platform and compiler versions...")
     choosePlatformConfiguration(platforms, compilerVersions, libraries)
   }
 
@@ -182,7 +182,7 @@ object Scaffold {
                     artefacts: Map[Platform, Set[Artefact]],
                     stable: Boolean
                    ) = {
-    Log.info("Fetching platform compiler versions...")
+    log.info("Fetching platform compiler versions...")
     val compilerVersions = fetchCompilerVersions(organisation, platforms, stable)
 
     val platformVersions: Map[Platform, (PlatformVersion, CompilerVersion)] =
@@ -213,9 +213,9 @@ object Scaffold {
         )
       }))
 
-    Log.info("Resolving bridge and platform compiler versions...")
+    log.info("Resolving bridge and platform compiler versions...")
     val bridgeVersions = MavenCentral.fetchPlatformCompilerVersions(
-      Artefact.CompilerBridge, stable)
+      Artefact.CompilerBridge, stable, log)
 
     // When choosing Scala compiler version for each platform, ensure that
     // a corresponding plug-in exists
@@ -242,12 +242,12 @@ object Scaffold {
               // resolve the minor version for the platform compiler.
               val versions = MavenCentral.fetchVersions(
                 Artefact.ScalaJsCompiler, platform, "", cv,
-                stable)
+                stable, log)
               versions.reverse.find(_.startsWith(platformVersion)).map(_ -> cv)
             } else if (platform == Native) {
               val versions = MavenCentral.fetchVersions(
                 Artefact.ScalaNativePlugin, platform, "",
-                cv, stable)
+                cv, stable, log)
               versions.reverse.find(_.startsWith(platformVersion)).map(_ -> cv)
             } else Some((cv, cv))
           }.headOption.map(platform -> _)
@@ -308,7 +308,7 @@ object Scaffold {
       if (!artefacts.exists(_._2.nonEmpty))
         Map[Platform, Map[Artefact, Option[String]]]()
       else {
-        Log.info("Resolving library versions...")
+        log.info("Resolving library versions...")
 
         val libraryArtefacts: Map[Platform, Map[Artefact, Option[String]]] =
           platforms.map { platform =>
@@ -317,7 +317,8 @@ object Scaffold {
             platform -> artefacts.getOrElse(platform, Set()).toList.flatMap { artefact =>
               resolvedCompilerVersions.get(platform).map { compilerVersion =>
                 val allVersions = MavenCentral.fetchVersions(
-                  artefact, platform, platformVersion.get, compilerVersion, stable)
+                  artefact, platform, platformVersion.get, compilerVersion,
+                  stable, log)
                 val resolvedVersion = allVersions.lastOption
                 artefact -> resolvedVersion
               }
@@ -506,7 +507,7 @@ object Scaffold {
   def createDirectories(seedPath: Path, platforms: Set[Platform]): Unit = {
     val basePath = seedPath.toAbsolutePath.getParent
 
-    Log.info("Creating folder structure...")
+    log.info("Creating folder structure...")
 
     val tree = (if (platforms.contains(JVM) && platforms.size > 1) {
       Files.createDirectories(basePath.resolve("jvm/src"))
@@ -587,10 +588,10 @@ object Scaffold {
   }
 
   def create(seedPath: Path): Unit = {
-    Log.info(s"Please answer the following questions to create the build file")
-    Log.info(s"The file will be named ${Ansi.italic(seedPath.toString)}")
+    log.info(s"Please answer the following questions to create the build file")
+    log.info(s"The file will be named ${Ansi.italic(seedPath.toString)}")
 
-    println()
+    log.newLine()
 
     val moduleName = askModuleName()
     val stable = askStable()
@@ -603,22 +604,22 @@ object Scaffold {
     FileUtils.write(seedPath.toFile, content, "UTF-8")
     createDirectories(seedPath, platforms)
 
-    Log.info("✓ Configuration written")
+    log.info("✓ Configuration written")
   }
 
   def ui(path: Path): Unit = {
     import Ansi._
     import ColourScheme._
 
-    Log.info(bold(foreground(blue2)("Welcome to Seed!")))
+    log.info(bold(foreground(blue2)("Welcome to Seed!")))
 
     val seedPath =
       if (Files.isRegularFile(path)) path
       else path.resolve("build.toml")
 
     if (Files.exists(seedPath))
-      Log.error(s"The file ${italic(seedPath.toString)} exists already. Please provide a different path.")
+      log.error(s"The file ${italic(seedPath.toString)} exists already. Please provide a different path.")
     else
-      Scaffold.create(seedPath)
+      create(seedPath)
   }
 }

@@ -3,7 +3,7 @@ package seed.config.util
 import java.nio.file.{Path, Paths}
 
 import org.apache.commons.io.FileUtils
-import seed.Log
+import seed.{Log, LogLevel}
 import seed.cli.util.Ansi
 import seed.model.Build.{PlatformModule, VersionTag}
 import seed.model.{Build, Platform}
@@ -13,6 +13,19 @@ import scala.util.Try
 
 object TomlUtils {
   object Codecs {
+    implicit val logLevelCodec: Codec[LogLevel] = Codec {
+      case (Value.Str(level), _, _) =>
+        LogLevel.All.get(level) match {
+          case None =>
+            Left((List(), s"Invalid log level ${Ansi.italic(level)} provided. Choose one of: " +
+                          LogLevel.All.keys.map(Ansi.italic).mkString(", ")))
+          case Some(l) => Right(l)
+        }
+
+      case (value, _, _) =>
+        Left((List(), s"Log level expected, $value provided."))
+    }
+
     implicit val platformCodec: Codec[Platform] = Codec {
       case (Value.Str(id), _, _) =>
         Platform.All.keys.find(_.id == id) match {
@@ -70,11 +83,11 @@ object TomlUtils {
         f(content) match {
           case Left((address, message)) =>
             log.error(s"The $description ${Ansi.italic(path.toString)} is malformed")
-            log.error(s"${Ansi.bold("Message:")} $message")
+            log.detail(s"${Ansi.bold("Message:")} $message")
 
             if (address.nonEmpty) {
               val trace = address.map(Ansi.italic).mkString(" → ")
-              log.error(s"${Ansi.bold("Trace:")} $trace")
+              log.detail(s"${Ansi.bold("Trace:")} $trace")
             }
 
             None

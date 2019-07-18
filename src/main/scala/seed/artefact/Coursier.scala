@@ -46,11 +46,11 @@ object Coursier {
   def coursierDependencies(deps: Set[JavaDep]): Seq[coursier.core.Dependency] =
     deps.map(r => Dependency(Module(Organization(r.organisation), ModuleName(r.artefact)), r.version)).toList
 
-  def resolve(all: Set[JavaDep], resolvers: Resolvers, ivyPath: Path, cachePath: Path, silent: Boolean): Resolution =
+  def resolve(all: Set[JavaDep], resolvers: Resolvers, ivyPath: Path, cachePath: Path, silent: Boolean, log: Log): Resolution =
     if (all.isEmpty) Resolution.empty
     else {
       val organisations = all.map(_.organisation).toList.sorted.map(Ansi.italic).mkString(", ")
-      Log.debug(s"Resolving ${Ansi.bold(all.size.toString)} dependencies from $organisations...")
+      log.debug(s"Resolving ${Ansi.bold(all.size.toString)} dependencies from $organisations...")
 
       val mapped = coursierDependencies(all)
 
@@ -58,7 +58,7 @@ object Coursier {
         val pattern = resolver.pattern.fold(coursier.ivy.Pattern.default)(p =>
           IvyRepository.parse(p) match {
             case Left(error) =>
-              Log.error(s"Could not parse Ivy pattern ${Ansi.italic(p)}: $error")
+              log.error(s"Could not parse Ivy pattern ${Ansi.italic(p)}: $error")
               sys.exit(1)
             case Right(parsed) => parsed.pattern
           })
@@ -83,9 +83,9 @@ object Coursier {
 
       val errors = resolution.errors
       if (errors.nonEmpty) {
-        Log.error("Some dependencies could not be resolved:")
+        log.error("Some dependencies could not be resolved:")
         errors.foreach { case ((module, _), _) =>
-          Log.error(s"  - ${module.name} in ${module.organization}")
+          log.error(s"  - ${module.name} in ${module.organization}")
         }
         sys.exit(1)
       }
@@ -107,7 +107,8 @@ object Coursier {
 
   def localArtefacts(artefacts: Seq[Artefact],
                      cache: Path,
-                     silent: Boolean
+                     silent: Boolean,
+                     log: Log
                     ): Map[ArtefactUrl, File] = {
     val localArtefacts = withLogger(silent) { l =>
       val fileCache = FileCache[Task]()
@@ -122,7 +123,7 @@ object Coursier {
     }
 
     if (localArtefacts.exists(_._2.isLeft))
-      Log.error("Failed to download: " + localArtefacts.filter(_._2.isLeft))
+      log.error("Failed to download: " + localArtefacts.filter(_._2.isLeft))
 
     localArtefacts
       .toMap
@@ -137,14 +138,15 @@ object Coursier {
                          ivyPath: Path,
                          cachePath: Path,
                          optionalArtefacts: Boolean,
-                         silent: Boolean): ResolutionResult = {
-    val resolution = resolve(deps, resolvers, ivyPath, cachePath, silent)
+                         silent: Boolean,
+                         log: Log): ResolutionResult = {
+    val resolution = resolve(deps, resolvers, ivyPath, cachePath, silent, log)
     val artefacts = resolution.dependencyArtifacts(
       Some(overrideClassifiers(
         sources = optionalArtefacts,
         javaDoc = optionalArtefacts))).map(_._3).toList
 
-    ResolutionResult(resolution, localArtefacts(artefacts, cachePath, silent))
+    ResolutionResult(resolution, localArtefacts(artefacts, cachePath, silent, log))
   }
 
   def resolveSubset(resolution: Resolution,

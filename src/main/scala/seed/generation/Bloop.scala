@@ -87,7 +87,8 @@ object Bloop {
                     compilerResolution: List[Coursier.ResolutionResult],
                     jsdom: Boolean,
                     emitSourceMaps: Boolean,
-                    test: Boolean
+                    test: Boolean,
+                    log: Log
                    ): Unit = {
     import parentModule.{moduleDeps, scalaDeps, sources, targets}
     import project.{scalaJsVersion, scalaOptions, scalaOrganisation, testFrameworks}
@@ -100,7 +101,7 @@ object Bloop {
       .foreach
       { js =>
         val bloopName = if (!test) name else name + "-test"
-        Log.info(s"Writing JavaScript module ${Ansi.italic(bloopName)}...")
+        log.info(s"Writing JavaScript module ${Ansi.italic(bloopName)}...")
 
         val scalaVersion = BuildConfig.scalaVersion(project,
           List(js, parentModule.js.getOrElse(Module()), parentModule))
@@ -172,7 +173,8 @@ object Bloop {
                         project: Project,
                         resolution: Coursier.ResolutionResult,
                         compilerResolution: List[Coursier.ResolutionResult],
-                        test: Boolean
+                        test: Boolean,
+                        log: Log
                        ): Unit = {
     import parentModule.{moduleDeps, scalaDeps, sources, targets}
     import project.{scalaNativeVersion, scalaOptions, scalaOrganisation, testFrameworks}
@@ -205,7 +207,7 @@ object Bloop {
       .foreach
       { native =>
         val bloopName = if (!test) name else name + "-test"
-        Log.info(s"Writing native module ${Ansi.italic(bloopName)}...")
+        log.info(s"Writing native module ${Ansi.italic(bloopName)}...")
 
         val scalaVersion = BuildConfig.scalaVersion(project,
           List(native, parentModule.native.getOrElse(Module()), parentModule))
@@ -294,7 +296,8 @@ object Bloop {
                      project: Project,
                      resolution: Coursier.ResolutionResult,
                      compilerResolution: List[Coursier.ResolutionResult],
-                     test: Boolean
+                     test: Boolean,
+                     log: Log
                     ): Unit = {
     import parentModule.{moduleDeps, sources, targets}
     import project.{scalaOptions, scalaOrganisation, testFrameworks}
@@ -307,7 +310,7 @@ object Bloop {
       .foreach
       { jvm =>
         val bloopName = if (!test) name else name + "-test"
-        Log.info(s"Writing JVM module ${Ansi.italic(bloopName)}...")
+        log.info(s"Writing JVM module ${Ansi.italic(bloopName)}...")
 
         val scalaVersion = BuildConfig.scalaVersion(project,
           List(jvm, parentModule.jvm.getOrElse(Module()), parentModule))
@@ -372,7 +375,8 @@ object Bloop {
                   resolution: Coursier.ResolutionResult,
                   compilerResolution: List[Coursier.ResolutionResult],
                   name: String,
-                  module: Module
+                  module: Module,
+                  log: Log
                  ): Unit = {
     val isCrossBuild = module.targets.toSet.size > 1
 
@@ -387,7 +391,7 @@ object Bloop {
       module.js, build.project, resolution, compilerResolution,
       jsdom = module.js.exists(_.jsdom),
       emitSourceMaps = module.js.exists(_.emitSourceMaps),
-      test = false)
+      test = false, log)
     writeJvmModule(build, if (!isCrossBuild) name else name + "-jvm",
       projectPath, bloopPath, bloopBuildPath,
       module.copy(
@@ -395,12 +399,14 @@ object Bloop {
         javaDeps = collectJvmJavaDeps(build, module)
       ),
       collectJvmClassPath(bloopBuildPath, build, module),
-      module.jvm, build.project, resolution, compilerResolution, test = false)
+      module.jvm, build.project, resolution, compilerResolution, test = false,
+      log)
     writeNativeModule(build, if (!isCrossBuild) name else name + "-native",
       projectPath, bloopPath, bloopBuildPath, Some(nativeOutputPath),
       module.copy(scalaDeps = collectNativeDeps(build, module)),
       collectJvmClassPath(bloopBuildPath, build, module),
-      module.native, build.project, resolution, compilerResolution, test = false)
+      module.native, build.project, resolution, compilerResolution, test = false,
+      log)
 
     module.test.foreach { test =>
       val targets = if (test.targets.nonEmpty) test.targets else module.targets
@@ -416,7 +422,7 @@ object Bloop {
         ),
         collectJsClassPath(bloopBuildPath, build, module),
         test.js, build.project, resolution, compilerResolution, jsdom,
-        emitSourceMaps, test = true)
+        emitSourceMaps, test = true, log)
 
       writeNativeModule(build, if (!isCrossBuild) name else name + "-native",
         projectPath, bloopPath, bloopBuildPath, None,
@@ -426,7 +432,8 @@ object Bloop {
           targets = targets
         ),
         collectNativeClassPath(bloopBuildPath, build, module),
-        test.native, build.project, resolution, compilerResolution, test = true)
+        test.native, build.project, resolution, compilerResolution, test = true,
+        log)
 
       writeJvmModule(build, if (!isCrossBuild) name else name + "-jvm",
         projectPath, bloopPath, bloopBuildPath,
@@ -437,7 +444,8 @@ object Bloop {
           targets = targets
         ),
         collectJvmClassPath(bloopBuildPath, build, module),
-        test.jvm, build.project, resolution, compilerResolution, test = true)
+        test.jvm, build.project, resolution, compilerResolution, test = true,
+        log)
 
       if (isCrossBuild)
         writeBloop(
@@ -473,12 +481,13 @@ object Bloop {
             build: Build,
             resolution: Coursier.ResolutionResult,
             compilerResolution: List[Coursier.ResolutionResult],
-            tmpfs: Boolean): Unit = {
+            tmpfs: Boolean,
+            log: Log): Unit = {
     val bloopPath = projectPath.resolve(".bloop")
-    val buildPath = PathUtil.buildPath(projectPath, tmpfs)
+    val buildPath = PathUtil.buildPath(projectPath, tmpfs, log)
     val bloopBuildPath = buildPath.resolve("bloop")
 
-    Log.info(s"Build path: ${Ansi.italic(buildPath.toString)}")
+    log.info(s"Build path: ${Ansi.italic(buildPath.toString)}")
 
     if (!Files.exists(bloopPath)) Files.createDirectory(bloopPath)
     if (!Files.exists(bloopBuildPath)) Files.createDirectories(bloopBuildPath)
@@ -488,11 +497,11 @@ object Bloop {
       .foreach(Files.delete)
 
     build.module.foreach { case (name, module) =>
-      Log.info(s"Building module ${Ansi.italic(name)}...")
+      log.info(s"Building module ${Ansi.italic(name)}...")
       buildModule(projectPath, bloopPath, buildPath, bloopBuildPath, build,
-        resolution, compilerResolution, name, module)
+        resolution, compilerResolution, name, module, log)
     }
 
-    Log.info("Bloop project has been created")
+    log.info("Bloop project has been created")
   }
 }
