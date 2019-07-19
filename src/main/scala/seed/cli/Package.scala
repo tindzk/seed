@@ -8,8 +8,8 @@ import seed.cli.util.Ansi
 import seed.config.BuildConfig
 import seed.generation.util.PathUtil
 import seed.model
-import seed.model.Build.JavaDep
-import seed.model.Config
+import seed.model.Build.{JavaDep, Module}
+import seed.model.{Build, Config}
 import seed.model.Platform.JVM
 import seed.{Cli, Log}
 
@@ -20,10 +20,9 @@ object Package {
          module: String,
          output: Option[Path],
          libs: Boolean,
-         packageConfig: Cli.PackageConfig
+         packageConfig: Cli.PackageConfig,
+         log: Log
         ): Unit = {
-    val log = Log(seedConfig)
-
     val tmpfs = packageConfig.tmpfs || seedConfig.build.tmpfs
     val buildPath = PathUtil.buildPath(projectPath, tmpfs, log)
     val bloopBuildPath = buildPath.resolve("bloop")
@@ -48,12 +47,13 @@ object Package {
         else if (paths.isEmpty)
           log.error(s"No build paths were found")
         else {
-          val files = paths.sorted.flatMap(path =>
-            Files.list(path).iterator().asScala.toList
-              .filter(_.getFileName.toString != "analysis.bin")
-              .map(p => p -> path.relativize(p).toString))
-
+          val files = collectFiles(paths)
           val jvmModule = resolvedModule.jvm.getOrElse(resolvedModule)
+
+          val classPath =
+            if (!libs) List()
+            else getLibraryClassPath(
+              seedConfig, packageConfig, build, jvmModule, outputPath, log)
 
           val mainClass = jvmModule.mainClass
           if (mainClass.isEmpty)
@@ -61,55 +61,65 @@ object Package {
           else
             log.info(s"Main class is ${Ansi.italic(mainClass.get)}")
 
-          val classPath =
-            if (!libs) List()
-            else {
-              val scalaVersion = BuildConfig.scalaVersion(build.project,
-                List(jvmModule))
-              val scalaLibraryDep =
-                JavaDep(build.project.scalaOrganisation, "scala-library", scalaVersion)
-              val scalaReflectDep =
-                JavaDep(build.project.scalaOrganisation, "scala-reflect", scalaVersion)
-              val platformDeps = Set(scalaLibraryDep, scalaReflectDep)
-
-              val libraryDeps = ArtefactResolution.allLibraryDeps(build,
-                Set(JVM))
-              val (resolvedDepPath, libraryResolution, platformResolution) =
-                ArtefactResolution.resolution(seedConfig, build,
-                  packageConfig, optionalArtefacts = false, libraryDeps,
-                  List(platformDeps), log)
-              val resolvedLibraryDeps = Coursier.localArtefacts(
-                libraryResolution, libraryDeps)
-
-              val resolvedPlatformDeps = Coursier.localArtefacts(
-                platformResolution.head, platformDeps)
-
-              val resolvedDeps = (resolvedLibraryDeps ++ resolvedPlatformDeps)
-                .distinct.sortBy(_.libraryJar)
-
-              log.info(s"Copying ${Ansi.bold(resolvedDeps.length.toString)} libraries to ${Ansi.italic(outputPath.toString)}...")
-              resolvedDeps.foreach { dep =>
-                val target = outputPath.resolve(resolvedDepPath.relativize(dep.libraryJar))
-                if (Files.exists(target))
-                  log.debug(s"Skipping ${dep.libraryJar.toString} as it exists already.")
-                else {
-                  log.debug(s"Copying ${dep.libraryJar.toString}...")
-
-                  if (!Files.exists(target.getParent))
-                    Files.createDirectories(target.getParent)
-                  Files.copy(dep.libraryJar, target)
-                }
-              }
-
-              log.info(s"Adding libraries to class path...")
-              resolvedDeps.map(p => resolvedDepPath.relativize(p.libraryJar).toString)
-            }
-
           if (!Files.exists(outputPath)) Files.createDirectories(outputPath)
           val outputJar = outputPath.resolve(module + ".jar")
           Files.deleteIfExists(outputJar)
           seed.generation.Package.create(files, outputJar, mainClass, classPath, log)
       }
     }
+  }
+
+  def collectFiles(paths: List[Path]): List[(Path, String)] =
+    paths.sorted.flatMap(path =>
+      Files.list(path).iterator().asScala.toList
+        .filter(_.getFileName.toString != "analysis.bin")
+        .map(p => p -> path.relativize(p).toString))
+
+  def getLibraryClassPath(seedConfig: Config,
+                          packageConfig: Cli.PackageConfig,
+                          build: Build,
+                          jvmModule: Module,
+                          outputPath: Path,
+                          log: Log
+                         ): List[String] = {
+    val scalaVersion = BuildConfig.scalaVersion(build.project,
+      List(jvmModule))
+    val scalaLibraryDep =
+      JavaDep(build.project.scalaOrganisation, "scala-library", scalaVersion)
+    val scalaReflectDep =
+      JavaDep(build.project.scalaOrganisation, "scala-reflect", scalaVersion)
+    val platformDeps = Set(scalaLibraryDep, scalaReflectDep)
+
+    val libraryDeps = ArtefactResolution.allLibraryDeps(build,
+      Set(JVM))
+    val (resolvedDepPath, libraryResolution, platformResolution) =
+      ArtefactResolution.resolution(seedConfig, build,
+        packageConfig, optionalArtefacts = false, libraryDeps,
+        List(platformDeps), log)
+    val resolvedLibraryDeps = Coursier.localArtefacts(
+      libraryResolution, libraryDeps)
+
+    val resolvedPlatformDeps = Coursier.localArtefacts(
+      platformResolution.head, platformDeps)
+
+    val resolvedDeps = (resolvedLibraryDeps ++ resolvedPlatformDeps)
+      .distinct.sortBy(_.libraryJar)
+
+    log.info(s"Copying ${Ansi.bold(resolvedDeps.length.toString)} libraries to ${Ansi.italic(outputPath.toString)}...")
+    resolvedDeps.foreach { dep =>
+      val target = outputPath.resolve(resolvedDepPath.relativize(dep.libraryJar))
+      if (Files.exists(target))
+        log.debug(s"Skipping ${dep.libraryJar.toString} as it exists already")
+      else {
+        log.debug(s"Copying ${dep.libraryJar.toString}...")
+
+        if (!Files.exists(target.getParent))
+          Files.createDirectories(target.getParent)
+        Files.copy(dep.libraryJar, target)
+      }
+    }
+
+    log.info(s"Adding libraries to class path...")
+    resolvedDeps.map(p => resolvedDepPath.relativize(p.libraryJar).toString)
   }
 }
