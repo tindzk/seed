@@ -1,0 +1,26 @@
+# See https://github.com/tindzk/seed/issues/16
+[project]
+scalaVersion   = "2.11.12"
+scalaJsVersion = "0.6.26"
+scalaOptions   = ["-encoding", "UTF-8", "-unchecked", "-deprecation", "-Xfuture"]
+
+[module.macros]
+root    = "macros"
+sources = ["macros"]
+targets = ["jvm", "js"]
+
+[module.macros.jvm]
+compilerDeps = [
+  ["org.scalamacros", "paradise", "2.1.1", "full"]
+]
+
+[module.macros.js]
+compilerDeps = [
+  ["org.scalamacros", "paradise", "2.1.1", "full"]
+]
+
+[module.example]
+root       = "example"
+sources    = ["example"]
+targets    = ["jvm", "js"]
+moduleDeps = ["macros"]

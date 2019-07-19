@@ -209,7 +209,7 @@ object Coursier {
           platformVersion, compilerVersion))
 
     result.resolution.dependencyArtifacts().find { case (dep, attr, art) =>
-      dep.module.name.value == name
+      dep.module.name.value == name && dep.version == version
     }.map(a => result.artefacts(a._3.url).toPath)
   }
 }
