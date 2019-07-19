@@ -9,19 +9,20 @@ import seed.cli.util.{Ansi, ColourScheme}
 import seed.model.{Artefact, Organisation, Platform, TestFramework}
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.Log
+import seed.generation.util.PathUtil
 import toml.Node._
 import toml.Value._
 import toml._
 
 import scala.util.{Success, Try}
 
-class Scaffold(log: Log) {
+class Scaffold(log: Log, silent: Boolean = false) {
   val console = System.console()
 
   def readInput[T](default: T, f: String => Option[T]): T = {
     val input = console.readLine().trim
     if (input.isEmpty) default else f(input).getOrElse {
-      log.info("Try again")
+      log.error("Invalid input provided. Please try again.")
       readInput(default, f)
     }
   }
@@ -37,46 +38,37 @@ class Scaffold(log: Log) {
   }
 
   def askStable(): Boolean = {
-    log.info(s"${Ansi.italic("Do you want to use:")} 1) stable releases or 2) pre-releases? [default: ${Ansi.underlined("1")}]")
+    log.info(s"${Ansi.italic("Do you want to use:")} ${Ansi.bold("1)")} stable releases or ${Ansi.bold("2)")} pre-releases? [default: ${Ansi.underlined("1")}]")
     readInput[Boolean](true, input =>
       Try(input.toInt) match {
         case Success(1) => Some(true)
         case Success(2) => Some(false)
-        case _          =>
-          log.error(s"Invalid number provided")
-          None
+        case _          => None
       })
   }
 
   def askOrganisation(): Organisation = {
-    log.info(s"${Ansi.italic("Do you want to use:")} 1) Lightbend or 2) Typelevel Scala? [default: ${Ansi.underlined("1")}]")
+    log.info(s"${Ansi.italic("Do you want to use:")} ${Ansi.bold("1)")} Lightbend or ${Ansi.bold("2)")} Typelevel Scala (${Ansi.italic("legacy")})? [default: ${Ansi.underlined("1")}]")
     readInput[Organisation](Organisation.Lightbend, input =>
       Try(input.toInt) match {
         case Success(1) => Some(Organisation.Lightbend)
         case Success(2) => Some(Organisation.Typelevel)
-        case _          =>
-          log.error(s"Invalid number provided")
-          None
+        case _          => None
       })
   }
 
   def askPlatforms() = {
-    log.info(s"${Ansi.italic("Which platform(s) do you want to support?")} [default: ${Ansi.underlined("1,2")}]")
-    log.info(s" 1. JVM")
-    log.info(s" 2. JavaScript")
-    log.info(s" 3. Native (experimental)")
+    log.info(s"${Ansi.italic("Which platform(s) do you want to support?")} [default: ${Ansi.underlined("1, 2")}]")
+    log.detail(s"${Ansi.bold("1.")} JVM")
+    log.detail(s"${Ansi.bold("2.")} JavaScript")
+    log.detail(s"${Ansi.bold("3.")} Native (${Ansi.italic("experimental")})")
 
     readInput[Set[Platform]](Set(JVM, JavaScript), input => {
-      val result = input.split(",").map(u => Try(u.toInt)).map {
+      val result = input.split(",").map(u => Try(u.trim.toInt)).map {
         case Success(1) => Some(JVM)
         case Success(2) => Some(JavaScript)
         case Success(3) => Some(Native)
-        case Success(i) =>
-          log.error(s"Invalid number provided: $i")
-          None
-        case _          =>
-          log.error(s"Invalid number provided")
-          None
+        case _          => None
       }
 
       if (result.exists(_.isEmpty)) None else Some(result.flatten.toSet)
@@ -85,27 +77,24 @@ class Scaffold(log: Log) {
 
   def askTestFrameworks() = {
     log.info(s"${Ansi.italic("Which test framework(s) do you need?")} [default: ${Ansi.underlined("none")}]")
-    log.info(s" 1. minitest")
-    log.info(s" 2. ScalaTest")
-    log.info(s" 3. ScalaCheck")
-    log.info(s" 4. µTest")
+    log.detail(s"${Ansi.bold("1.")} minitest")
+    log.detail(s"${Ansi.bold("2.")} ScalaTest")
+    log.detail(s"${Ansi.bold("3.")} ScalaCheck")
+    log.detail(s"${Ansi.bold("4.")} µTest")
 
     import TestFramework._
-    readInput[Set[TestFramework]](Set(), input => {
-      val result = input.split(",").map(u => Try(u.toInt)).map {
-        case Success(1) => Some(Minitest)
-        case Success(2) => Some(ScalaTest)
-        case Success(3) => Some(ScalaCheck)
-        case Success(4) => Some(Utest)
-        case Success(i) =>
-          log.error(s"Invalid number provided: $i")
-          None
-        case _          =>
-          log.error(s"Invalid number provided")
-          None
-      }
+    readInput[Set[TestFramework]](Set(), {
+      case "none" => Some(Set())
+      case input =>
+        val result = input.split(",").map(u => Try(u.trim.toInt)).map {
+          case Success(1) => Some(Minitest)
+          case Success(2) => Some(ScalaTest)
+          case Success(3) => Some(ScalaCheck)
+          case Success(4) => Some(Utest)
+          case _          => None
+        }
 
-      if (result.exists(_.isEmpty)) None else Some(result.flatten.toSet)
+        if (result.exists(_.isEmpty)) None else Some(result.flatten.toSet)
     })
   }
 
@@ -176,6 +165,9 @@ class Scaffold(log: Log) {
     log.info("Resolving platform and compiler versions...")
     choosePlatformConfiguration(platforms, compilerVersions, libraries)
   }
+
+  def println(message: String): Unit =
+    if (!silent) Predef.println(message)
 
   def checkVersions(organisation: String,
                     platforms: Set[Platform],
@@ -363,7 +355,9 @@ class Scaffold(log: Log) {
                         stable: Boolean,
                         organisation: Organisation,
                         platforms: Set[Platform],
-                        testFrameworks: Set[TestFramework]): String = {
+                        testFrameworks: Set[TestFramework]): toml.Root = {
+    require(platforms.nonEmpty)
+
     val artefacts = testFrameworks.map(_.artefact)
 
     val (compilerVersions, platformVersions, libraryArtefacts) = checkVersions(
@@ -374,7 +368,7 @@ class Scaffold(log: Log) {
         Native -> artefacts
       ), stable)
 
-    val jvmScalaVersion    = compilerVersions(JVM)
+    val jvmScalaVersion    = compilerVersions.values.head
     val jsScalaVersion     = compilerVersions.get(JavaScript)
     val nativeScalaVersion = compilerVersions.get(Native)
     val scalaJsVersion     = platformVersions.get(JavaScript)
@@ -397,25 +391,22 @@ class Scaffold(log: Log) {
       if (frameworks.isEmpty) Map() else Map("scalaDeps" -> Arr(frameworks))
     }
 
-    toml.Toml.generate(Root(List(
+    Root(List(
       NamedTable(
         List("project"),
         Map("scalaVersion" -> Str(jvmScalaVersion)) ++
         (if (organisation == Organisation.Lightbend) Map()
          else Map("scalaOrganisation" -> Str(organisation.packageName))) ++
-        (if (!platforms.contains(JavaScript)) Map()
+        (if (scalaJsVersion.isEmpty) Map()
          else Map("scalaJsVersion" -> Str(scalaJsVersion.get))) ++
-        (if (!platforms.contains(Native)) Map() else
-         Map("scalaNativeVersion" -> Str(scalaNativeVersion.get))) ++
-        Map(
-          "scalaOptions" -> Arr(List(
-            Str("-encoding"), Str("UTF-8"),
-            Str("-unchecked"),
-            Str("-deprecation"),
-            Str("-Xfuture")
-          )),
-          "testFrameworks" -> Arr(
-            testFrameworks.map(tf => Str(tf.mainClass)).toList
+        (if (scalaNativeVersion.isEmpty) Map() else
+         Map("scalaNativeVersion" -> Str(scalaNativeVersion.get))
+        ) ++ (
+          if (testFrameworks.isEmpty) Map()
+          else Map(
+            "testFrameworks" -> Arr(
+              testFrameworks.map(tf => Str(tf.mainClass)).toList
+            )
           )
         )
       )
@@ -430,13 +421,17 @@ class Scaffold(log: Log) {
             platforms.map(platform => Str(platform.id)).toList
           )
         )
-      ),
-      NamedTable(
-        List("module", moduleName, "test"),
-        Map("sources" -> Arr(List(Str("shared/test"))))
+      )
+    ) ++ (
+      if (testFrameworks.isEmpty) List()
+      else List(
+        NamedTable(
+          List("module", moduleName, "test"),
+          Map("sources" -> Arr(List(Str("shared/test"))))
+        )
       )
     )) ++
-    (if (!platforms.contains(JavaScript)) List() else List(
+    (if (scalaJsVersion.isEmpty) List() else List(
       NamedTable(
         List("module", moduleName, "js"),
         Map("root" -> Str("js")) ++
@@ -449,15 +444,18 @@ class Scaffold(log: Log) {
             if (platforms.size == 1) Str("src") else Str("js/src")
           ))
         )
-      ),
-
-      NamedTable(
-        List("module", moduleName, "test", "js"),
-        Map(
-          "sources" -> Arr(List(
-            if (platforms.size == 1) Str("test") else Str("js/test")
-          ))
-        ) ++ scalaTestDeps(JavaScript)
+      )
+    ) ++ (
+      if (testFrameworks.isEmpty) List()
+      else List(
+        NamedTable(
+          List("module", moduleName, "test", "js"),
+          Map(
+            "sources" -> Arr(List(
+              if (platforms.size == 1) Str("test") else Str("js/test")
+            ))
+          ) ++ scalaTestDeps(JavaScript)
+        )
       )
     )) ++
     (if (!platforms.contains(JVM)) List() else List(
@@ -469,17 +467,21 @@ class Scaffold(log: Log) {
             if (platforms.size == 1) Str("src") else Str("jvm/src")
           ))
         )
-      ),
-      NamedTable(
-        List("module", moduleName, "test", "jvm"),
-        Map(
-          "sources" -> Arr(List(
-            if (platforms.size == 1) Str("test") else Str("jvm/test")
-          ))
-        ) ++ scalaTestDeps(JVM)
+      )
+    ) ++ (
+      if (testFrameworks.isEmpty) List()
+      else List(
+        NamedTable(
+          List("module", moduleName, "test", "jvm"),
+          Map(
+            "sources" -> Arr(List(
+              if (platforms.size == 1) Str("test") else Str("jvm/test")
+            ))
+          ) ++ scalaTestDeps(JVM)
+        )
       )
     )) ++
-    (if (!platforms.contains(Native)) List() else List(
+    (if (scalaNativeVersion.isEmpty) List() else List(
       NamedTable(
         List("module", moduleName, "native"),
         Map("root" -> Str("native")) ++
@@ -492,95 +494,117 @@ class Scaffold(log: Log) {
             if (platforms.size == 1) Str("src") else Str("native/src")
           ))
         )
-      ),
-      NamedTable(
-        List("module", moduleName, "test", "native"),
-        Map(
-          "sources" -> Arr(List(
-            if (platforms.size == 1) Str("test") else Str("native/test")
-          ))
-        ) ++ scalaTestDeps(Native)
       )
-    ))))
+    ) ++ (
+      if (testFrameworks.isEmpty) List()
+      else List(
+        NamedTable(
+          List("module", moduleName, "test", "native"),
+          Map(
+            "sources" -> Arr(List(
+              if (platforms.size == 1) Str("test") else Str("native/test")
+            ))
+          ) ++ scalaTestDeps(Native)
+        )
+      )
+    )))
   }
 
-  def createDirectories(seedPath: Path, platforms: Set[Platform]): Unit = {
+  def createDirectories(seedPath: Path,
+                        platforms: Set[Platform],
+                        testFrameworks: Boolean
+                       ): Unit = {
     val basePath = seedPath.toAbsolutePath.getParent
 
     log.info("Creating folder structure...")
 
     val tree = (if (platforms.contains(JVM) && platforms.size > 1) {
       Files.createDirectories(basePath.resolve("jvm/src"))
-      Files.createDirectories(basePath.resolve("jvm/test"))
+      if (testFrameworks)
+        Files.createDirectories(basePath.resolve("jvm/test"))
 
-      Seq(
-        Seq(
+      List(
+        List(
           fansi.Bold.On("jvm/src"),
           fansi.Str("Source files for JVM platform")
-        ),
-        Seq(
+        )
+      ) ++ (
+        if (!testFrameworks) List()
+        else List(List(
           fansi.Bold.On("jvm/test"),
           fansi.Str("Test files for JVM platform")
-        )
+        ))
       )
-    } else Seq()) ++
+    } else List()) ++
     (if (platforms.contains(Native) && platforms.size > 1) {
       Files.createDirectories(basePath.resolve("native/src"))
-      Files.createDirectories(basePath.resolve("native/test"))
+      if (testFrameworks)
+        Files.createDirectories(basePath.resolve("native/test"))
 
-      Seq(
-        Seq(
+      List(
+        List(
           fansi.Bold.On("native/src"),
           fansi.Str("Source files for Native platform")
-        ),
-        Seq(
+        )
+      ) ++ (
+        if (!testFrameworks) List()
+        else List(List(
           fansi.Bold.On("native/test"),
           fansi.Str("Test files for Native platform")
-        )
+        ))
       )
-    } else Seq()) ++
+    } else List()) ++
     (if (platforms.contains(JavaScript) && platforms.size > 1) {
       Files.createDirectories(basePath.resolve("js/src"))
-      Files.createDirectories(basePath.resolve("js/test"))
+      if (testFrameworks)
+        Files.createDirectories(basePath.resolve("js/test"))
 
-      Seq(
-        Seq(
+      List(
+        List(
           fansi.Bold.On("js/src"),
           fansi.Str("Source files for JavaScript platform")
-        ),
-        Seq(
+        )
+      ) ++ (
+        if (!testFrameworks) List()
+        else List(List(
           fansi.Bold.On("js/test"),
           fansi.Str("Test files for JavaScript platform")
-        )
+        ))
       )
-    } else Seq()) ++
+    } else List()) ++
     (if (platforms.size == 1) {
       Files.createDirectories(basePath.resolve("src"))
-      Files.createDirectories(basePath.resolve("test"))
+      if (testFrameworks)
+        Files.createDirectories(basePath.resolve("test"))
 
-      Seq(
-        Seq(
+      List(
+        List(
           fansi.Bold.On("src"),
           fansi.Str(s"Source files for ${platforms.head.caption} platform")
-        ),
-        Seq(
+        )
+      ) ++ (
+        if (!testFrameworks) List()
+        else List(List(
           fansi.Bold.On("test"),
           fansi.Str(s"Test files for ${platforms.head.caption} platform")
-        )
+        ))
       )
     } else {
       Files.createDirectories(basePath.resolve("shared/src"))
-      Files.createDirectories(basePath.resolve("shared/test"))
+      if (testFrameworks)
+        Files.createDirectories(basePath.resolve("shared/test"))
 
-      Seq(
-        Seq(
+      List(
+        List(
           fansi.Bold.On("shared/src"),
           fansi.Str("Shared source files for all platforms")
-        ),
-        Seq(
+        )
+      ) ++ (
+        if (!testFrameworks) List()
+        else List(List(
           fansi.Bold.On("shared/test"),
           fansi.Str("Shared test files for all platforms")
-        )
+        ))
       )
     })
 
@@ -599,10 +623,11 @@ class Scaffold(log: Log) {
     val platforms = askPlatforms()
     val testFrameworks = askTestFrameworks()
     val content =
-      generateBuildFile(moduleName, stable, organisation, platforms, testFrameworks)
+      toml.Toml.generate(
+        generateBuildFile(moduleName, stable, organisation, platforms, testFrameworks))
 
     FileUtils.write(seedPath.toFile, content, "UTF-8")
-    createDirectories(seedPath, platforms)
+    createDirectories(seedPath, platforms, testFrameworks.nonEmpty)
 
     log.info("✓ Configuration written")
   }
@@ -613,9 +638,7 @@ class Scaffold(log: Log) {
 
     log.info(bold(foreground(blue2)("Welcome to Seed!")))
 
-    val seedPath =
-      if (Files.isRegularFile(path)) path
-      else path.resolve("build.toml")
+    val seedPath = PathUtil.buildFilePath(path)
 
     if (Files.exists(seedPath))
       log.error(s"The file ${italic(seedPath.toString)} exists already. Please provide a different path.")
