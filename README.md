@@ -523,16 +523,22 @@ For two equivalent examples of using code generation, please refer to these link
 * [Command target](test/custom-command-target/)
 
 ### Compiler plug-ins
-A module can add Scala plug-ins with `compilerDeps`. The setting behaves like `scalaDeps`, but also adds the `-Xplugin` parameter to the Scala compiler when the module is compiled. A minimal example looks as follows:
+Project and modules can add Scala plug-ins with `compilerDeps`. The setting behaves like `scalaDeps`, but also adds the `-Xplugin` parameter to the Scala compiler when modules are compiled. For example:
 
 ```toml
+[project]
+compilerDeps = [
+  ["org.scalameta", "semanticdb-scalac", "4.2.0", "full"]
+]
+
 [module.macros.js]
 compilerDeps = [
   ["org.scalamacros", "paradise", "2.1.1", "full"]
 ]
 ```
 
-Note that plug-ins are inherited by all dependent modules such that `compilerDeps` only needs to be defined on the base module.
+Note that project-level plug-ins are inherited by all modules defined under the project, as well as any dependent modules such that `compilerDeps` only needs to be defined on the base project or module.
+In the example above, `module.macros.js` inherits the semanticdb plug-in from the *project* and adds a separate dependency on the macro paradise plug-in.        
 
 For a complete cross-compiled Macro Paradise example, please refer to [this project](test/example-paradise/).
 

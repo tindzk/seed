@@ -62,8 +62,8 @@ object BuildConfig {
   }
 
   def processBuild(build: Build, projectPath: Path, parse: Path => Option[(Build, Map[String, Path])]): (Build, Map[String, Path]) = {
-    val parsed = build match { case p =>
-      p.copy(module = p.module.mapValues { module =>
+    val parsed = build.copy(
+      module = build.module.mapValues { module =>
         val parentTargets = moduleTargets(module, module.targets)
         module.copy(
           targets = parentTargets,
@@ -74,25 +74,38 @@ object BuildConfig {
                 if (module.targets.isEmpty) parentTargets else module.targets))
           }
         )
-      })
-    }
+      }
+    )
 
     val imported = parsed.`import`.flatMap(parse(_))
 
-    val result = parsed.copy(
-      project = parsed.project.copy(testFrameworks =
-        (parsed.project.testFrameworks ++
-         imported.flatMap(_._1.project.testFrameworks)
-        ).distinct
+    val parsedModules = parsed.module.mapValues(inheritCompilerDeps(parsed.project))
+
+    val importedModules = imported.foldLeft(Map.empty[String, Module]) {
+      case (acc, (importedBuild, importedPaths)) =>
+        acc ++ importedBuild.module.mapValues(inheritCompilerDeps(importedBuild.project))
+    }
+
+    val combinedBuild = parsed.copy(
+      project = parsed.project.copy(
+        testFrameworks = (parsed.project.testFrameworks ++ imported.flatMap(_._1.project.testFrameworks)).distinct
       ),
-      module = parsed.module ++ imported.flatMap(_._1.module))
+      module = parsedModules ++ importedModules)
+
 
     val moduleProjectPaths =
       imported.flatMap(_._2).toMap ++
       parsed.module.keys.map(m => m -> projectPath).toMap
 
-    (result, moduleProjectPaths)
+    (combinedBuild, moduleProjectPaths)
   }
+
+  def inheritCompilerDeps(project: Project)(module: Module): Module =
+    module.copy(
+      compilerDeps = (project.compilerDeps ++ module.compilerDeps).distinct,
+      jvm = module.jvm.map(inheritCompilerDeps(project)),
+      js = module.js.map(inheritCompilerDeps(project)),
+      native = module.native.map(inheritCompilerDeps(project)))
 
   def moduleTargets(module: Build.Module,
                     otherTargets: List[Platform]): List[Platform] = (

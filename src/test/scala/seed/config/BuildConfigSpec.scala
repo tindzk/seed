@@ -127,4 +127,55 @@ object BuildConfigSpec extends SimpleTestSuite {
       build.module("example").jvm.get.scalaDeps,
       List(ScalaDep("org.scalameta", "interactive", "4.1.0", VersionTag.Full)))
   }
+
+  test("Copy compilerDeps from project definitions to modules") {
+    val fooToml = """
+      |import = ["bar"]
+      |
+      |[project]
+      |scalaVersion = "2.12.8"
+      |compilerDeps = [
+      |  ["foo", "foo", "1.0", "full"]
+      |]
+      |
+      |[module.foo]
+      |sources = ["foo-jvm/src"]
+      |[module.foo.js]
+      |sources = ["foo-js/src"]
+      |compilerDeps = [
+      |  ["foo-js", "foo-js", "1.0", "full"]
+      |]
+    """.stripMargin
+
+    val barToml = """
+      |[project]
+      |scalaVersion = "2.12.8"
+      |compilerDeps = [
+      |  ["bar", "bar", "1.0", "full"]
+      |]
+      |
+      |[module.bar]
+      |sources = ["bar/src"]
+    """.stripMargin
+
+    val buildRaw = TomlUtils.parseBuildToml(Paths.get("."))(fooToml)
+    val (build, _) = BuildConfig.processBuild(buildRaw.right.get, Paths.get("."),
+      _ => TomlUtils.parseBuildToml(Paths.get("."))(barToml).toOption.map(build => build -> Map.empty))
+
+    assertEquals(
+      build.module("foo").compilerDeps,
+      List(ScalaDep("foo", "foo", "1.0", VersionTag.Full)))
+
+    assertEquals(
+      build.module("foo").js.get.compilerDeps,
+      List(
+        ScalaDep("foo", "foo", "1.0", VersionTag.Full),
+        ScalaDep("foo-js", "foo-js", "1.0", VersionTag.Full))
+    )
+
+    assertEquals(
+      build.module("bar").compilerDeps,
+      List(ScalaDep("bar", "bar", "1.0", VersionTag.Full))
+    )
+  }
 }
