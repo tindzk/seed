@@ -53,7 +53,7 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
       JavaDep("net.java.dev.jna", "jna", "4.5.1")))
   }
 
-  test("compilerDeps()") {
+  test("Inherit compiler dependencies") {
     val build = Build(
       project = Project("2.12.8", scalaJsVersion = Some("0.6.26")),
       module = Map())
@@ -80,6 +80,46 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
           JavaDep("org.scala-lang", "scala-library", "2.12.8"),
           JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
           JavaDep("org.scala-js", "scalajs-compiler_2.12.8", "0.6.26"),
+          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1"),
           JavaDep("com.softwaremill.clippy", "plugin_2.12", "0.6.0"))))
+  }
+
+  test("Compiler dependency with overridden version in platform module") {
+    val build = Build(
+      project = Project("2.12.8", scalaJsVersion = Some("0.6.26")),
+      module = Map())
+    val module = Module(
+      targets = List(JVM, JavaScript),
+      compilerDeps = List(
+        ScalaDep("org.scalamacros", "paradise", "2.1.0", VersionTag.Full)),
+      js = Some(Module(
+        compilerDeps = List(
+          ScalaDep("org.scalamacros", "paradise", "2.1.1", VersionTag.Full)))))
+    val deps = ArtefactResolution.compilerDeps(build, module)
+
+    assertEquals(deps,
+      List(
+        Set(
+          JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
+          JavaDep("org.scala-lang", "scala-library", "2.12.8"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
+          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.0")),
+        Set(
+          JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
+          JavaDep("org.scala-lang", "scala-library", "2.12.8"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
+          JavaDep("org.scala-js", "scalajs-compiler_2.12.8", "0.6.26"),
+          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1"))))
+  }
+
+  test("mergeDeps()") {
+    val deps =
+      List(
+        ScalaDep("org.scalamacros", "paradise", "2.1.0", VersionTag.Full),
+        ScalaDep("org.scalamacros", "paradise", "2.1.1", VersionTag.Full))
+
+    assertEquals(
+      ArtefactResolution.mergeDeps(deps),
+      List(ScalaDep("org.scalamacros", "paradise", "2.1.1", VersionTag.Full)))
   }
 }

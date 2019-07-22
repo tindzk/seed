@@ -25,6 +25,15 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   override def setup(): Unit = ()
   override def tearDown(env: Unit): Unit = ()
 
+  def readBloopJson(path: Path): bloop.config.Config.File = {
+    val content = FileUtils.readFileToString(path.toFile, "UTF-8")
+
+    import io.circe.parser._
+    decode[bloop.config.Config.File](content)(
+      ConfigEncoderDecoders.allDecoder
+    ).right.get
+  }
+
   def compileAndRun(projectPath: Path) = {
     def compile =
       TestProcessHelper.runBloop(projectPath)("compile", "example").map { x =>
@@ -47,7 +56,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     compileAndRun(projectPath)
   }
 
-  testAsync("Build project with compiler plug-in") { _ =>
+  testAsync("Build project with compiler plug-in defined on cross-platform module") { _ =>
     val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(
       Paths.get("test/example-paradise"), Log.urgent).get
     val buildPath = projectPath.resolve("build")
@@ -56,6 +65,58 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       ivyPath = None, cachePath = None)
     cli.Generate.ui(Config(), projectPath, build, Command.Bloop(packageConfig),
       Log.urgent)
+    compileAndRun(projectPath)
+  }
+
+  testAsync("Build project with compiler plug-in defined on platform modules") { _ =>
+    val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(
+      Paths.get("test/example-paradise-platform"), Log.urgent).get
+    val buildPath = projectPath.resolve("build")
+    if (Files.exists(buildPath)) FileUtils.deleteDirectory(buildPath.toFile)
+    val packageConfig = PackageConfig(tmpfs = false, silent = false,
+      ivyPath = None, cachePath = None)
+    cli.Generate.ui(Config(), projectPath, build, Command.Bloop(packageConfig),
+      Log.urgent)
+    compileAndRun(projectPath)
+  }
+
+  testAsync("Build project with overridden compiler plug-in version") { _ =>
+    val projectPath = Paths.get("test/example-paradise-versions")
+    val BuildConfig.Result(build, _, _) =
+      BuildConfig.load(projectPath, Log.urgent).get
+    val buildPath = projectPath.resolve("build")
+    if (Files.exists(buildPath)) FileUtils.deleteDirectory(buildPath.toFile)
+    val packageConfig = PackageConfig(tmpfs = false, silent = false,
+      ivyPath = None, cachePath = None)
+    cli.Generate.ui(Config(), projectPath, build, Command.Bloop(packageConfig),
+      Log.urgent)
+
+    val bloopPath = projectPath.resolve(".bloop")
+
+    val macrosJvm = readBloopJson(bloopPath.resolve("macros-jvm.json"))
+    val macrosJs = readBloopJson(bloopPath.resolve("macros-js.json"))
+    val exampleJvm = readBloopJson(bloopPath.resolve("example-jvm.json"))
+    val exampleJs = readBloopJson(bloopPath.resolve("example-js.json"))
+
+    def getFileName(path: String): String = path.drop(path.lastIndexOf('/') + 1)
+
+    assertEquals(
+      macrosJvm.project.scala.get.options.filter(_.contains("paradise"))
+        .map(getFileName),
+      List("paradise_2.11.12-2.1.0.jar"))
+    assertEquals(
+      macrosJs.project.scala.get.options.filter(_.contains("paradise"))
+        .map(getFileName),
+      List("paradise_2.11.12-2.1.1.jar"))
+    assertEquals(
+      exampleJvm.project.scala.get.options.filter(_.contains("paradise"))
+        .map(getFileName),
+      List("paradise_2.11.12-2.1.0.jar"))
+    assertEquals(
+      exampleJs.project.scala.get.options.filter(_.contains("paradise"))
+        .map(getFileName),
+      List("paradise_2.11.12-2.1.1.jar"))
+
     compileAndRun(projectPath)
   }
 
@@ -120,12 +181,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   testAsync("Build project with custom command target") { _ =>
     buildCustomTarget("custom-command-target").map { _ =>
       val path = Paths.get(s"test/custom-command-target/.bloop/demo.json")
-      val content = FileUtils.readFileToString(path.toFile, "UTF-8")
-
-      import io.circe.parser._
-      val result = decode[bloop.config.Config.File](content)(
-        ConfigEncoderDecoders.allDecoder
-      ).right.get
+      val result = readBloopJson(path)
 
       // Should not include "utils" dependency since it does not have any
       // Scala sources and no Bloop module.

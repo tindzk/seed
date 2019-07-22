@@ -4,23 +4,22 @@ import java.nio.file.Path
 
 import seed.artefact.Coursier
 import seed.config.BuildConfig
+import seed.artefact.ArtefactResolution
 import seed.model.Build.Module
 import seed.model.Platform.{JavaScript, Native}
 import seed.model.{Artefact, Build, Platform}
 
 object ScalaCompiler {
-  def resolveCompiler(build: Build,
-                      module: Module,
-                      compilerResolution: List[Coursier.ResolutionResult],
+  def resolveCompiler(compilerResolution: List[Coursier.ResolutionResult],
                       artefact: Artefact,
+                      artefactVersion: String,
                       platform: Platform,
+                      platformVer: String,
                       compilerVer: String
                      ): Path = {
-    val platformVer = BuildConfig.platformVersion(build, module, platform)
-
     compilerResolution.iterator.flatMap(resolution =>
       Coursier.artefactPath(resolution, artefact, platform,
-        platformVer, compilerVer, platformVer)
+        platformVer, compilerVer, artefactVersion)
     ).toList.headOption.getOrElse(
       throw new Exception(s"Artefact '$artefact' missing"))
   }
@@ -30,16 +29,25 @@ object ScalaCompiler {
                       compilerResolution: List[Coursier.ResolutionResult],
                       platform: Platform,
                       compilerVer: String): List[String] = {
+    import ArtefactResolution.mergeDeps
+
+    val platformVer = BuildConfig.platformVersion(build, module, platform)
     val moduleDeps = BuildConfig.collectModuleDeps(build, module, platform)
     val modules = moduleDeps.map(build.module) :+ module
     val artefacts =
-      (if (platform == JavaScript) List(Artefact.ScalaJsCompiler)
-       else if (platform == Native) List(Artefact.ScalaNativePlugin)
+      (if (platform == JavaScript) List(Artefact.ScalaJsCompiler -> platformVer)
+       else if (platform == Native) List(Artefact.ScalaNativePlugin -> platformVer)
        else List()
-      ) ++ modules.flatMap(_.compilerDeps.map(Artefact.fromDep))
+      ) ++ mergeDeps(modules.flatMap { m =>
+        val platformModule = BuildConfig.platformModule(m, platform)
+        val dependencies =
+          m.compilerDeps ++ platformModule.toList.flatMap(_.compilerDeps)
+        mergeDeps(dependencies)
+      }).map(d => Artefact.fromDep(d) -> d.version)
 
-    artefacts.map(a => resolveCompiler(
-      build, module, compilerResolution, a, platform, compilerVer)
-    ).map(p => "-Xplugin:" + p)
+    artefacts.map { case (artefact, version) =>
+      resolveCompiler(compilerResolution, artefact, version, platform,
+        platformVer, compilerVer)
+    }.map(p => "-Xplugin:" + p)
   }
 }

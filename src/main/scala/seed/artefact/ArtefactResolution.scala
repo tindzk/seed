@@ -105,8 +105,11 @@ object ArtefactResolution {
   def compilerDeps(build: Build, module: Module): List[Set[JavaDep]] = {
     def f(build: Build, module: Module, platform: Platform): Set[JavaDep] = {
       import build.project.scalaOrganisation
+      val platformModule = BuildConfig.platformModule(module, platform)
+
       val platformVer = BuildConfig.platformVersion(build, module, platform)
-      val compilerVer = BuildConfig.scalaVersion(build.project, List(module))
+      val compilerVer = BuildConfig.scalaVersion(build.project,
+        platformModule.toList :+ module)
 
       val scalaDeps = Set(
         Artefact.scalaCompiler(scalaOrganisation) -> compilerVer,
@@ -120,18 +123,17 @@ object ArtefactResolution {
         else Set()
       )
 
+      val dependencies = mergeDeps[ScalaDep](
+        module.compilerDeps ++ platformModule.toList.flatMap(_.compilerDeps))
+
       scalaDeps.map { case (artefact, version) =>
         javaDepFromArtefact(artefact, version, platform, platformVer,
           compilerVer)
-      } ++ module.compilerDeps.map(dep =>
+      } ++ dependencies.map(dep =>
         javaDepFromScalaDep(dep, platform, platformVer, compilerVer))
     }
 
-    module.targets.map(target =>
-      f(build,
-        BuildConfig.platformModule(module, target).getOrElse(module),
-        target)
-    ).filter(_.nonEmpty)
+    module.targets.map(target => f(build, module, target)).filter(_.nonEmpty)
   }
 
   def allCompilerDeps(build: Build): List[Set[JavaDep]] =
@@ -278,4 +280,17 @@ object ArtefactResolution {
 
     (resolvedCachePath, platformResolution, compilerResolution)
   }
+
+  /** @return If there are two dependencies with the same organisation and
+    *         artefact name, only retain the last one, regardless of its version.
+    */
+  def mergeDeps[T <: Dep](deps: List[T]): List[T] =
+    deps.foldLeft(List[T]()) { case (acc, cur) =>
+      acc.find(
+        d => d.organisation == cur.organisation && d.artefact == cur.artefact
+      ) match {
+        case None => acc :+ cur
+        case Some(previous) => acc.diff(List(previous)) :+ cur
+      }
+    }
 }
