@@ -22,4 +22,11 @@ object TestProcessHelper {
       out => sb.append(out + "\n"))(args: _*)
     process.success.map(_ => sb.toString)
   }
+
+  def runCommand(cwd: Path, cmd: List[String]): Future[String] = {
+    val sb = new StringBuilder
+    val process = ProcessHelper.runCommmand(cwd, cmd, None, None, Log.urgent,
+      out => sb.append(out + "\n"))
+    process.success.map(_ => sb.toString)
+  }
 }

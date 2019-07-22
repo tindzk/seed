@@ -23,7 +23,7 @@ object TomlUtils {
         }
 
       case (value, _, _) =>
-        Left((List(), s"Log level expected, $value provided."))
+        Left((List(), s"Log level expected, $value provided"))
     }
 
     implicit val platformCodec: Codec[Platform] = Codec {

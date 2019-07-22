@@ -9,6 +9,8 @@ import java.nio.file.Path
 import seed.Log
 import seed.cli.util.Ansi
 
+import scala.collection.mutable
+
 // Adapted from https://stackoverflow.com/a/1281295
 object Package {
   def create(source: List[(Path, String)],
@@ -25,15 +27,21 @@ object Package {
       mainAttributes.put(Attributes.Name.CLASS_PATH, classPath.mkString(" "))
     val targetFile = new JarOutputStream(
       new FileOutputStream(target.toFile), manifest)
+    val entryCache = mutable.Set[String]()
     source.foreach { case (path, jarPath) =>
       log.debug(s"Packaging ${Ansi.italic(path.toString)}...")
-      add(path.toFile, jarPath, targetFile)
+      add(path.toFile, jarPath, targetFile, entryCache, log)
     }
     log.info(s"Written $target")
     targetFile.close()
   }
 
-  def add(source: File, jarPath: String, target: JarOutputStream): Unit = {
+  def add(source: File,
+          jarPath: String,
+          target: JarOutputStream,
+          entryCache: mutable.Set[String],
+          log: Log
+         ): Unit = {
     val path =
       if (source.isFile) jarPath
       else {
@@ -41,16 +49,26 @@ object Package {
         jarPath + "/"
       }
 
-    val entry = new JarEntry(path)
-    entry.setTime(source.lastModified)
-    target.putNextEntry(entry)
+    val addedEntry =
+      if (entryCache.contains(path)) {
+        if (source.isFile)
+          log.warn(s"Skipping file ${Ansi.italic(source.toString)} as another module already added it")
 
-    if (source.isFile)
-      IOUtils.copy(new FileInputStream(source), target)
-    else
+        false
+      } else {
+        val entry = new JarEntry(path)
+        entry.setTime(source.lastModified)
+        target.putNextEntry(entry)
+        entryCache += path
+        if (source.isFile) IOUtils.copy(new FileInputStream(source), target)
+
+        true
+      }
+
+    if (!source.isFile)
       for (nestedFile <- source.listFiles)
-        add(nestedFile, path + nestedFile.getName, target)
+        add(nestedFile, path + nestedFile.getName, target, entryCache, log)
 
-    target.closeEntry()
+    if (addedEntry) target.closeEntry()
   }
 }

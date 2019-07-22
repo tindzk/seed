@@ -1,0 +1,10 @@
+[project]
+scalaVersion = "2.13.0"
+
+[module.core.jvm]
+sources = ["core/src"]
+
+[module.app.jvm]
+moduleDeps = ["core"]
+sources    = ["app/src"]
+mainClass  = "example.Main"
