@@ -261,7 +261,7 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
           val log = Log(config)
           val BuildConfig.Result(build, projectPath, _) =
             BuildConfig.load(buildPath, log).getOrElse(sys.exit(1))
-          cli.Generate.ui(config, projectPath, build, command, log)
+          cli.Generate.ui(config, projectPath, projectPath, build, command, log)
         case Success(Config(configPath, _, command: Command.Server)) =>
           val config = SeedConfig.load(configPath)
           val log = Log(config)

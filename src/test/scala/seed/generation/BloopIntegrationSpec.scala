@@ -16,6 +16,8 @@ import seed.model.Config
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 
+import seed.generation.util.BuildUtil.tempPath
+
 object BloopIntegrationSpec extends TestSuite[Unit] {
   Exit.TestCases = true
 
@@ -51,7 +53,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   }
 
   testAsync("Generate and compile meta modules") { _ =>
-    val projectPath = Paths.get("test/meta-module")
+    val projectPath = tempPath.resolve("meta-module")
     util.ProjectGeneration.generateBloopCrossProject(projectPath)
     compileAndRun(projectPath)
   }
@@ -59,39 +61,39 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   testAsync("Build project with compiler plug-in defined on cross-platform module") { _ =>
     val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(
       Paths.get("test/example-paradise"), Log.urgent).get
-    val buildPath = projectPath.resolve("build")
-    if (Files.exists(buildPath)) FileUtils.deleteDirectory(buildPath.toFile)
+    val buildPath = tempPath.resolve("example-paradise")
+    Files.createDirectory(buildPath)
     val packageConfig = PackageConfig(tmpfs = false, silent = false,
       ivyPath = None, cachePath = None)
-    cli.Generate.ui(Config(), projectPath, build, Command.Bloop(packageConfig),
-      Log.urgent)
-    compileAndRun(projectPath)
+    cli.Generate.ui(Config(), projectPath, buildPath, build,
+      Command.Bloop(packageConfig), Log.urgent)
+    compileAndRun(buildPath)
   }
 
   testAsync("Build project with compiler plug-in defined on platform modules") { _ =>
     val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(
       Paths.get("test/example-paradise-platform"), Log.urgent).get
-    val buildPath = projectPath.resolve("build")
-    if (Files.exists(buildPath)) FileUtils.deleteDirectory(buildPath.toFile)
+    val buildPath = tempPath.resolve("example-paradise-platform")
+    Files.createDirectory(buildPath)
     val packageConfig = PackageConfig(tmpfs = false, silent = false,
       ivyPath = None, cachePath = None)
-    cli.Generate.ui(Config(), projectPath, build, Command.Bloop(packageConfig),
-      Log.urgent)
-    compileAndRun(projectPath)
+    cli.Generate.ui(Config(), projectPath, buildPath, build,
+      Command.Bloop(packageConfig), Log.urgent)
+    compileAndRun(buildPath)
   }
 
   testAsync("Build project with overridden compiler plug-in version") { _ =>
     val projectPath = Paths.get("test/example-paradise-versions")
     val BuildConfig.Result(build, _, _) =
       BuildConfig.load(projectPath, Log.urgent).get
-    val buildPath = projectPath.resolve("build")
-    if (Files.exists(buildPath)) FileUtils.deleteDirectory(buildPath.toFile)
+    val buildPath = tempPath.resolve("example-paradise-versions")
+    Files.createDirectory(buildPath)
     val packageConfig = PackageConfig(tmpfs = false, silent = false,
       ivyPath = None, cachePath = None)
-    cli.Generate.ui(Config(), projectPath, build, Command.Bloop(packageConfig),
-      Log.urgent)
+    cli.Generate.ui(Config(), projectPath, buildPath, build,
+      Command.Bloop(packageConfig), Log.urgent)
 
-    val bloopPath = projectPath.resolve(".bloop")
+    val bloopPath = buildPath.resolve(".bloop")
 
     val macrosJvm = readBloopJson(bloopPath.resolve("macros-jvm.json"))
     val macrosJs = readBloopJson(bloopPath.resolve("macros-js.json"))
@@ -117,19 +119,19 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
         .map(getFileName),
       List("paradise_2.11.12-2.1.1.jar"))
 
-    compileAndRun(projectPath)
+    compileAndRun(buildPath)
   }
 
   testAsync("Build modules with different Scala versions") { _ =>
     val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(
       Paths.get("test/multiple-scala-versions"), Log.urgent).get
-    val buildPath = projectPath.resolve("build")
-    if (Files.exists(buildPath)) FileUtils.deleteDirectory(buildPath.toFile)
+    val buildPath = tempPath.resolve("multiple-scala-versions-bloop")
+    Files.createDirectory(buildPath)
     val packageConfig = PackageConfig(tmpfs = false, silent = false,
       ivyPath = None, cachePath = None)
-    cli.Generate.ui(Config(), projectPath, build, Command.Bloop(packageConfig),
-      Log.urgent)
-    TestProcessHelper.runBloop(projectPath)("run", "module211", "module212")
+    cli.Generate.ui(Config(), projectPath, buildPath, build,
+      Command.Bloop(packageConfig), Log.urgent)
+    TestProcessHelper.runBloop(buildPath)("run", "module211", "module212")
       .map { x =>
         val lines = x.split("\n").toList
         assert(lines.contains("2.11.11"))
@@ -142,17 +144,17 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
 
     val BuildConfig.Result(build, projectPath, _) =
       BuildConfig.load(path, Log.urgent).get
-    val buildPath = projectPath.resolve("build")
-    if (Files.exists(buildPath)) FileUtils.deleteDirectory(buildPath.toFile)
+    val buildPath = tempPath.resolve(name)
+    Files.createDirectory(buildPath)
     val generatedFile = projectPath.resolve("demo").resolve("Generated.scala")
-    if (Files.exists(generatedFile)) Files.delete(generatedFile)
     val packageConfig = PackageConfig(tmpfs = false, silent = false,
       ivyPath = None, cachePath = None)
-    cli.Generate.ui(Config(), projectPath, build, Command.Bloop(packageConfig),
-      Log.urgent)
+    cli.Generate.ui(Config(), projectPath, buildPath, build,
+      Command.Bloop(packageConfig), Log.urgent)
 
     val result = seed.cli.Build.build(
       path,
+      Some(buildPath),
       List("demo"),
       watch = false,
       tmpfs = false,
@@ -164,12 +166,12 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     if (expectFailure) future.failed.map(_ => ())
     else {
       Await.result(future, 30.seconds)
-
       assert(Files.exists(generatedFile))
 
-      TestProcessHelper.runBloop(projectPath)("run", "demo")
+      TestProcessHelper.runBloop(buildPath)("run", "demo")
         .map { x =>
           assertEquals(x.split("\n").count(_ == "42"), 1)
+          Files.delete(generatedFile)
         }
     }
   }
@@ -180,7 +182,10 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
 
   testAsync("Build project with custom command target") { _ =>
     buildCustomTarget("custom-command-target").map { _ =>
-      val path = Paths.get(s"test/custom-command-target/.bloop/demo.json")
+      val path = tempPath
+        .resolve("custom-command-target")
+        .resolve(".bloop")
+        .resolve("demo.json")
       val result = readBloopJson(path)
 
       // Should not include "utils" dependency since it does not have any

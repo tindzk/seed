@@ -10,6 +10,7 @@ import seed.artefact.ArtefactResolution
 object Generate {
   def ui(seedConfig: model.Config,
          projectPath: Path,
+         outputPath: Path,
          build: model.Build,
          command: Command.Generate,
          log: Log
@@ -30,9 +31,9 @@ object Generate {
         compilerDeps, log)
 
     val tmpfs = command.packageConfig.tmpfs || seedConfig.build.tmpfs
-    if (isBloop) Bloop.build(projectPath, build, platformResolution,
+    if (isBloop) Bloop.build(projectPath, outputPath, build, platformResolution,
       compilerResolution, tmpfs, log)
-    if (isIdea) Idea.build(projectPath, projectPath, build, platformResolution,
+    if (isIdea) Idea.build(projectPath, outputPath, build, platformResolution,
       compilerResolution, tmpfs, log)
   }
 }

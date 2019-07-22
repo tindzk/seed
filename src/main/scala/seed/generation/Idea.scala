@@ -416,7 +416,7 @@ object Idea {
             compilerResolution: List[Coursier.ResolutionResult],
             tmpfs: Boolean,
             log: Log): Unit = {
-    val buildPath = PathUtil.buildPath(projectPath, tmpfs, log)
+    val buildPath = PathUtil.buildPath(outputPath, tmpfs, log)
     val ideaBuildPath = buildPath.resolve("idea")
 
     log.info(s"Build path: ${Ansi.italic(ideaBuildPath.toString)}")

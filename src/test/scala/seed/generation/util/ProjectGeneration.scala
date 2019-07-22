@@ -11,8 +11,6 @@ import seed.model.{Build, Platform}
 
 object ProjectGeneration {
   def generate(projectPath: Path, build: Build): Unit = {
-    if (Files.exists(projectPath)) FileUtils.deleteDirectory(projectPath.toFile)
-
     val bloopPath = projectPath.resolve(".bloop")
     val buildPath = projectPath.resolve("build")
     val bloopBuildPath = buildPath.resolve("bloop")

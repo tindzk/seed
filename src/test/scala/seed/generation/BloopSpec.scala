@@ -1,10 +1,11 @@
 package seed.generation
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path}
 
 import bloop.config.ConfigEncoderDecoders
 import minitest.SimpleTestSuite
 import org.apache.commons.io.FileUtils
+import seed.generation.util.BuildUtil.tempPath
 
 object BloopSpec extends SimpleTestSuite {
   def parseBloopFile(path: Path): bloop.config.Config.File = {
@@ -13,7 +14,9 @@ object BloopSpec extends SimpleTestSuite {
   }
 
   test("Inherit javaDeps in child modules") {
-    val projectPath = Paths.get("test/inherit-javadeps")
+    val projectPath = tempPath.resolve("inherit-javadeps")
+    Files.createDirectory(projectPath)
+
     val bloopPath = projectPath.resolve(".bloop")
     util.ProjectGeneration.generateJavaDepBloopProject(projectPath)
 
