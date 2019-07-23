@@ -1,6 +1,6 @@
 package seed.cli
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 import seed.Log
 import seed.cli.util.Ansi
@@ -47,7 +47,7 @@ object BuildTarget {
     val allTargets = (targets ++ inheritedTargets).distinct
 
     val buildPath = PathUtil.buildPath(projectPath, tmpfs, log)
-
+    if (!Files.exists(buildPath)) Files.createDirectories(buildPath)
     log.info(s"Build path: $buildPath")
 
     allTargets.map { case (m, t) =>

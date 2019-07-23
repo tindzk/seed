@@ -484,13 +484,11 @@ object Bloop {
             tmpfs: Boolean,
             log: Log): Unit = {
     val bloopPath = projectPath.resolve(".bloop")
+    if (!Files.exists(bloopPath)) Files.createDirectory(bloopPath)
+
     val buildPath = PathUtil.buildPath(projectPath, tmpfs, log)
     val bloopBuildPath = buildPath.resolve("bloop")
-
     log.info(s"Build path: ${Ansi.italic(buildPath.toString)}")
-
-    if (!Files.exists(bloopPath)) Files.createDirectory(bloopPath)
-    if (!Files.exists(bloopBuildPath)) Files.createDirectories(bloopBuildPath)
 
     import scala.collection.JavaConverters._
     Files.newDirectoryStream(bloopPath, "*.json").iterator().asScala
