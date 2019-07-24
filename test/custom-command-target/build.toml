@@ -2,7 +2,9 @@
 scalaVersion = "2.13.0"
 
 [module.utils.target.gen-sources]
-command = "echo 'object Generated { val constant = 42 }' > demo/Generated.scala"
+# `ls $BUILD_PATH` checks whether the build path exists, otherwise it would
+# return with a non-zero code.
+command = "ls $BUILD_PATH && echo 'object Generated { val constant = 42 }' > demo/Generated.scala"
 await = true
 
 [module.demo.jvm]
