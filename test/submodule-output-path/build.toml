@@ -1,0 +1,10 @@
+import = ["submodule"]
+
+[project]
+scalaVersion   = "2.13.0"
+scalaJsVersion = "0.6.28"
+
+[module.app.js]
+moduleDeps = ["base"]
+sources    = ["src"]
+output     = "js/app.js"

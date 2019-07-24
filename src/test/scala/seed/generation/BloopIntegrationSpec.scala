@@ -82,6 +82,24 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     compileAndRun(buildPath)
   }
 
+  testAsync("Link JavaScript modules with custom target path") { _ =>
+    val BuildConfig.Result(build, projectPath, _) = BuildConfig.load(
+      Paths.get("test/submodule-output-path"), Log.urgent).get
+    val buildPath = tempPath.resolve("submodule-output-path")
+    Files.createDirectory(buildPath)
+    val packageConfig = PackageConfig(tmpfs = false, silent = false,
+      ivyPath = None, cachePath = None)
+    cli.Generate.ui(Config(), projectPath, buildPath, build,
+      Command.Bloop(packageConfig), Log.urgent)
+    TestProcessHelper.runBloop(buildPath)("run", "app", "base", "base2")
+      .map { x =>
+        assertEquals(x.split("\n").count(_ == "hello"), 3)
+        assert(Files.exists(buildPath.resolve("build").resolve("js").resolve("app.js")))
+        assert(Files.exists(buildPath.resolve("build").resolve("js").resolve("base.js")))
+        assert(Files.exists(buildPath.resolve("build").resolve("base2.js")))
+      }
+  }
+
   testAsync("Build project with overridden compiler plug-in version") { _ =>
     val projectPath = Paths.get("test/example-paradise-versions")
     val BuildConfig.Result(build, _, _) =

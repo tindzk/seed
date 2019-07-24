@@ -1,0 +1,10 @@
+[project]
+scalaVersion   = "2.13.0"
+scalaJsVersion = "0.6.28"
+
+[module.base.js]
+sources = ["src"]
+output  = "js/"
+
+[module.base2.js]
+sources = ["src"]
