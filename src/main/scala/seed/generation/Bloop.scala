@@ -359,11 +359,13 @@ object Bloop {
   }
 
   def moduleOutputPath(buildPath: Path,
-                       module: Option[Module],
+                       module: Module,
                        defaultName: String): Path =
-    module.flatMap(_.output) match {
-      case Some(p) if p.isAbsolute => p
-      case Some(p) => buildPath.toAbsolutePath.resolve(p).normalize()
+    module.output match {
+      case Some(p) if Paths.get(p).isAbsolute => Paths.get(p)
+      case Some(p) =>
+        val base = buildPath.toAbsolutePath.resolve(p).normalize()
+        if (!p.endsWith("/")) base else base.resolve(defaultName)
       case None => buildPath.toAbsolutePath.resolve(defaultName)
     }
 
@@ -380,12 +382,25 @@ object Bloop {
                  ): Unit = {
     val isCrossBuild = module.targets.toSet.size > 1
 
-    val jsOutputPath = moduleOutputPath(buildPath, module.js, name + ".js")
+    val jsOutputPath = module.js
+      .orElse(if (!module.targets.contains(JavaScript)) None else Some(Module()))
+      .map(js => moduleOutputPath(buildPath, js, name + ".js"))
+
     val nativeOutputPath =
-      moduleOutputPath(buildPath, module.native, name + ".run")
+      module.native
+        .orElse(if (!module.targets.contains(Native)) None else Some(Module()))
+        .map(native => moduleOutputPath(buildPath, native, name + ".run"))
+
+    jsOutputPath.foreach { path =>
+      if (!Files.exists(path.getParent)) Files.createDirectories(path.getParent)
+    }
+
+    nativeOutputPath.foreach { path =>
+      if (!Files.exists(path.getParent)) Files.createDirectories(path.getParent)
+    }
 
     writeJsModule(build, if (!isCrossBuild) name else name + "-js",
-      projectPath, bloopPath, bloopBuildPath, Some(jsOutputPath),
+      projectPath, bloopPath, bloopBuildPath, jsOutputPath,
       module.copy(scalaDeps = collectJsDeps(build, module)),
       collectJsClassPath(bloopBuildPath, build, module),
       module.js, build.project, resolution, compilerResolution,
@@ -402,7 +417,7 @@ object Bloop {
       module.jvm, build.project, resolution, compilerResolution, test = false,
       log)
     writeNativeModule(build, if (!isCrossBuild) name else name + "-native",
-      projectPath, bloopPath, bloopBuildPath, Some(nativeOutputPath),
+      projectPath, bloopPath, bloopBuildPath, nativeOutputPath,
       module.copy(scalaDeps = collectNativeDeps(build, module)),
       collectJvmClassPath(bloopBuildPath, build, module),
       module.native, build.project, resolution, compilerResolution, test = false,

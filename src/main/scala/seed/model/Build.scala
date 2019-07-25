@@ -69,7 +69,10 @@ object Build {
                     moduleDeps: List[String] = List(),
                     mainClass: Option[String] = None,
                     targets: List[Platform] = List(),
-                    output: Option[Path] = None,
+
+                    // If this was a Path, it would include the directory
+                    // relative to the build file.
+                    output: Option[String] = None,
 
                     // JavaScript
                     jsdom: Boolean = false,
