@@ -138,16 +138,22 @@ class Scaffold(log: Log, silent: Boolean = false) {
   def fetchCompilerVersions(organisation: String,
                             platforms: Set[Platform],
                             stable: Boolean): Map[Platform, List[String]] = {
+    val scalaCompiler = Artefact.scalaCompiler(organisation)
+    val organisationVersions =
+      MavenCentral.fetchCompilerVersions(scalaCompiler, stable, log)
+
     val compilerArtefacts: Map[Platform, Artefact] =
-      Map((JVM, Artefact.scalaCompiler(organisation))) ++
       (if (platforms.contains(JavaScript)) Map((JavaScript, Artefact.ScalaJsCompiler)) else Map()) ++
       (if (platforms.contains(Native)) Map((Native, Artefact.ScalaNativePlugin)) else Map())
 
+    Map((JVM, organisationVersions)) ++
     compilerArtefacts.map { case (platform, artefact) =>
-      if (artefact.versionTag.isEmpty)
-        platform -> MavenCentral.fetchCompilerVersions(artefact, stable, log)
-      else
-        platform -> MavenCentral.fetchPlatformCompilerVersions(artefact, stable, log)
+      val versions =
+        MavenCentral.fetchPlatformCompilerVersions(artefact, stable, log)
+      val compatibleVersions =
+        versions.filter(
+          organisationVersions.map(MavenCentral.trimCompilerVendor).contains)
+      platform -> compatibleVersions
     }
   }
 
