@@ -1,6 +1,6 @@
-.bloop/
-.idea/
-target/
 /.idea/
-/build/
-/test/meta-module/
+/.bloop/
+/.metals/
+/project/.bloop/
+
+target/

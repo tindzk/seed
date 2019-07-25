@@ -1,8 +1,7 @@
 package seed.build
 
-import java.nio.file.Paths
+import java.nio.file.Files
 
-import scala.concurrent.Future
 import scala.collection.mutable.ListBuffer
 import minitest.TestSuite
 import seed.Log
@@ -10,6 +9,7 @@ import seed.cli.util.BloopCli
 import seed.generation.util.{ProjectGeneration, TestProcessHelper}
 import seed.model.{BuildEvent, Platform}
 import seed.generation.util.TestProcessHelper.ec
+import seed.generation.util.BuildUtil.tempPath
 
 object LinkSpec extends TestSuite[Unit] {
   override def setupSuite(): Unit = TestProcessHelper.semaphore.acquire()
@@ -19,7 +19,9 @@ object LinkSpec extends TestSuite[Unit] {
   override def tearDown(env: Unit): Unit = ()
 
   testAsync("Link module and interpret Bloop events") { _ =>
-    val projectPath = Paths.get("test/module-link")
+    val projectPath = tempPath.resolve("module-link")
+    Files.createDirectory(projectPath)
+
     val build = ProjectGeneration.generateBloopCrossProject(projectPath)
 
     var events = ListBuffer[BuildEvent]()
@@ -39,7 +41,7 @@ object LinkSpec extends TestSuite[Unit] {
       require(events(1) == BuildEvent.Compiled("example", Platform.JavaScript))
       require(events(2).isInstanceOf[BuildEvent.Linked])
       require(events(2).asInstanceOf[BuildEvent.Linked]
-        .path.endsWith("test/module-link/build/example.js"))
+        .path.endsWith("module-link/build/example.js"))
     }
   }
 }

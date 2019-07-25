@@ -8,13 +8,16 @@ import java.nio.file.{Files, Paths}
 import org.apache.commons.io.FileUtils
 import seed.Log
 import seed.config.util.TomlUtils
+import seed.generation.util.BuildUtil
 import seed.model.Build
 import seed.model.Build.{Project, ScalaDep, VersionTag}
 import seed.model.Platform.{JVM, JavaScript}
 
+import BuildUtil.tempPath
+
 object BuildConfigSpec extends SimpleTestSuite {
   test("Resolve absolute project path") {
-    FileUtils.write(new File("/tmp/a.toml"),
+    FileUtils.write(tempPath.resolve("a.toml").toFile,
       """
         |[project]
         |scalaVersion = "2.12.8"
@@ -24,9 +27,9 @@ object BuildConfigSpec extends SimpleTestSuite {
       """.stripMargin, "UTF-8")
 
     val BuildConfig.Result(_, projectPath, moduleProjectPaths) =
-      BuildConfig.load(Paths.get("/tmp/a.toml"), Log.urgent).get
-    assertEquals(projectPath, Paths.get("/tmp"))
-    assertEquals(moduleProjectPaths, Map("example" -> Paths.get("/tmp")))
+      BuildConfig.load(tempPath.resolve("a.toml"), Log.urgent).get
+    assertEquals(projectPath, tempPath)
+    assertEquals(moduleProjectPaths, Map("example" -> tempPath))
   }
 
   test("Resolve relative project path") {
@@ -43,12 +46,14 @@ object BuildConfigSpec extends SimpleTestSuite {
       BuildConfig.load(Paths.get("test/a.toml"), Log.urgent).get
     assertEquals(projectPath, Paths.get("test"))
     assertEquals(moduleProjectPaths, Map("example" -> Paths.get("test")))
+    Files.delete(Paths.get("test/a.toml"))
   }
 
   test("Import module") {
-    Files.createDirectories(Paths.get("/tmp/seed-root/child"))
+    Files.createDirectories(tempPath.resolve("seed-root").resolve("child"))
 
-    FileUtils.write(new File("/tmp/seed-root/child/build.toml"),
+    FileUtils.write(
+      tempPath.resolve("seed-root").resolve("child").resolve("build.toml").toFile,
       """
         |[project]
         |scalaVersion = "2.12.8"
@@ -57,7 +62,7 @@ object BuildConfigSpec extends SimpleTestSuite {
         |sources = ["src"]
       """.stripMargin, "UTF-8")
 
-    FileUtils.write(new File("/tmp/seed-root/build.toml"),
+    FileUtils.write(tempPath.resolve("seed-root").resolve("build.toml").toFile,
       """
         |import = ["child"]
         |
@@ -69,10 +74,10 @@ object BuildConfigSpec extends SimpleTestSuite {
       """.stripMargin, "UTF-8")
 
     val BuildConfig.Result(_, projectPath, moduleProjectPaths) =
-      BuildConfig.load(Paths.get("/tmp/seed-root"), Log.urgent).get
+      BuildConfig.load(tempPath.resolve("seed-root"), Log.urgent).get
     assertEquals(moduleProjectPaths, Map(
-      "root"  -> Paths.get("/tmp/seed-root"),
-      "child" -> Paths.get("/tmp/seed-root/child")))
+      "root"  -> tempPath.resolve("seed-root"),
+      "child" -> tempPath.resolve("seed-root").resolve("child")))
   }
 
   test("Set target platforms on test modules") {
@@ -84,9 +89,9 @@ object BuildConfigSpec extends SimpleTestSuite {
       |testFrameworks    = ["minitest.runner.Framework"]
       |
       |[module.example]
-      |root       = "shared"
-      |sources    = ["shared/src"]
-      |targets    = ["js", "jvm"]
+      |root    = "shared"
+      |sources = ["shared/src"]
+      |targets = ["js", "jvm"]
       |
       |[module.example.test]
       |sources   = ["shared/test"]

@@ -105,7 +105,7 @@ object Server {
       case WsCommand.BuildEvents => buildEventClients += wsClient
       case WsCommand.Build(buildPath, targets) =>
         seed.cli.Build.build(
-          buildPath, targets, watch = false, tmpfs, clientLog,
+          buildPath, None, targets, watch = false, tmpfs, clientLog,
           build => onStdOut(wsServer, wsClient, build, serverLog)
         ) match {
           case Left(errors) =>

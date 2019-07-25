@@ -34,7 +34,7 @@ object Build {
 
       case None =>
         val tmpfs = command.packageConfig.tmpfs || seedConfig.build.tmpfs
-        build(buildPath, command.modules, command.watch, tmpfs, log, _ => log.info) match {
+        build(buildPath, None, command.modules, command.watch, tmpfs, log, _ => log.info) match {
           case Left(errors) =>
             errors.foreach(log.error)
             sys.exit(1)
@@ -43,6 +43,7 @@ object Build {
     }
 
   def build(buildPath: Path,
+            projectPath: Option[Path],
             modules: List[String],
             watch: Boolean,
             tmpfs: Boolean,
@@ -51,11 +52,12 @@ object Build {
            ): Either[List[String], Future[Unit]] =
     BuildConfig.load(buildPath, log) match {
       case None => Left(List())
-      case Some(BuildConfig.Result(build, projectPath, moduleProjectPaths)) =>
+      case Some(BuildConfig.Result(build, buildProjectPath, moduleProjectPaths)) =>
         val parsedModules = modules.map(util.Target.parseModuleString(build))
         util.Validation.unpack(parsedModules).right.map { allModules =>
-          val futures = BuildTarget.buildTargets(build, allModules, projectPath,
-            moduleProjectPaths, watch, tmpfs, log)
+          val futures = BuildTarget.buildTargets(build, allModules,
+            projectPath.getOrElse(buildProjectPath), moduleProjectPaths, watch,
+            tmpfs, log)
 
           val buildModules = allModules.flatMap {
             case util.Target.Parsed(module, None) =>
@@ -66,7 +68,8 @@ object Build {
           }
 
           val bloop = util.BloopCli.compile(
-            build, projectPath, buildModules, watch, log, onStdOut(build)
+            build, projectPath.getOrElse(buildProjectPath), buildModules, watch,
+            log, onStdOut(build)
           ).fold(Future.unit)(_.success)
 
           Future.sequence(futures :+ bloop).map(_ => ())

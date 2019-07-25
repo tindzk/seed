@@ -478,17 +478,19 @@ object Bloop {
   }
 
   def build(projectPath: Path,
+            outputPath: Path,
             build: Build,
             resolution: Coursier.ResolutionResult,
             compilerResolution: List[Coursier.ResolutionResult],
             tmpfs: Boolean,
             log: Log): Unit = {
-    val bloopPath = projectPath.resolve(".bloop")
+    val bloopPath = outputPath.resolve(".bloop")
     if (!Files.exists(bloopPath)) Files.createDirectory(bloopPath)
 
-    val buildPath = PathUtil.buildPath(projectPath, tmpfs, log)
-    val bloopBuildPath = buildPath.resolve("bloop")
+    val buildPath = PathUtil.buildPath(outputPath, tmpfs, log)
     log.info(s"Build path: ${Ansi.italic(buildPath.toString)}")
+
+    val bloopBuildPath = buildPath.resolve("bloop")
 
     import scala.collection.JavaConverters._
     Files.newDirectoryStream(bloopPath, "*.json").iterator().asScala

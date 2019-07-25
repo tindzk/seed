@@ -17,14 +17,14 @@ object PathUtil {
     if (tmpfs) tmpfsPath(projectPath, log) else projectPath.resolve("build")
 
   def normalisePath(pathVariable: String, root: Path)(path: Path): String = {
-    val canonicalRoot = root.toFile.getCanonicalPath
-    val canonicalPath = path.toFile.getCanonicalPath
+    val absoluteRoot = root.toFile.getAbsolutePath
+    val absolutePath = path.toFile.getAbsolutePath
 
-    val rootElems = canonicalRoot.split("/").toList
-    val pathElems = canonicalPath.split("/").toList
+    val rootElems = absoluteRoot.split("/").toList
+    val pathElems = absolutePath.split("/").toList
     val common = pathElems.zip(rootElems).takeWhile { case (a, b) => a == b }
 
-    if (common.length == 1) canonicalPath
+    if (common.length == 1) absolutePath
     else {
       val levels = rootElems.length - common.length
       val relativePath = (0 until levels).map(_ => "../").mkString
