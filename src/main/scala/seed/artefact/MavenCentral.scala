@@ -54,15 +54,12 @@ object MavenCentral {
       .map(_.takeWhile(_ != '/'))
   }
 
-  /** @param stable Only consider stable artefacts (as opposed to pre-releases)
-    * @return Found versions in ascending order
-    */
-  def fetchLibraryArtefacts(artefact: Artefact, stable: Boolean, log: Log): List[
+  def parseLibraryArtefacts(artefacts: List[String], artefactName: String, stable: Boolean, log: Log): List[
     (Platform, PlatformVersion, CompilerVersion)
   ] =
-    fetchOrganisationArtefacts(artefact.organisation, log)
-      .filter(_.startsWith(artefact.name))
-      .map(_.drop(artefact.name.length + 1))
+    artefacts
+      .filter(_.startsWith(artefactName + "_"))
+      .map(_.drop(artefactName.length + 1))
       .filter(a =>
         a.headOption.exists(_.isDigit) ||
         a.startsWith("sjs") ||
@@ -71,6 +68,18 @@ object MavenCentral {
        .filter(a => isArtefactEligible(stable, log)(a._2) &&
                     isArtefactEligible(stable, log)(a._3))
        .sortBy(_._2)(new SemanticVersioning(log).versionOrdering)
+
+  /** @param stable Only consider stable artefacts (as opposed to pre-releases)
+    * @return Found versions in ascending order
+    */
+  def fetchLibraryArtefacts(artefact: Artefact, stable: Boolean, log: Log): List[
+    (Platform, PlatformVersion, CompilerVersion)
+  ] =
+    parseLibraryArtefacts(
+      fetchOrganisationArtefacts(artefact.organisation, log),
+      artefact.name,
+      stable,
+      log)
 
   type PlatformVersion = String
   type CompilerVersion = String
