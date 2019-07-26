@@ -7,7 +7,7 @@ import seed.artefact.{ArtefactResolution, Coursier}
 import seed.cli.util.Ansi
 import seed.model.Build.{Module, Project}
 import seed.model.Platform.{JVM, JavaScript, Native}
-import seed.model.{Artefact, Build, Resolution}
+import seed.model.{Build, Resolution}
 import seed.Log
 import seed.config.BuildConfig
 import seed.generation.util.PathUtil
@@ -23,7 +23,6 @@ object Bloop {
                  bloopPath: Path,
                  dependencies: List[String],
                  classesDir: Path,
-                 classPath: List[Path],
                  sources: List[Path],
                  resources: List[Path] = List(),
                  scalaCompiler: Option[Resolution.ScalaCompiler],
@@ -35,7 +34,9 @@ object Bloop {
       directory = projectPath.toAbsolutePath,
       sources = sources.map(_.toAbsolutePath),
       dependencies = dependencies,
-      classpath = scalaCompiler.fold(List[Path]())(_.fullClassPath.map(_.toAbsolutePath).sorted),
+      classpath = scalaCompiler.fold(List[Path]())(sc =>
+        (sc.libraries.map(_.libraryJar) ++
+         sc.classPath.map(_.toAbsolutePath)).sorted),
       out = classesDir.toAbsolutePath,
       classesDir = classesDir.toAbsolutePath,
       `scala` = scalaCompiler.map(scalaCompiler =>
@@ -65,7 +66,41 @@ object Bloop {
         options = Config.TestOptions(excludes = List(), arguments = List())
       )),
       platform = platform,
-      resolution = Some(Config.Resolution(List())),
+      resolution = Some(Config.Resolution(
+        scalaCompiler.fold(List[Config.Module]())(sc =>
+          sc.libraries.map { artefact =>
+            val name = artefact.javaDep.artefact.takeWhile(_ != '_')
+            Config.Module(
+              organization = artefact.javaDep.organisation,
+              name = name,
+              version = artefact.javaDep.version,
+              configurations = None,
+              artifacts = List(
+                Config.Artifact(
+                  name = name,
+                  classifier = None,
+                  checksum = None,
+                  path = artefact.libraryJar
+                )
+              ) ++
+              artefact.sourcesJar.toList.map { path =>
+                Config.Artifact(
+                  name = name,
+                  classifier = Some("sources"),
+                  checksum = None,
+                  path = path
+                )
+              } ++
+              artefact.javaDocJar.toList.map { path =>
+                Config.Artifact(
+                  name = name,
+                  classifier = Some("javadoc"),
+                  checksum = None,
+                  path = path
+                )
+              }
+            )
+          }))),
       resources = Some(resources.map(_.toAbsolutePath)))
 
     bloop.config.write(
@@ -88,6 +123,7 @@ object Bloop {
                     jsdom: Boolean,
                     emitSourceMaps: Boolean,
                     test: Boolean,
+                    optionalArtefacts: Boolean,
                     log: Log
                    ): Unit = {
     import parentModule.{moduleDeps, scalaDeps, sources, targets}
@@ -106,10 +142,6 @@ object Bloop {
         val scalaVersion = BuildConfig.scalaVersion(project,
           List(js, parentModule.js.getOrElse(Module()), parentModule))
 
-        def resolveLibrary(artefact: Artefact): Path =
-          Coursier.artefactPath(resolution, artefact, JavaScript,
-            scalaJsVersion.get, scalaVersion, scalaJsVersion.get).get
-
         val plugIns = util.ScalaCompiler.compilerPlugIns(build,
           parentModule, compilerResolution, JavaScript, scalaVersion)
 
@@ -118,7 +150,8 @@ object Bloop {
           (scalaDeps ++ js.scalaDeps).map(dep =>
             ArtefactResolution.javaDepFromScalaDep(
               dep, JavaScript, scalaJsVersion.get, scalaVersion)
-          ).toSet)
+          ).toSet ++ ArtefactResolution.jsPlatformDeps(build, js),
+          optionalArtefacts)
         val dependencies =
           if (test) List(name)
           else (moduleDeps ++ js.moduleDeps)
@@ -126,13 +159,13 @@ object Bloop {
             .map(name => BuildConfig.targetName(build, name, JavaScript))
 
         val classesDir = buildPath.resolve(bloopName)
-        val classPath  = resolvedDeps.map(_.libraryJar) ++
-          (if (test) List(buildPath.resolve(name))
-           else List()
-          ) ++ parentClassPaths ++ List(resolveLibrary(Artefact.ScalaJsLibrary))
+        val classPath  =
+          (if (test) List(buildPath.resolve(name)) else List()) ++
+          parentClassPaths
 
         val scalaCompiler = ArtefactResolution.resolveScalaCompiler(
-          compilerResolution, scalaOrganisation, scalaVersion, classPath)
+          compilerResolution, scalaOrganisation, scalaVersion, resolvedDeps,
+          classPath, optionalArtefacts)
 
         writeBloop(
           projectPath = projectPath,
@@ -140,7 +173,6 @@ object Bloop {
           bloopPath = bloopPath,
           dependencies = dependencies,
           classesDir = classesDir,
-          classPath = classPath,
           sources = sources ++ js.sources,
           scalaCompiler = Some(scalaCompiler),
           scalaOptions = scalaOptions ++ plugIns,
@@ -174,6 +206,7 @@ object Bloop {
                         resolution: Coursier.ResolutionResult,
                         compilerResolution: List[Coursier.ResolutionResult],
                         test: Boolean,
+                        optionalArtefacts: Boolean,
                         log: Log
                        ): Unit = {
     import parentModule.{moduleDeps, scalaDeps, sources, targets}
@@ -209,18 +242,10 @@ object Bloop {
         val bloopName = if (!test) name else name + "-test"
         log.info(s"Writing native module ${Ansi.italic(bloopName)}...")
 
-        val scalaVersion = BuildConfig.scalaVersion(project,
-          List(native, parentModule.native.getOrElse(Module()), parentModule))
+        val modules =
+          List(native, parentModule.native.getOrElse(Module()), parentModule)
 
-        val scalaNativeArtefacts = Set(
-          Artefact.ScalaNativeJavalib,
-          Artefact.ScalaNativeScalalib,
-          Artefact.ScalaNativeNativelib,
-          Artefact.ScalaNativeAuxlib
-        ).map(a =>
-          a -> Coursier.artefactPath(resolution, a, Native,
-            scalaNativeVersion.get, scalaVersion, scalaNativeVersion.get).get
-        ).toMap
+        val scalaVersion = BuildConfig.scalaVersion(project, modules)
 
         val plugIns = util.ScalaCompiler.compilerPlugIns(build,
           parentModule, compilerResolution, Native, scalaVersion)
@@ -230,7 +255,13 @@ object Bloop {
             (scalaDeps ++ native.scalaDeps).map(dep =>
               ArtefactResolution.javaDepFromScalaDep(dep, Native,
                 scalaNativeVersion.get, scalaVersion)
-            ).toSet)
+            ).toSet ++ ArtefactResolution.nativePlatformDeps(build, modules),
+            optionalArtefacts)
+
+        val nativeLibDep = ArtefactResolution.nativeLibraryDep(build, modules)
+        val scalaNativelib = resolvedDeps
+          .find(_.javaDep == nativeLibDep)
+          .map(_.libraryJar).get
 
         val dependencies =
           if (test) List(name)
@@ -239,19 +270,13 @@ object Bloop {
             .map(name => BuildConfig.targetName(build, name, Native))
 
         val classesDir = buildPath.resolve(bloopName)
-        val classPath  = resolvedDeps.map(_.libraryJar) ++
-                           (if (test) List(buildPath.resolve(name))
-                            else List()
-                           ) ++ parentClassPaths ++
-                           List(
-                             Artefact.ScalaNativeJavalib,
-                             Artefact.ScalaNativeScalalib,
-                             Artefact.ScalaNativeNativelib,
-                             Artefact.ScalaNativeAuxlib
-                           ).map(scalaNativeArtefacts)
+        val classPath  =
+         (if (test) List(buildPath.resolve(name)) else List()) ++
+         parentClassPaths
 
         val scalaCompiler = ArtefactResolution.resolveScalaCompiler(
-          compilerResolution, scalaOrganisation, scalaVersion, classPath)
+          compilerResolution, scalaOrganisation, scalaVersion, resolvedDeps,
+          classPath, optionalArtefacts)
 
         writeBloop(
           projectPath = projectPath,
@@ -259,7 +284,6 @@ object Bloop {
           bloopPath = bloopPath,
           dependencies = dependencies,
           classesDir = classesDir,
-          classPath = classPath,
           sources = sources ++ native.sources,
           scalaCompiler = Some(scalaCompiler),
           scalaOptions = scalaOptions ++ plugIns,
@@ -269,7 +293,7 @@ object Bloop {
             mode = Config.LinkerMode.Debug,
             gc = gc,
             targetTriple = targetTriple,
-            nativelib = scalaNativeArtefacts(Artefact.ScalaNativeNativelib),
+            nativelib = scalaNativelib,
             clang = clang,
             clangpp = clangpp,
             toolchain = List(),
@@ -297,6 +321,7 @@ object Bloop {
                      resolution: Coursier.ResolutionResult,
                      compilerResolution: List[Coursier.ResolutionResult],
                      test: Boolean,
+                     optionalArtefacts: Boolean,
                      log: Log
                     ): Unit = {
     import parentModule.{moduleDeps, sources, targets}
@@ -320,7 +345,7 @@ object Bloop {
           ArtefactResolution.javaDepFromScalaDep(dep, JVM, scalaVersion,
             scalaVersion))
         val resolvedDeps = Coursier.localArtefacts(resolution,
-          (javaDeps ++ scalaDeps).toSet)
+          (javaDeps ++ scalaDeps).toSet, optionalArtefacts)
 
         val plugIns = util.ScalaCompiler.compilerPlugIns(build,
           parentModule, compilerResolution, JVM, scalaVersion)
@@ -332,13 +357,13 @@ object Bloop {
             .map(name => BuildConfig.targetName(build, name, JVM))
 
         val classesDir = buildPath.resolve(bloopName)
-        val classPath  = resolvedDeps.map(_.libraryJar) ++
-                        (if (test)
-                          List(buildPath.resolve(name))
-                         else List()) ++ parentClassPaths
+        val classPath  =
+          (if (test) List(buildPath.resolve(name)) else List()) ++
+          parentClassPaths
 
         val scalaCompiler = ArtefactResolution.resolveScalaCompiler(
-          compilerResolution, scalaOrganisation, scalaVersion, classPath)
+          compilerResolution, scalaOrganisation, scalaVersion, resolvedDeps,
+          classPath, optionalArtefacts)
 
         writeBloop(
           projectPath = projectPath,
@@ -346,7 +371,6 @@ object Bloop {
           bloopPath = bloopPath,
           dependencies = dependencies,
           classesDir = classesDir,
-          classPath = classPath,
           sources = sources ++ jvm.sources,
           resources = jvm.resources,
           scalaCompiler = Some(scalaCompiler),
@@ -378,6 +402,7 @@ object Bloop {
                   compilerResolution: List[Coursier.ResolutionResult],
                   name: String,
                   module: Module,
+                  optionalArtefacts: Boolean,
                   log: Log
                  ): Unit = {
     val isCrossBuild = module.targets.toSet.size > 1
@@ -406,7 +431,7 @@ object Bloop {
       module.js, build.project, resolution, compilerResolution,
       jsdom = module.js.exists(_.jsdom),
       emitSourceMaps = module.js.exists(_.emitSourceMaps),
-      test = false, log)
+      test = false, optionalArtefacts, log)
     writeJvmModule(build, if (!isCrossBuild) name else name + "-jvm",
       projectPath, bloopPath, bloopBuildPath,
       module.copy(
@@ -415,13 +440,13 @@ object Bloop {
       ),
       collectJvmClassPath(bloopBuildPath, build, module),
       module.jvm, build.project, resolution, compilerResolution, test = false,
-      log)
+      optionalArtefacts, log)
     writeNativeModule(build, if (!isCrossBuild) name else name + "-native",
       projectPath, bloopPath, bloopBuildPath, nativeOutputPath,
       module.copy(scalaDeps = collectNativeDeps(build, module)),
       collectJvmClassPath(bloopBuildPath, build, module),
-      module.native, build.project, resolution, compilerResolution, test = false,
-      log)
+      module.native, build.project, resolution, compilerResolution,
+      test = false, optionalArtefacts, log)
 
     module.test.foreach { test =>
       val targets = if (test.targets.nonEmpty) test.targets else module.targets
@@ -437,7 +462,7 @@ object Bloop {
         ),
         collectJsClassPath(bloopBuildPath, build, module),
         test.js, build.project, resolution, compilerResolution, jsdom,
-        emitSourceMaps, test = true, log)
+        emitSourceMaps, test = true, optionalArtefacts, log)
 
       writeNativeModule(build, if (!isCrossBuild) name else name + "-native",
         projectPath, bloopPath, bloopBuildPath, None,
@@ -448,7 +473,7 @@ object Bloop {
         ),
         collectNativeClassPath(bloopBuildPath, build, module),
         test.native, build.project, resolution, compilerResolution, test = true,
-        log)
+        optionalArtefacts, log)
 
       writeJvmModule(build, if (!isCrossBuild) name else name + "-jvm",
         projectPath, bloopPath, bloopBuildPath,
@@ -460,7 +485,7 @@ object Bloop {
         ),
         collectJvmClassPath(bloopBuildPath, build, module),
         test.jvm, build.project, resolution, compilerResolution, test = true,
-        log)
+        optionalArtefacts, log)
 
       if (isCrossBuild)
         writeBloop(
@@ -469,7 +494,6 @@ object Bloop {
           bloopPath = bloopPath,
           dependencies = targets.map(t => name + "-" + t.id + "-test"),
           classesDir = bloopBuildPath,
-          classPath = List(),
           sources = List(),
           scalaCompiler = None,
           scalaOptions = List(),
@@ -484,7 +508,6 @@ object Bloop {
         bloopPath = bloopPath,
         dependencies = module.targets.map(t => name + "-" + t.id),
         classesDir = bloopBuildPath,
-        classPath = List(),
         sources = List(),
         scalaCompiler = None,
         scalaOptions = List(),
@@ -498,6 +521,7 @@ object Bloop {
             resolution: Coursier.ResolutionResult,
             compilerResolution: List[Coursier.ResolutionResult],
             tmpfs: Boolean,
+            optionalArtefacts: Boolean,
             log: Log): Unit = {
     val bloopPath = outputPath.resolve(".bloop")
     if (!Files.exists(bloopPath)) Files.createDirectory(bloopPath)
@@ -514,7 +538,7 @@ object Bloop {
     build.module.foreach { case (name, module) =>
       log.info(s"Building module ${Ansi.italic(name)}...")
       buildModule(projectPath, bloopPath, buildPath, bloopBuildPath, build,
-        resolution, compilerResolution, name, module, log)
+        resolution, compilerResolution, name, module, optionalArtefacts, log)
     }
 
     log.info("Bloop project has been created")

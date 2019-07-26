@@ -25,14 +25,15 @@ object Generate {
       case _: Command.All => (true, true)
     }
 
+    val optionalArtefacts = isIdea || seedConfig.resolution.optionalArtefacts
+
     val (_, platformResolution, compilerResolution) =
       ArtefactResolution.resolution(seedConfig, build, command.packageConfig,
-        optionalArtefacts = isIdea, platformDeps ++ libraryDeps,
-        compilerDeps, log)
+        optionalArtefacts, platformDeps ++ libraryDeps, compilerDeps, log)
 
     val tmpfs = command.packageConfig.tmpfs || seedConfig.build.tmpfs
     if (isBloop) Bloop.build(projectPath, outputPath, build, platformResolution,
-      compilerResolution, tmpfs, log)
+      compilerResolution, tmpfs, optionalArtefacts, log)
     if (isIdea) Idea.build(projectPath, outputPath, build, platformResolution,
       compilerResolution, tmpfs, log)
   }

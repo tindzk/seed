@@ -648,6 +648,14 @@ ivyPath = "/home/user/.ivy2/local"
 # Artefact cache path
 # Can be also set with --cache-path
 cachePath = "/home/user/.cache/coursier/v1"
+
+# Fetch JavaDoc and source artefacts for all library dependencies. Then,
+# populate the resolution section in Bloop. This setting is only needed if you
+# use Bloop with IDEs, e.g. Metals or IntelliJ.
+# See also https://scalacenter.github.io/bloop/docs/build-tools/sbt#download-dependencies-sources
+#
+# If you generate an IDEA project, these artefacts will always be downloaded.
+optionalArtefacts = false
 ```
 
 The default values are indicated.

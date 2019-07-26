@@ -14,5 +14,6 @@ object Config {
   case class Build(tmpfs: Boolean = false)
   case class Resolution(silent: Boolean = false,
                         ivyPath: Path = Coursier.DefaultIvyPath,
-                        cachePath: Path = Coursier.DefaultCachePath)
+                        cachePath: Path = Coursier.DefaultCachePath,
+                        optionalArtefacts: Boolean = false)
 }

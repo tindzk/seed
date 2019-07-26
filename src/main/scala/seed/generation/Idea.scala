@@ -56,9 +56,9 @@ object Idea {
                    librariesPath: Path,
                    scalaVersion: String): Unit = {
     val filteredResolvedDeps = resolvedDeps.filter(l =>
-      !ArtefactResolution.isCompilerLibrary(l.libraryJar))
+      !ArtefactResolution.isScalaLibrary(l.javaDep))
     val filteredResolvedTestDeps = resolvedTestDeps.filter(l =>
-      !ArtefactResolution.isCompilerLibrary(l.libraryJar))
+      !ArtefactResolution.isScalaLibrary(l.javaDep))
 
     (filteredResolvedDeps ++ filteredResolvedTestDeps).foreach(dep =>
       createLibrary(
@@ -102,13 +102,14 @@ object Idea {
 
     scalaVersions.foreach { scalaVersion =>
       val scalaCompiler = ArtefactResolution.resolveScalaCompiler(resolution,
-        build.project.scalaOrganisation, scalaVersion, List())
+        build.project.scalaOrganisation, scalaVersion, List(), List(),
+        optionalArtefacts = false)
 
       val xml = IdeaFile.createLibrary(IdeaFile.Library(
         name = build.project.scalaOrganisation + "-" + scalaVersion,
         compilerInfo = Some(IdeaFile.CompilerInfo(
           scalaVersion, scalaCompiler.compilerJars.map(_.toString))),
-        classes = scalaCompiler.fullClassPath.map(_.toString),
+        classes = scalaCompiler.libraries.map(_.libraryJar.toString),
         javaDoc = List(),
         sources = List()))
 

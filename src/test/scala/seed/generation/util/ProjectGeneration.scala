@@ -45,6 +45,7 @@ object ProjectGeneration {
         compilerResolution,
         id,
         module,
+        optionalArtefacts = false,
         Log.urgent)
     }
   }

@@ -48,8 +48,8 @@ object ArtefactResolution {
     )
   }
 
-  def nativePlatformDeps(build: Build, module: Module): Set[JavaDep] = {
-    val scalaVersion = BuildConfig.scalaVersion(build.project, List(module))
+  def nativePlatformDeps(build: Build, modules: List[Module]): Set[JavaDep] = {
+    val scalaVersion = BuildConfig.scalaVersion(build.project, modules)
     val scalaNativeVersion = build.project.scalaNativeVersion.get
 
     Set(
@@ -61,6 +61,14 @@ object ArtefactResolution {
       javaDepFromArtefact(artefact, scalaNativeVersion, Native,
         scalaNativeVersion, scalaVersion)
     )
+  }
+
+  def nativeLibraryDep(build: Build, modules: List[Module]): JavaDep = {
+    val scalaVersion = BuildConfig.scalaVersion(build.project, modules)
+    val scalaNativeVersion = build.project.scalaNativeVersion.get
+
+    javaDepFromArtefact(Artefact.ScalaNativeNativelib, scalaNativeVersion,
+      Native, scalaNativeVersion, scalaVersion)
   }
 
   def jvmArtefacts(stack: List[Module]): Set[(Platform, Dep)] =
@@ -143,8 +151,8 @@ object ArtefactResolution {
     module.targets.toSet[Platform].flatMap { target =>
       if (target == JavaScript)
         jsPlatformDeps(build, module.js.getOrElse(Module()))
-      else if (target == Native) nativePlatformDeps(build,
-        module.native.getOrElse(Module()))
+      else if (target == Native)
+        nativePlatformDeps(build, module.native.toList)
       else Set[JavaDep]()
     }
 
@@ -211,14 +219,16 @@ object ArtefactResolution {
       .groupBy(_._1)
       .mapValues(_.map(_._2))
 
-  def isCompilerLibrary(library: Path): Boolean =
-    library.toString.contains("/scala-library/") ||
-    library.toString.contains("/scala-reflect/")
+  def isScalaLibrary(javaDep: JavaDep): Boolean =
+    javaDep.artefact == "scala-library" ||
+    javaDep.artefact == "scala-reflect"
 
   def resolveScalaCompiler(resolutionResult: List[Coursier.ResolutionResult],
                            scalaOrganisation: String,
                            scalaVersion: String,
-                           classPath: List[Path]
+                           userLibraries: List[Resolution.Artefact],
+                           classPath: List[Path],
+                           optionalArtefacts: Boolean
                           ): Resolution.ScalaCompiler = {
     val compilerDep = JavaDep(scalaOrganisation, "scala-compiler", scalaVersion)
     val libraryDep  = JavaDep(scalaOrganisation, "scala-library", scalaVersion)
@@ -227,21 +237,23 @@ object ArtefactResolution {
     val resolution = resolutionResult.find(r =>
       Coursier.hasDep(r, compilerDep)).get
 
-    val compiler = Coursier.localArtefacts(resolution, Set(compilerDep))
-    val libraries =
-      Coursier.localArtefacts(resolution, Set(libraryDep, reflectDep))
+    val compiler =
+      Coursier.localArtefacts(resolution, Set(compilerDep), false)
+    val scalaLibraries =
+      Coursier.localArtefacts(resolution, Set(libraryDep, reflectDep),
+        optionalArtefacts)
 
     // Replace official scala-library and scala-reflect artefacts by
     // organisation-specific ones. This is needed for Typelevel Scala.
-    val fullClassPath = libraries.map(_.libraryJar) ++
-                        classPath.filter(!isCompilerLibrary(_))
+    val libraries =
+      scalaLibraries ++ userLibraries.filter(a => !isScalaLibrary(a.javaDep))
 
-    val compilerJars: List[Path] =
-      compiler.map(_.libraryJar).filter(!isCompilerLibrary(_)) ++
-      libraries.map(_.libraryJar)
+    val compilerArtefacts =
+      compiler.filter(a => !isScalaLibrary(a.javaDep)) ++ scalaLibraries
 
     Resolution.ScalaCompiler(
-      scalaOrganisation, scalaVersion, fullClassPath.distinct, compilerJars)
+      scalaOrganisation, scalaVersion, libraries, classPath,
+      compilerArtefacts.map(_.libraryJar))
   }
 
   def resolution(seedConfig: seed.model.Config,
