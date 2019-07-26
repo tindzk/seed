@@ -42,6 +42,7 @@ libraryDependencies ++= Seq(
   "ch.epfl.scala"      %% "bloop-config"   % bloopVersion,
   "com.joefkelley"     %% "argyle"         % "1.0.0",
   "org.scalaj"         %% "scalaj-http"    % "2.4.2",
+  "dev.zio"            %% "zio"            % "1.0.0-RC10-1",
   "io.circe"           %% "circe-core"     % "0.11.1",
   "commons-io"         %  "commons-io"     % "2.6",
   "com.zaxxer"         %  "nuprocess"      % "1.2.4",

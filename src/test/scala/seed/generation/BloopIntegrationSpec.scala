@@ -7,7 +7,7 @@ import minitest.TestSuite
 import org.apache.commons.io.FileUtils
 import seed.{Log, cli}
 import seed.Cli.{Command, PackageConfig}
-import seed.cli.util.Exit
+import seed.cli.util.RTS
 import seed.config.BuildConfig
 import seed.generation.util.TestProcessHelper
 import seed.generation.util.TestProcessHelper.ec
@@ -15,12 +15,9 @@ import seed.model.Config
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
-
 import seed.generation.util.BuildUtil.tempPath
 
 object BloopIntegrationSpec extends TestSuite[Unit] {
-  Exit.TestCases = true
-
   override def setupSuite(): Unit = TestProcessHelper.semaphore.acquire()
   override def tearDownSuite(): Unit = TestProcessHelper.semaphore.release()
 
@@ -179,11 +176,11 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       if (expectFailure) Log.silent else Log.urgent,
       _ => _ => ())
 
-    val future = result.right.get
+    val uio = result.right.get
 
-    if (expectFailure) future.failed.map(_ => ())
+    if (expectFailure) RTS.unsafeRunToFuture(uio).failed.map(_ => ())
     else {
-      Await.result(future, 30.seconds)
+      RTS.unsafeRunSync(uio)
       assert(Files.exists(generatedFile))
 
       TestProcessHelper.runBloop(buildPath)("run", "demo")

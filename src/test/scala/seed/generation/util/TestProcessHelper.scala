@@ -5,6 +5,7 @@ import java.util.concurrent.{Executors, Semaphore}
 
 import scala.concurrent.{ExecutionContext, Future}
 import seed.Log
+import seed.cli.util.RTS
 import seed.process.ProcessHelper
 
 object TestProcessHelper {
@@ -20,13 +21,13 @@ object TestProcessHelper {
     val sb = new StringBuilder
     val process = ProcessHelper.runBloop(cwd, Log.urgent,
       out => sb.append(out + "\n"))(args: _*)
-    process.success.map(_ => sb.toString)
+    RTS.unsafeRunToFuture(process).map(_ => sb.toString)
   }
 
   def runCommand(cwd: Path, cmd: List[String]): Future[String] = {
     val sb = new StringBuilder
     val process = ProcessHelper.runCommmand(cwd, cmd, None, None, Log.urgent,
       out => sb.append(out + "\n"))
-    process.success.map(_ => sb.toString)
+    RTS.unsafeRunToFuture(process).map(_ => sb.toString)
   }
 }

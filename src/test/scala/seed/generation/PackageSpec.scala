@@ -3,10 +3,9 @@ package seed.generation
 import java.nio.file.{Files, Paths}
 
 import minitest.TestSuite
-import org.apache.commons.io.FileUtils
 import seed.{Log, cli}
 import seed.Cli.{Command, PackageConfig}
-import seed.cli.util.Exit
+import seed.cli.util.RTS
 import seed.config.BuildConfig
 import seed.generation.util.TestProcessHelper
 import seed.generation.util.TestProcessHelper.ec
@@ -14,8 +13,6 @@ import seed.model.Config
 import seed.generation.util.BuildUtil.tempPath
 
 object PackageSpec extends TestSuite[Unit] {
-  Exit.TestCases = true
-
   override def setupSuite(): Unit = TestProcessHelper.semaphore.acquire()
   override def tearDownSuite(): Unit = TestProcessHelper.semaphore.release()
 
@@ -45,7 +42,7 @@ object PackageSpec extends TestSuite[Unit] {
       _ => _ => ())
 
     for {
-      _ <- result.right.get
+      _ <- RTS.unsafeRunToFuture(result.right.get)
       result <- {
         cli.Package.ui(Config(), outputPath, build, "app",
           Some(buildPath), libs = true, packageConfig, Log.urgent)
