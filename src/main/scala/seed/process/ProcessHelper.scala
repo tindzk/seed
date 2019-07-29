@@ -62,7 +62,7 @@ object ProcessHelper {
                  ): Process =
     Promise.make[Nothing, Unit].flatMap { termination =>
       log.info(s"Running command '${Ansi.italic(cmd.mkString(" "))}'...")
-      log.detail(s"Working directory: ${Ansi.italic(cwd.toString)}")
+      log.detail(s"Working directory: ${Ansi.italic(cwd.toAbsolutePath.toString)}")
 
       val pb = new NuProcessBuilder(cmd.asJava)
 
@@ -83,7 +83,6 @@ object ProcessHelper {
         },
         pid => log.debug("PID: " + pid),
         code => {
-          log.debug("Exit code: " + code)
           if (code == 0) RTS.unsafeRun(termination.succeed(()))
           else {
             log.error(s"Process exited with non-zero exit code")
