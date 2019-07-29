@@ -151,7 +151,8 @@ object Coursier {
 
   def resolveSubset(resolution: Resolution,
                     deps: Set[JavaDep],
-                    optionalArtefacts: Boolean): List[(Classifier, Artefact)] = {
+                    optionalArtefacts: Boolean
+                   ): Map[JavaDep, List[(Classifier, Artefact)]] = {
     val result =
       resolution
         .subset(coursierDependencies(deps))
@@ -166,7 +167,11 @@ object Coursier {
       m.name.value == d.artefact))
     require(missing.isEmpty, s"Missing dependencies in artefact resolution: $missing")
 
-    result.map(a => (a._2.classifier, a._3)).toList
+    result.groupBy { case (dep, _, _) =>
+      // Do not look up artefact in `deps` since `result` may contain additional
+      // dependencies
+      JavaDep(dep.module.organization.value, dep.module.name.value, dep.version)
+    }.mapValues(_.map(a => (a._2.classifier, a._3)).toList)
   }
 
   def overrideClassifiers(sources: Boolean, javaDoc: Boolean): Seq[Classifier] =
@@ -177,20 +182,17 @@ object Coursier {
   /** Resolves requested libraries and their dependencies */
   def localArtefacts(result: ResolutionResult,
                      all: Set[JavaDep],
-                     optionalArtefacts: Boolean = false
+                     optionalArtefacts: Boolean
                     ): List[model.Resolution.Artefact] =
     resolveSubset(result.resolution, all, optionalArtefacts)
-      .groupBy(x => x._2.url.take(x._2.url.lastIndexOf('/')))
-      .values
       .toList
-      .filter(x =>
-        x.exists(x => x._1 == Classifier.empty && x._2.url.endsWith(".jar"))
-      ).map { a =>
+      .map { case (dep, a) =>
         val jar = result.artefacts(a.find(_._1 == Classifier.empty).get._2.url)
         val doc = a.find(_._1 == Classifier.javadoc).map(_._2.url).flatMap(result.artefacts.get)
         val src = a.find(_._1 == Classifier.sources).map(_._2.url).flatMap(result.artefacts.get)
 
         model.Resolution.Artefact(
+          javaDep = dep,
           libraryJar = jar.toPath,
           javaDocJar = doc.map(_.toPath),
           sourcesJar = src.map(_.toPath))

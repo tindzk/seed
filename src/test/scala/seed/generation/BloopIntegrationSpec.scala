@@ -13,8 +13,7 @@ import seed.generation.util.TestProcessHelper
 import seed.generation.util.TestProcessHelper.ec
 import seed.model.Config
 
-import scala.concurrent.duration._
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Future
 import seed.generation.util.BuildUtil.tempPath
 
 object BloopIntegrationSpec extends TestSuite[Unit] {
@@ -133,6 +132,26 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       exampleJs.project.scala.get.options.filter(_.contains("paradise"))
         .map(getFileName),
       List("paradise_2.11.12-2.1.1.jar"))
+
+    def checkResolutionArtefacts(configFile: bloop.config.Config.File): Unit = {
+      val resolution = configFile.project.resolution.get.modules
+      configFile.project.classpath
+        .filter(_.toString.endsWith(".jar"))
+        .foreach { cp =>
+          assert(resolution.exists(_.artifacts.exists(_.path == cp)),
+            s"Missing artefact: $cp")
+
+          // By default, only fetch class artefacts unless user enabled
+          // `optionalArtefacts` in Seed configuration
+          assert(!resolution.exists(_.artifacts.exists(_.classifier.isDefined)),
+            s"Classifier should be empty: $cp")
+        }
+    }
+
+    checkResolutionArtefacts(macrosJvm)
+    checkResolutionArtefacts(macrosJs)
+    checkResolutionArtefacts(exampleJvm)
+    checkResolutionArtefacts(exampleJs)
 
     compileAndRun(buildPath)
   }

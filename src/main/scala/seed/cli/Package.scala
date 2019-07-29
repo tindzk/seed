@@ -97,10 +97,10 @@ object Package {
         packageConfig, optionalArtefacts = false, libraryDeps,
         List(platformDeps), log)
     val resolvedLibraryDeps = Coursier.localArtefacts(
-      libraryResolution, libraryDeps)
+      libraryResolution, libraryDeps, optionalArtefacts = false)
 
     val resolvedPlatformDeps = Coursier.localArtefacts(
-      platformResolution.head, platformDeps)
+      platformResolution.head, platformDeps, optionalArtefacts = false)
 
     val resolvedDeps = (resolvedLibraryDeps ++ resolvedPlatformDeps)
       .distinct.sortBy(_.libraryJar)
