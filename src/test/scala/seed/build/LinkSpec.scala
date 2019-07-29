@@ -5,7 +5,7 @@ import java.nio.file.Files
 import scala.collection.mutable.ListBuffer
 import minitest.TestSuite
 import seed.Log
-import seed.cli.util.BloopCli
+import seed.cli.util.{BloopCli, RTS}
 import seed.generation.util.{ProjectGeneration, TestProcessHelper}
 import seed.model.{BuildEvent, Platform}
 import seed.generation.util.TestProcessHelper.ec
@@ -34,7 +34,7 @@ object LinkSpec extends TestSuite[Unit] {
     assert(process.isDefined)
 
     for {
-      _ <- process.get.success
+      _ <- RTS.unsafeRunToFuture(process.get)
     } yield {
       require(events.length == 3)
       require(events(0) == BuildEvent.Compiling("example", Platform.JavaScript))

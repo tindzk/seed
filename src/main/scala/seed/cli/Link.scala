@@ -4,15 +4,12 @@ import java.net.URI
 import java.nio.file.Path
 
 import seed.Log
-import seed.cli.util.{Ansi, WsClient}
+import seed.cli.util.{Ansi, RTS, WsClient}
 import seed.config.BuildConfig
 import seed.model
 import seed.model.Config
 import seed.Cli.Command
-
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.Duration
-import scala.concurrent.ExecutionContext.Implicits.global
+import zio._
 
 object Link {
   def ui(buildPath: Path, seedConfig: Config, command: Command.Link, log: Log): Unit =
@@ -38,7 +35,9 @@ object Link {
           case Left(errors) =>
             errors.foreach(log.error)
             sys.exit(1)
-          case Right(future) => Await.result(future, Duration.Inf)
+          case Right(uio) =>
+            val result = RTS.unsafeRunSync(uio)
+            sys.exit(if (result.succeeded) 0 else 1)
         }
     }
 
@@ -48,14 +47,14 @@ object Link {
            tmpfs: Boolean,
            log: Log,
            onStdOut: model.Build => String => Unit
-          ): Either[List[String], Future[Unit]] =
+          ): Either[List[String], UIO[Unit]] =
     BuildConfig.load(buildPath, log) match {
       case None => Left(List())
       case Some(BuildConfig.Result(build, projectPath, moduleProjectPaths)) =>
         val parsedModules = modules.map(util.Target.parseModuleString(build))
         util.Validation.unpack(parsedModules).right.map { allModules =>
-          val futures = BuildTarget.buildTargets(build, allModules, projectPath,
-            moduleProjectPaths, watch, tmpfs, log)
+          val processes = BuildTarget.buildTargets(build, allModules,
+            projectPath, moduleProjectPaths, watch, tmpfs, log)
 
           val linkModules = allModules.flatMap {
             case util.Target.Parsed(module, None) =>
@@ -67,9 +66,18 @@ object Link {
 
           val bloop = util.BloopCli.link(
             build, projectPath, linkModules, watch, log, onStdOut(build)
-          ).fold(Future.unit)(_.success)
+          ).getOrElse(ZIO.unit)
 
-          Future.sequence(futures :+ bloop).map(_ => ())
+          val await = processes.collect { case Left(p) => p }
+          val async = processes.collect { case Right(p) => p }
+
+          if (await.nonEmpty)
+            log.info(s"Awaiting termination of ${await.length} processes...")
+
+          for {
+            _ <- ZIO.collectAllPar(await)
+            _ <- ZIO.collectAllPar(async :+ bloop)
+          } yield ()
         }
     }
 }

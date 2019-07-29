@@ -7,8 +7,8 @@ import com.zaxxer.nuprocess.{NuAbstractProcessHandler, NuProcess, NuProcessBuild
 import seed.Log
 
 import scala.collection.JavaConverters._
-import scala.concurrent.{Future, Promise}
-import seed.cli.util.{Ansi, BloopCli, Exit}
+import seed.cli.util.{Ansi, BloopCli, RTS}
+import zio._
 
 sealed trait ProcessOutput
 object ProcessOutput {
@@ -48,20 +48,10 @@ class ProcessHandler(onLog: ProcessOutput => Unit,
 
 object ProcessHelper {
   /**
-    * @param nuProcess  Underlying NuProcess instance
-    * @param success    Future that terminates upon successful completion
+    * UIO type that wraps a NuProcess instance and completes when the process
+    * returned the exit code 0, otherwise it fails.
     */
-  class Process(private val nuProcess: NuProcess,
-                val success: Future[Unit]) {
-    private var _killed = false
-
-    def isRunning: Boolean = nuProcess.isRunning
-    def killed: Boolean = _killed
-    def kill(): Unit = {
-      nuProcess.destroy(true)
-      _killed = true
-    }
-  }
+  type Process = UIO[Unit]
 
   def runCommmand(cwd: Path,
                   cmd: List[String],
@@ -69,42 +59,42 @@ object ProcessHelper {
                   buildPath: Option[String] = None,
                   log: Log,
                   onStdOut: String => Unit
-                 ): Process = {
-    log.info(s"Running command '${Ansi.italic(cmd.mkString(" "))}'...")
-    log.detail(s"Working directory: ${Ansi.italic(cwd.toString)}")
+                 ): Process =
+    Promise.make[Nothing, Unit].flatMap { termination =>
+      log.info(s"Running command '${Ansi.italic(cmd.mkString(" "))}'...")
+      log.detail(s"Working directory: ${Ansi.italic(cwd.toAbsolutePath.toString)}")
 
-    val termination = Promise[Unit]()
+      val pb = new NuProcessBuilder(cmd.asJava)
 
-    val pb = new NuProcessBuilder(cmd.asJava)
+      modulePath.foreach { mp =>
+        pb.environment().put("MODULE_PATH", mp)
+        log.detail(s"Module path: ${Ansi.italic(mp)}")
+      }
 
-    modulePath.foreach { mp =>
-      pb.environment().put("MODULE_PATH", mp)
-      log.detail(s"Module path: ${Ansi.italic(mp)}")
+      buildPath.foreach { bp =>
+        pb.environment().put("BUILD_PATH", bp)
+        log.detail(s"Build path: ${Ansi.italic(bp)}")
+      }
+
+      pb.setProcessListener(new ProcessHandler(
+        {
+          case ProcessOutput.StdOut(output) => onStdOut(output)
+          case ProcessOutput.StdErr(output) => log.error(output)
+        },
+        pid => log.debug("PID: " + pid),
+        code => {
+          if (code == 0) RTS.unsafeRun(termination.succeed(()))
+          else {
+            log.error(s"Process exited with non-zero exit code")
+            RTS.unsafeRun(termination.interrupt)
+          }
+        }))
+
+      if (cwd.toString != "") pb.setCwd(cwd)
+
+      pb.start()
+      termination.await
     }
-
-    buildPath.foreach { bp =>
-      pb.environment().put("BUILD_PATH", bp)
-      log.detail(s"Build path: ${Ansi.italic(bp)}")
-    }
-
-    pb.setProcessListener(new ProcessHandler(
-      {
-        case ProcessOutput.StdOut(output) => onStdOut(output)
-        case ProcessOutput.StdErr(output) => log.error(output)
-      },
-      pid => log.debug("PID: " + pid),
-      code => {
-        log.debug("Exit code: " + code)
-        if (code == 0) termination.success(())
-        else {
-          log.error(s"Process exited with non-zero exit code")
-          termination.failure(Exit.error())
-        }
-      }))
-
-    if (cwd.toString != "") pb.setCwd(cwd)
-    new Process(pb.start(), termination.future)
-  }
 
   def runBloop(cwd: Path,
                log: Log,

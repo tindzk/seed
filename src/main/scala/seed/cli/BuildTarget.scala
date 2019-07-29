@@ -9,8 +9,7 @@ import seed.generation.util.PathUtil
 import seed.model
 import seed.process.ProcessHelper
 
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.Duration
+import zio._
 
 object BuildTarget {
   def buildTargets(build: model.Build,
@@ -20,7 +19,7 @@ object BuildTarget {
                    watch: Boolean,
                    tmpfs: Boolean,
                    log: Log
-                  ): List[Future[Unit]] = {
+                  ): List[Either[UIO[Unit], UIO[Unit]]] = {
     def format(module: String, target: String): String = module + ":" + target
     def formatAll(targets: List[(String, String)]): String =
       targets.map { case (m, t) => Ansi.italic(format(m, t)) }.mkString(", ")
@@ -50,7 +49,7 @@ object BuildTarget {
     if (!Files.exists(buildPath)) Files.createDirectories(buildPath)
     log.info(s"Build path: $buildPath")
 
-    allTargets.map { case (m, t) =>
+    allTargets.flatMap { case (m, t) =>
       val customLog = log.prefix(Ansi.bold(s"[${format(m, t)}]: "))
 
       val modulePath = moduleProjectPaths(m)
@@ -66,39 +65,25 @@ object BuildTarget {
             Some(buildPath.toAbsolutePath.toString)
           )(args: _*)
 
-          if (target.await) {
-            customLog.info("Awaiting process termination...")
-            Await.result(process.success, Duration.Inf)
-            Future.unit
-          } else {
-            process.success
-          }
+          List(if (target.await) Left(process) else Right(process))
 
         case None =>
           if (watch && target.watchCommand.isDefined)
             target.watchCommand match {
-              case None      => Future.unit
-              case Some(cmd) =>
-                val process = ProcessHelper.runShell(modulePath, cmd,
-                  buildPath.toAbsolutePath.toString, customLog, customLog.info)
-                process.success
+              case None      => List()
+              case Some(cmd) => List(Right(ProcessHelper.runShell(
+                modulePath, cmd, buildPath.toAbsolutePath.toString, customLog,
+                customLog.info)))
             }
           else
             target.command match {
-              case None => Future.unit
+              case None      => List()
               case Some(cmd) =>
-                val process =
-                  ProcessHelper.runShell(modulePath, cmd,
-                    buildPath.toAbsolutePath.toString, customLog,
-                    customLog.info)
+                val process = ProcessHelper.runShell(modulePath, cmd,
+                  buildPath.toAbsolutePath.toString, customLog,
+                  customLog.info)
 
-                if (target.await) {
-                  customLog.info("Awaiting process termination...")
-                  Await.result(process.success, Duration.Inf)
-                  Future.unit
-                } else {
-                  process.success
-                }
+                List(if (target.await) Left(process) else Right(process))
             }
       }
     }

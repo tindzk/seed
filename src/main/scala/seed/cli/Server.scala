@@ -7,14 +7,13 @@ import io.circe.syntax._
 import io.circe.{Decoder, DecodingFailure, Encoder, Json}
 import org.java_websocket.WebSocket
 import seed.Log
-import seed.cli.util.{Ansi, BloopCli, WsServer}
+import seed.cli.util.{BloopCli, RTS, WsServer}
 import seed.model
 import seed.Cli.Command
 import seed.model.Config
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext.Implicits._
 
 sealed abstract class WsCommand(val description: String)
 object WsCommand {
@@ -111,7 +110,9 @@ object Server {
           case Left(errors) =>
             errors.foreach(clientLog.error)
             wsClient.close()
-          case Right(future) => future.foreach(_ => wsClient.close())
+          case Right(uio) =>
+            // TODO Send success state to client too
+            RTS.unsafeRunAsync(uio)(_ => wsClient.close())
         }
       case WsCommand.Link(buildPath, modules) =>
         seed.cli.Link.link(
@@ -121,7 +122,7 @@ object Server {
           case Left(errors) =>
             errors.foreach(clientLog.error)
             wsClient.close()
-          case Right(future) => future.foreach(_ => wsClient.close())
+          case Right(uio) => RTS.unsafeRunAsync(uio)(_ => wsClient.close())
         }
     }
   }
