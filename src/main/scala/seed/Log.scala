@@ -3,11 +3,12 @@ package seed
 import seed.cli.util.Ansi._
 import seed.cli.util.ColourScheme._
 
-class Log(f: String => Unit,
-          map: String => String,
-          val level: LogLevel,
-          val unicode: Boolean
-         ) {
+class Log(
+  f: String => Unit,
+  map: String => String,
+  val level: LogLevel,
+  val unicode: Boolean
+) {
   import Log._
   import LogLevel._
 
@@ -15,28 +16,40 @@ class Log(f: String => Unit,
 
   def debug(message: String): Unit =
     if (level <= Debug)
-      f(foreground(green2)(
-        bold(if (unicode) "↪ " else "[debug] ") + map(message)))
+      f(
+        foreground(green2)(
+          bold(if (unicode) "↪ " else "[debug] ") + map(message)
+        )
+      )
 
   def detail(message: String): Unit =
     if (level <= Detail)
-      f((" " * (if (unicode) UnicodeLength else NonUnicodeLength)) +
-        foreground(blue3)(map(message)))
+      f(
+        (" " * (if (unicode) UnicodeLength else NonUnicodeLength)) +
+          foreground(blue3)(map(message))
+      )
 
   def info(message: String): Unit =
     if (level <= Info)
-    f(foreground(blue2)(
-      bold(if (unicode) "ⓘ " else " [info] ") + map(message)))
+      f(
+        foreground(blue2)(
+          bold(if (unicode) "ⓘ " else " [info] ") + map(message)
+        )
+      )
 
   def warn(message: String): Unit =
     if (level <= Warn)
-      f(foreground(yellow2)(
-        bold(if (unicode) "⚠ " else " [warn] ") + map(message)))
+      f(
+        foreground(yellow2)(
+          bold(if (unicode) "⚠ " else " [warn] ") + map(message)
+        )
+      )
 
   def error(message: String): Unit =
     if (level <= Error)
-      f(foreground(red2)(
-        bold(if (unicode) "✗ " else "[error] ") + map(message)))
+      f(
+        foreground(red2)(bold(if (unicode) "✗ " else "[error] ") + map(message))
+      )
 
   def newLine(): Unit = f(" ")
 }
@@ -54,11 +67,11 @@ object LogLevel {
   case object Silent extends LogLevel(5)
 
   val All = Map(
-    "debug" -> Debug,
+    "debug"  -> Debug,
     "detail" -> Detail,
-    "info" -> Info,
-    "warn" -> Warn,
-    "error" -> Error,
+    "info"   -> Info,
+    "warn"   -> Warn,
+    "error"  -> Error,
     "silent" -> Silent
   )
 }

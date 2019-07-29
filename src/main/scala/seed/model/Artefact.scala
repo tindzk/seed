@@ -2,9 +2,11 @@ package seed.model
 
 import seed.model.Build.{Dep, JavaDep, ScalaDep, VersionTag}
 
-case class Artefact(organisation: String,
-                    name: String,
-                    versionTag: Option[VersionTag])
+case class Artefact(
+  organisation: String,
+  name: String,
+  versionTag: Option[VersionTag]
+)
 
 object Artefact {
   import VersionTag._
@@ -28,14 +30,19 @@ object Artefact {
   val ScalaJsCompiler = Artefact("org.scala-js", "scalajs-compiler", Some(Full))
   val ScalaJsLibrary  = Artefact("org.scala-js", "scalajs-library", Some(Binary))
 
-  val ScalaNativePlugin    = Artefact("org.scala-native", "nscplugin", Some(Full))
-  val ScalaNativeJavalib   = Artefact("org.scala-native", "javalib", Some(PlatformBinary))
-  val ScalaNativeScalalib  = Artefact("org.scala-native", "scalalib", Some(PlatformBinary))
-  val ScalaNativeNativelib = Artefact("org.scala-native", "nativelib", Some(PlatformBinary))
-  val ScalaNativeAuxlib    = Artefact("org.scala-native", "auxlib", Some(PlatformBinary))
+  val ScalaNativePlugin = Artefact("org.scala-native", "nscplugin", Some(Full))
+  val ScalaNativeJavalib =
+    Artefact("org.scala-native", "javalib", Some(PlatformBinary))
+  val ScalaNativeScalalib =
+    Artefact("org.scala-native", "scalalib", Some(PlatformBinary))
+  val ScalaNativeNativelib =
+    Artefact("org.scala-native", "nativelib", Some(PlatformBinary))
+  val ScalaNativeAuxlib =
+    Artefact("org.scala-native", "auxlib", Some(PlatformBinary))
 
-  val Minitest   = Artefact("io.monix", "minitest", Some(PlatformBinary))
-  val ScalaTest  = Artefact("org.scalatest", "scalatest", Some(PlatformBinary))
-  val ScalaCheck = Artefact("org.scalacheck", "scalacheck", Some(PlatformBinary))
-  val Utest      = Artefact("com.lihaoyi", "utest", Some(PlatformBinary))
+  val Minitest  = Artefact("io.monix", "minitest", Some(PlatformBinary))
+  val ScalaTest = Artefact("org.scalatest", "scalatest", Some(PlatformBinary))
+  val ScalaCheck =
+    Artefact("org.scalacheck", "scalacheck", Some(PlatformBinary))
+  val Utest = Artefact("com.lihaoyi", "utest", Some(PlatformBinary))
 }

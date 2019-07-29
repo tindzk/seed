@@ -7,28 +7,33 @@ import pine._
 /** XML writers for IDEA files */
 object IdeaFile {
   case class Output(classPath: String, testClassPath: String)
-  case class Module(projectId: String,
-                    rootPath: String,
-                    sourcePaths: List[String],
-                    testPaths: List[String],
-                    libraries: List[String],
-                    testLibraries: List[String],
-                    moduleDeps: List[String],
-                    output: Option[Output])
+  case class Module(
+    projectId: String,
+    rootPath: String,
+    sourcePaths: List[String],
+    testPaths: List[String],
+    libraries: List[String],
+    testLibraries: List[String],
+    moduleDeps: List[String],
+    output: Option[Output]
+  )
 
   case class CompilerInfo(version: String, compilerClasses: List[String])
 
-  case class Library(name: String,
-                     compilerInfo: Option[CompilerInfo],
-                     classes: List[String],
-                     javaDoc: List[String],
-                     sources: List[String])
+  case class Library(
+    name: String,
+    compilerInfo: Option[CompilerInfo],
+    classes: List[String],
+    javaDoc: List[String],
+    sources: List[String]
+  )
 
   def createModule(module: Module): String = {
     val output = module.output.toList.flatMap { output =>
       List(
         xml"""<output url="file://${output.classPath}" />""",
-        xml"""<output-test url="file://${output.testClassPath}" />""")
+        xml"""<output-test url="file://${output.testClassPath}" />"""
+      )
     }
 
     val sourceFolders = module.sourcePaths.map { path =>
@@ -88,22 +93,28 @@ object IdeaFile {
   def createLibrary(library: Library): String = {
     val tpe = library.compilerInfo.map(_ => "Scala")
     val languageLevel =
-      library.compilerInfo.map { case CompilerInfo(version, _) =>
-        val level = "Scala_" + Bloop.majorMinorVersion(version)
-          .replaceAllLiterally(".", "_")
-        xml"""<language-level>$level</language-level>"""
+      library.compilerInfo.map {
+        case CompilerInfo(version, _) =>
+          val level = "Scala_" + Bloop
+            .majorMinorVersion(version)
+            .replaceAllLiterally(".", "_")
+          xml"""<language-level>$level</language-level>"""
       }.toList
     val compilerPaths = library.compilerInfo.fold(List[pine.Tag[Singleton]]())(
-      _.compilerClasses.map(path => xml"""<root url="file://$path" />"""))
+      _.compilerClasses.map(path => xml"""<root url="file://$path" />""")
+    )
     val properties = if (compilerPaths.isEmpty) List() else List(xml"""
       <properties>
         $languageLevel
         <compiler-classpath>$compilerPaths</compiler-classpath>
       </properties>
     """)
-    val classes = library.classes.map(path => xml"""<root url="jar://$path!/" />""")
-    val javaDoc = library.javaDoc.map(path => xml"""<root url="jar://$path!/" />""")
-    val sources = library.sources.map(path => xml"""<root url="jar://$path!/" />""")
+    val classes =
+      library.classes.map(path => xml"""<root url="jar://$path!/" />""")
+    val javaDoc =
+      library.javaDoc.map(path => xml"""<root url="jar://$path!/" />""")
+    val sources =
+      library.sources.map(path => xml"""<root url="jar://$path!/" />""")
 
     xml"""
     <component name="libraryTable">
@@ -119,11 +130,16 @@ object IdeaFile {
 
   type Options = List[String]
   type Modules = List[String]
-  def createScalaCompiler(compilerSettings: List[(Options, Modules)]): String = {
-    def component(options: List[String], modules: List[String]): pine.Tag[Singleton] = {
+  def createScalaCompiler(
+    compilerSettings: List[(Options, Modules)]
+  ): String = {
+    def component(
+      options: List[String],
+      modules: List[String]
+    ): pine.Tag[Singleton] = {
       val profileName = "Profile of modules " + modules.mkString(", ")
       val modulesAttr = modules.mkString(",")
-      val parameters = options.map(option => xml"<parameter value=$option />")
+      val parameters  = options.map(option => xml"<parameter value=$option />")
       xml"""
         <component name="ScalaCompilerConfiguration">
           <option name="incrementalityType" value="IDEA" />

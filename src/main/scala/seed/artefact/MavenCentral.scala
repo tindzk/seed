@@ -16,7 +16,10 @@ object MavenCentral {
     s"$Url/$organisationPath/"
   }
 
-  def urlForArtefactMetaData(organisation: String, artefactName: String): String =
+  def urlForArtefactMetaData(
+    organisation: String,
+    artefactName: String
+  ): String =
     urlForOrganisation(organisation) + s"$artefactName/maven-metadata.xml"
 
   def requestHttp(url: String, log: Log): String = {
@@ -28,84 +31,118 @@ object MavenCentral {
     !stable || (stable && !SemanticVersioning.isPreRelease(version))
 
   /** @return If there no stable version was published for the artefact, return
-   *          all unstable versions
-   */
-  def parseVersionsXml(body: String, stable: Boolean, log: Log): List[String] = {
-    val versions = Try(pine.XmlParser.fromString(body))
-      .toOption
-      .toList
-      .flatMap(_
-        .byTagAll["version"]
-        .flatMap(_.children.headOption)
-        .collect { case pine.Text(t) => t }
-        .sorted(new SemanticVersioning(log).versionOrdering))
+    *          all unstable versions
+    */
+  def parseVersionsXml(
+    body: String,
+    stable: Boolean,
+    log: Log
+  ): List[String] = {
+    val versions = Try(pine.XmlParser.fromString(body)).toOption.toList
+      .flatMap(
+        _.byTagAll["version"]
+          .flatMap(_.children.headOption)
+          .collect { case pine.Text(t) => t }
+          .sorted(new SemanticVersioning(log).versionOrdering)
+      )
 
     if (stable && versions.exists(isArtefactEligible(stable, log)))
       versions.filter(isArtefactEligible(stable, log))
     else versions
   }
 
-  def fetchOrganisationArtefacts(organisation: String, log: Log): List[String] = {
+  def fetchOrganisationArtefacts(
+    organisation: String,
+    log: Log
+  ): List[String] = {
     val response = requestHttp(urlForOrganisation(organisation), log)
-    response.split("\n")
+    response
+      .split("\n")
       .toList
       .filter(_.startsWith("<a href=\""))
       .map(_.drop("<a href=\"".length))
       .map(_.takeWhile(_ != '/'))
   }
 
-  def parseLibraryArtefacts(artefacts: List[String], artefactName: String, stable: Boolean, log: Log): List[
+  def parseLibraryArtefacts(
+    artefacts: List[String],
+    artefactName: String,
+    stable: Boolean,
+    log: Log
+  ): List[
     (Platform, PlatformVersion, CompilerVersion)
   ] =
     artefacts
       .filter(_.startsWith(artefactName + "_"))
       .map(_.drop(artefactName.length + 1))
-      .filter(a =>
-        a.headOption.exists(_.isDigit) ||
-        a.startsWith("sjs") ||
-        a.startsWith("native")
-      ).map(parseArtefactName)
-       .filter(a => isArtefactEligible(stable, log)(a._2) &&
-                    isArtefactEligible(stable, log)(a._3))
-       .sortBy(_._2)(new SemanticVersioning(log).versionOrdering)
+      .filter(
+        a =>
+          a.headOption.exists(_.isDigit) ||
+            a.startsWith("sjs") ||
+            a.startsWith("native")
+      )
+      .map(parseArtefactName)
+      .filter(
+        a =>
+          isArtefactEligible(stable, log)(a._2) &&
+            isArtefactEligible(stable, log)(a._3)
+      )
+      .sortBy(_._2)(new SemanticVersioning(log).versionOrdering)
 
   /** @param stable Only consider stable artefacts (as opposed to pre-releases)
     * @return Found versions in ascending order
     */
-  def fetchLibraryArtefacts(artefact: Artefact, stable: Boolean, log: Log): List[
+  def fetchLibraryArtefacts(
+    artefact: Artefact,
+    stable: Boolean,
+    log: Log
+  ): List[
     (Platform, PlatformVersion, CompilerVersion)
   ] =
     parseLibraryArtefacts(
       fetchOrganisationArtefacts(artefact.organisation, log),
       artefact.name,
       stable,
-      log)
+      log
+    )
 
   type PlatformVersion = String
   type CompilerVersion = String
-  /** Derive from artefact name, supported platforms and compilers */
-  def parseArtefactName(version: String):
-    (Platform, PlatformVersion, CompilerVersion) = {
 
+  /** Derive from artefact name, supported platforms and compilers */
+  def parseArtefactName(
+    version: String
+  ): (Platform, PlatformVersion, CompilerVersion) =
     if (version.startsWith("sjs"))
-      (JavaScript,
-       version.drop("sjs".length).takeWhile(_ != '_'),
-       version.reverse.takeWhile(_ != '_').reverse)
+      (
+        JavaScript,
+        version.drop("sjs".length).takeWhile(_ != '_'),
+        version.reverse.takeWhile(_ != '_').reverse
+      )
     else if (version.startsWith("native"))
-      (Native,
+      (
+        Native,
         version.drop("native".length).takeWhile(_ != '_'),
-        version.reverse.takeWhile(_ != '_').reverse)
+        version.reverse.takeWhile(_ != '_').reverse
+      )
     else
       (JVM, version, version)
-  }
 
-  def fetchCompilerVersions(artefact: Artefact, stable: Boolean, log: Log): List[String] = {
+  def fetchCompilerVersions(
+    artefact: Artefact,
+    stable: Boolean,
+    log: Log
+  ): List[String] = {
     require(artefact.versionTag.isEmpty)
     val url = urlForArtefactMetaData(artefact.organisation, artefact.name)
     parseVersionsXml(requestHttp(url, log), stable, log)
   }
 
-  def fetchPlatformCompilerVersions(artefact: Artefact, stable: Boolean, log: Log): List[String] = {
+  def fetchPlatformCompilerVersions(
+    artefact: Artefact,
+    stable: Boolean,
+    log: Log
+  ): List[String] = {
     require(artefact.versionTag.contains(VersionTag.Full))
     fetchLibraryArtefacts(artefact, stable, log).map(_._3).distinct
   }
@@ -125,22 +162,25 @@ object MavenCentral {
       }
     }
 
-  def formatArtefactName(artefactName: String,
-                         versionTag: VersionTag,
-                         platform: Platform,
-                         platformVersion: PlatformVersion,
-                         compilerVersion: CompilerVersion
-                        ): String =
+  def formatArtefactName(
+    artefactName: String,
+    versionTag: VersionTag,
+    platform: Platform,
+    platformVersion: PlatformVersion,
+    compilerVersion: CompilerVersion
+  ): String =
     versionTag match {
       case VersionTag.PlatformBinary =>
         val trimmedCompilerVersion = trimCompilerVersion(compilerVersion)
 
         val version = platform match {
-          case JVM        => trimmedCompilerVersion
-          case JavaScript => "sjs" + trimCompilerVersion(platformVersion) +
-                             "_" + trimmedCompilerVersion
-          case Native     => "native" + trimCompilerVersion(platformVersion) +
-                             "_" + trimmedCompilerVersion
+          case JVM => trimmedCompilerVersion
+          case JavaScript =>
+            "sjs" + trimCompilerVersion(platformVersion) +
+              "_" + trimmedCompilerVersion
+          case Native =>
+            "native" + trimCompilerVersion(platformVersion) +
+              "_" + trimmedCompilerVersion
         }
 
         artefactName + "_" + version
@@ -154,17 +194,25 @@ object MavenCentral {
         artefactName + "_" + trimmedCompilerVersion
     }
 
-  def fetchVersions(artefact: Artefact,
-                    platform: Platform,
-                    platformVersion: PlatformVersion,
-                    compilerVersion: CompilerVersion,
-                    stable: Boolean,
-                    log: Log
-                   ): List[String] = {
+  def fetchVersions(
+    artefact: Artefact,
+    platform: Platform,
+    platformVersion: PlatformVersion,
+    compilerVersion: CompilerVersion,
+    stable: Boolean,
+    log: Log
+  ): List[String] = {
     val artefactName =
-      artefact.versionTag.fold(artefact.name)(vt =>
-        formatArtefactName(artefact.name, vt, platform, platformVersion,
-          compilerVersion))
+      artefact.versionTag.fold(artefact.name)(
+        vt =>
+          formatArtefactName(
+            artefact.name,
+            vt,
+            platform,
+            platformVersion,
+            compilerVersion
+          )
+      )
     val url = urlForArtefactMetaData(artefact.organisation, artefactName)
 
     parseVersionsXml(requestHttp(url, log), stable, log)

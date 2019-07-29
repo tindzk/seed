@@ -9,7 +9,9 @@ object PathUtil {
   def tmpfsPath(projectPath: Path, log: Log): Path = {
     val name = projectPath.toAbsolutePath.getFileName.toString
     log.info("Build path set to tmpfs")
-    log.warn(s"Please ensure that no other project with the name ${Ansi.italic(name)} compiles to tmpfs")
+    log.warn(
+      s"Please ensure that no other project with the name ${Ansi.italic(name)} compiles to tmpfs"
+    )
     Paths.get("/tmp").resolve("build-" + name)
   }
 
@@ -22,13 +24,15 @@ object PathUtil {
 
     val rootElems = absoluteRoot.split("/").toList
     val pathElems = absolutePath.split("/").toList
-    val common = pathElems.zip(rootElems).takeWhile { case (a, b) => a == b }
+    val common    = pathElems.zip(rootElems).takeWhile { case (a, b) => a == b }
 
     if (common.length == 1) absolutePath
     else {
-      val levels = rootElems.length - common.length
+      val levels       = rootElems.length - common.length
       val relativePath = (0 until levels).map(_ => "../").mkString
-      pathVariable + "/" + relativePath + pathElems.drop(common.length).mkString("/")
+      pathVariable + "/" + relativePath + pathElems
+        .drop(common.length)
+        .mkString("/")
     }
   }
 

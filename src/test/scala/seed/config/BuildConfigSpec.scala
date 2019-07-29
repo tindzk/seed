@@ -17,14 +17,17 @@ import BuildUtil.tempPath
 
 object BuildConfigSpec extends SimpleTestSuite {
   test("Resolve absolute project path") {
-    FileUtils.write(tempPath.resolve("a.toml").toFile,
+    FileUtils.write(
+      tempPath.resolve("a.toml").toFile,
       """
         |[project]
         |scalaVersion = "2.12.8"
         |
         |[module.example.jvm]
         |sources = ["src"]
-      """.stripMargin, "UTF-8")
+      """.stripMargin,
+      "UTF-8"
+    )
 
     val BuildConfig.Result(_, projectPath, moduleProjectPaths) =
       BuildConfig.load(tempPath.resolve("a.toml"), Log.urgent).get
@@ -33,14 +36,17 @@ object BuildConfigSpec extends SimpleTestSuite {
   }
 
   test("Resolve relative project path") {
-    FileUtils.write(new File("test/a.toml"),
+    FileUtils.write(
+      new File("test/a.toml"),
       """
         |[project]
         |scalaVersion = "2.12.8"
         |
         |[module.example.jvm]
         |sources = ["src"]
-      """.stripMargin, "UTF-8")
+      """.stripMargin,
+      "UTF-8"
+    )
 
     val BuildConfig.Result(_, projectPath, moduleProjectPaths) =
       BuildConfig.load(Paths.get("test/a.toml"), Log.urgent).get
@@ -53,16 +59,23 @@ object BuildConfigSpec extends SimpleTestSuite {
     Files.createDirectories(tempPath.resolve("seed-root").resolve("child"))
 
     FileUtils.write(
-      tempPath.resolve("seed-root").resolve("child").resolve("build.toml").toFile,
+      tempPath
+        .resolve("seed-root")
+        .resolve("child")
+        .resolve("build.toml")
+        .toFile,
       """
         |[project]
         |scalaVersion = "2.12.8"
         |
         |[module.child.jvm]
         |sources = ["src"]
-      """.stripMargin, "UTF-8")
+      """.stripMargin,
+      "UTF-8"
+    )
 
-    FileUtils.write(tempPath.resolve("seed-root").resolve("build.toml").toFile,
+    FileUtils.write(
+      tempPath.resolve("seed-root").resolve("build.toml").toFile,
       """
         |import = ["child"]
         |
@@ -71,13 +84,19 @@ object BuildConfigSpec extends SimpleTestSuite {
         |
         |[module.root.jvm]
         |sources = ["src"]
-      """.stripMargin, "UTF-8")
+      """.stripMargin,
+      "UTF-8"
+    )
 
     val BuildConfig.Result(_, projectPath, moduleProjectPaths) =
       BuildConfig.load(tempPath.resolve("seed-root"), Log.urgent).get
-    assertEquals(moduleProjectPaths, Map(
-      "root"  -> tempPath.resolve("seed-root"),
-      "child" -> tempPath.resolve("seed-root").resolve("child")))
+    assertEquals(
+      moduleProjectPaths,
+      Map(
+        "root"  -> tempPath.resolve("seed-root"),
+        "child" -> tempPath.resolve("seed-root").resolve("child")
+      )
+    )
   }
 
   test("Set target platforms on test modules") {
@@ -104,12 +123,22 @@ object BuildConfigSpec extends SimpleTestSuite {
     """.stripMargin
 
     val buildRaw = TomlUtils.parseBuildToml(Paths.get("."))(toml)
-    val (build, _) = BuildConfig.processBuild(buildRaw.right.get, Paths.get("."), _ =>
-      Some((Build(project = Project(scalaVersion = "2.12.8"), module = Map()), Map())))
+    val (build, _) = BuildConfig.processBuild(
+      buildRaw.right.get,
+      Paths.get("."),
+      _ =>
+        Some(
+          (
+            Build(project = Project(scalaVersion = "2.12.8"), module = Map()),
+            Map()
+          )
+        )
+    )
 
     assertEquals(
       build.module("example").test.get.targets,
-      List(JavaScript, JVM))
+      List(JavaScript, JVM)
+    )
   }
 
   test("Parse TOML with full Scala dependency") {
@@ -125,12 +154,20 @@ object BuildConfigSpec extends SimpleTestSuite {
     """.stripMargin
 
     val buildRaw = TomlUtils.parseBuildToml(Paths.get("."))(toml)
-    val (build, _) = BuildConfig.processBuild(buildRaw.right.get, Paths.get("."), _ =>
-      Some(Build(project = Project(scalaVersion = "2.12.8"), module = Map()), Map()))
+    val (build, _) = BuildConfig.processBuild(
+      buildRaw.right.get,
+      Paths.get("."),
+      _ =>
+        Some(
+          Build(project = Project(scalaVersion = "2.12.8"), module = Map()),
+          Map()
+        )
+    )
 
     assertEquals(
       build.module("example").jvm.get.scalaDeps,
-      List(ScalaDep("org.scalameta", "interactive", "4.1.0", VersionTag.Full)))
+      List(ScalaDep("org.scalameta", "interactive", "4.1.0", VersionTag.Full))
+    )
   }
 
   test("Copy compilerDeps from project definitions to modules") {
@@ -164,18 +201,27 @@ object BuildConfigSpec extends SimpleTestSuite {
     """.stripMargin
 
     val buildRaw = TomlUtils.parseBuildToml(Paths.get("."))(fooToml)
-    val (build, _) = BuildConfig.processBuild(buildRaw.right.get, Paths.get("."),
-      _ => TomlUtils.parseBuildToml(Paths.get("."))(barToml).toOption.map(build => build -> Map.empty))
+    val (build, _) = BuildConfig.processBuild(
+      buildRaw.right.get,
+      Paths.get("."),
+      _ =>
+        TomlUtils
+          .parseBuildToml(Paths.get("."))(barToml)
+          .toOption
+          .map(build => build -> Map.empty)
+    )
 
     assertEquals(
       build.module("foo").compilerDeps,
-      List(ScalaDep("foo", "foo", "1.0", VersionTag.Full)))
+      List(ScalaDep("foo", "foo", "1.0", VersionTag.Full))
+    )
 
     assertEquals(
       build.module("foo").js.get.compilerDeps,
       List(
         ScalaDep("foo", "foo", "1.0", VersionTag.Full),
-        ScalaDep("foo-js", "foo-js", "1.0", VersionTag.Full))
+        ScalaDep("foo-js", "foo-js", "1.0", VersionTag.Full)
+      )
     )
 
     assertEquals(

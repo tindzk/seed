@@ -34,16 +34,20 @@ object ColourScheme {
 }
 
 object Ansi {
-  def esc (str: String*) = "\u001b[" + str.mkString(";")
+  def esc(str: String*)  = "\u001b[" + str.mkString(";")
   def escM(str: String*) = "\u001b[" + str.mkString(";") + "m"
 
   def foreground(colour: Colour)(text: String): String =
-    escM("38", "2", colour.r.toString, colour.g.toString, colour.b.toString) + text + escM("39")
+    escM("38", "2", colour.r.toString, colour.g.toString, colour.b.toString) + text + escM(
+      "39"
+    )
 
   def background(colour: Colour)(text: String): String =
-    escM("48", "2", colour.r.toString, colour.g.toString, colour.b.toString) + text + escM("49")
+    escM("48", "2", colour.r.toString, colour.g.toString, colour.b.toString) + text + escM(
+      "49"
+    )
 
-  def bold      (text: String): String = escM("1") + text + escM("22")
-  def italic    (text: String): String = escM("3") + text + escM("23")
+  def bold(text: String): String       = escM("1") + text + escM("22")
+  def italic(text: String): String     = escM("3") + text + escM("23")
   def underlined(text: String): String = escM("4") + text + escM("24")
 }

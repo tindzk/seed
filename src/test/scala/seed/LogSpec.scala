@@ -13,7 +13,7 @@ object LogSpec extends SimpleTestSuite {
 
   test("Set log level to lowest") {
     val result = ListBuffer[String]()
-    val log = new Log(result += _, identity, LogLevel.Debug, unicode = false)
+    val log    = new Log(result += _, identity, LogLevel.Debug, unicode = false)
     log.debug("Hello World 1")
     log.info("Hello World 2")
     log.error("Hello World 3")
@@ -25,7 +25,7 @@ object LogSpec extends SimpleTestSuite {
 
   test("Set log level to highest") {
     val result = ListBuffer[String]()
-    val log = new Log(result += _, identity, LogLevel.Error, unicode = false)
+    val log    = new Log(result += _, identity, LogLevel.Error, unicode = false)
     log.debug("Hello World 1")
     log.info("Hello World 2")
     log.error("Hello World 3")

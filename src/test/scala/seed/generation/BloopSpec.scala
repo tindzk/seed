@@ -21,12 +21,21 @@ object BloopSpec extends SimpleTestSuite {
     util.ProjectGeneration.generateJavaDepBloopProject(projectPath)
 
     val base = parseBloopFile(bloopPath.resolve("base.json"))
-    assert(base.project.classpath.exists(_.toString.contains("/org/postgresql/postgresql/")))
+    assert(
+      base.project.classpath
+        .exists(_.toString.contains("/org/postgresql/postgresql/"))
+    )
 
     val example = parseBloopFile(bloopPath.resolve("example.json"))
-    assert(example.project.classpath.exists(_.toString.contains("/org/postgresql/postgresql/")))
+    assert(
+      example.project.classpath
+        .exists(_.toString.contains("/org/postgresql/postgresql/"))
+    )
 
     val exampleTest = parseBloopFile(bloopPath.resolve("example-test.json"))
-    assert(exampleTest.project.classpath.exists(_.toString.contains("/org/postgresql/postgresql/")))
+    assert(
+      exampleTest.project.classpath
+        .exists(_.toString.contains("/org/postgresql/postgresql/"))
+    )
   }
 }

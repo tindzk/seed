@@ -11,42 +11,59 @@ import seed.model.{Build, Platform}
 
 object ProjectGeneration {
   def generate(projectPath: Path, build: Build): Unit = {
-    val bloopPath = projectPath.resolve(".bloop")
-    val buildPath = projectPath.resolve("build")
+    val bloopPath      = projectPath.resolve(".bloop")
+    val buildPath      = projectPath.resolve("build")
     val bloopBuildPath = buildPath.resolve("bloop")
 
     Set(bloopPath, buildPath, bloopBuildPath)
       .foreach(Files.createDirectories(_))
 
-    val resolvedIvyPath = Coursier.DefaultIvyPath
+    val resolvedIvyPath   = Coursier.DefaultIvyPath
     val resolvedCachePath = Coursier.DefaultCachePath
 
     val compilerDeps0 = ArtefactResolution.allCompilerDeps(build)
-    val platformDeps = ArtefactResolution.allPlatformDeps(build)
-    val libraryDeps  = ArtefactResolution.allLibraryDeps(build)
+    val platformDeps  = ArtefactResolution.allPlatformDeps(build)
+    val libraryDeps   = ArtefactResolution.allLibraryDeps(build)
 
     val resolution =
-      Coursier.resolveAndDownload(platformDeps ++ libraryDeps, build.resolvers,
-        resolvedIvyPath, resolvedCachePath, optionalArtefacts = false,
-        silent = true, Log.urgent)
-    val compilerResolution =
-      compilerDeps0.map(d =>
-        Coursier.resolveAndDownload(d, build.resolvers, resolvedIvyPath,
-          resolvedCachePath, optionalArtefacts = false, silent = true, Log.urgent))
-
-    build.module.foreach { case (id, module) =>
-      Bloop.buildModule(
-        projectPath,
-        bloopPath,
-        buildPath,
-        bloopBuildPath,
-        build,
-        resolution,
-        compilerResolution,
-        id,
-        module,
+      Coursier.resolveAndDownload(
+        platformDeps ++ libraryDeps,
+        build.resolvers,
+        resolvedIvyPath,
+        resolvedCachePath,
         optionalArtefacts = false,
-        Log.urgent)
+        silent = true,
+        Log.urgent
+      )
+    val compilerResolution =
+      compilerDeps0.map(
+        d =>
+          Coursier.resolveAndDownload(
+            d,
+            build.resolvers,
+            resolvedIvyPath,
+            resolvedCachePath,
+            optionalArtefacts = false,
+            silent = true,
+            Log.urgent
+          )
+      )
+
+    build.module.foreach {
+      case (id, module) =>
+        Bloop.buildModule(
+          projectPath,
+          bloopPath,
+          buildPath,
+          bloopBuildPath,
+          build,
+          resolution,
+          compilerResolution,
+          id,
+          module,
+          optionalArtefacts = false,
+          Log.urgent
+        )
     }
   }
 
@@ -56,12 +73,16 @@ object ProjectGeneration {
       module = Map(
         "base" -> Build.Module(
           targets = List(Platform.JVM),
-          javaDeps = List(JavaDep("org.postgresql", "postgresql", "42.2.5"))),
+          javaDeps = List(JavaDep("org.postgresql", "postgresql", "42.2.5"))
+        ),
         "example" -> Build.Module(
           moduleDeps = List("base"),
           targets = List(Platform.JVM),
           jvm = Some(Build.Module()),
-          test = Some(Build.Module(jvm = Some(Build.Module()))))))
+          test = Some(Build.Module(jvm = Some(Build.Module())))
+        )
+      )
+    )
 
     generate(projectPath, build)
   }
@@ -72,17 +93,22 @@ object ProjectGeneration {
     Files.createDirectories(sourcePath)
 
     val build = Build(
-      project = Build.Project(
-        "2.12.8", scalaJsVersion = Some("0.6.26")),
-      module = Map("example" -> Build.Module(
-        sources = List(sourcePath),
-        targets = List(Platform.JVM, Platform.JavaScript))))
+      project = Build.Project("2.12.8", scalaJsVersion = Some("0.6.26")),
+      module = Map(
+        "example" -> Build.Module(
+          sources = List(sourcePath),
+          targets = List(Platform.JVM, Platform.JavaScript)
+        )
+      )
+    )
 
     generate(projectPath, build)
 
-    FileUtils.write(sourcePath.resolve("Main.scala").toFile,
+    FileUtils.write(
+      sourcePath.resolve("Main.scala").toFile,
       """object Main extends App { println("hello") }""",
-      "UTF-8")
+      "UTF-8"
+    )
 
     build
   }

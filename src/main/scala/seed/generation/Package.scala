@@ -13,35 +13,40 @@ import scala.collection.mutable
 
 // Adapted from https://stackoverflow.com/a/1281295
 object Package {
-  def create(source: List[(Path, String)],
-             target: Path,
-             mainClass: Option[String],
-             classPath: List[String],
-             log: Log): Unit = {
-    val manifest = new Manifest()
+  def create(
+    source: List[(Path, String)],
+    target: Path,
+    mainClass: Option[String],
+    classPath: List[String],
+    log: Log
+  ): Unit = {
+    val manifest       = new Manifest()
     val mainAttributes = manifest.getMainAttributes
     mainAttributes.put(Attributes.Name.MANIFEST_VERSION, "1.0")
-    mainClass.foreach(cls =>
-      mainAttributes.put(Attributes.Name.MAIN_CLASS, cls))
+    mainClass.foreach(
+      cls => mainAttributes.put(Attributes.Name.MAIN_CLASS, cls)
+    )
     if (classPath.nonEmpty)
       mainAttributes.put(Attributes.Name.CLASS_PATH, classPath.mkString(" "))
-    val targetFile = new JarOutputStream(
-      new FileOutputStream(target.toFile), manifest)
+    val targetFile =
+      new JarOutputStream(new FileOutputStream(target.toFile), manifest)
     val entryCache = mutable.Set[String]()
-    source.foreach { case (path, jarPath) =>
-      log.debug(s"Packaging ${Ansi.italic(path.toString)}...")
-      add(path.toFile, jarPath, targetFile, entryCache, log)
+    source.foreach {
+      case (path, jarPath) =>
+        log.debug(s"Packaging ${Ansi.italic(path.toString)}...")
+        add(path.toFile, jarPath, targetFile, entryCache, log)
     }
     log.info(s"Written $target")
     targetFile.close()
   }
 
-  def add(source: File,
-          jarPath: String,
-          target: JarOutputStream,
-          entryCache: mutable.Set[String],
-          log: Log
-         ): Unit = {
+  def add(
+    source: File,
+    jarPath: String,
+    target: JarOutputStream,
+    entryCache: mutable.Set[String],
+    log: Log
+  ): Unit = {
     val path =
       if (source.isFile) jarPath
       else {
@@ -52,7 +57,9 @@ object Package {
     val addedEntry =
       if (entryCache.contains(path)) {
         if (source.isFile)
-          log.warn(s"Skipping file ${Ansi.italic(source.toString)} as another module already added it")
+          log.warn(
+            s"Skipping file ${Ansi.italic(source.toString)} as another module already added it"
+          )
 
         false
       } else {

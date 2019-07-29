@@ -11,39 +11,43 @@ import seed.config.{BuildConfig, SeedConfig}
 import seed.cli.util.ArgyleHelpers._
 
 object Cli {
-  case class PackageConfig(tmpfs: Boolean,
-                           silent: Boolean,
-                           ivyPath: Option[Path],
-                           cachePath: Option[Path])
+  case class PackageConfig(
+    tmpfs: Boolean,
+    silent: Boolean,
+    ivyPath: Option[Path],
+    cachePath: Option[Path]
+  )
   case class WebSocketConfig(host: String, port: Short) {
     def format: String = host + ":" + port
   }
 
   sealed trait Command
   object Command {
-    case object Help extends Command
+    case object Help    extends Command
     case object Version extends Command
-    case object Init extends Command
-    case class Server(packageConfig: PackageConfig,
-                      webSocket: WebSocketConfig
-                     ) extends Command
-    case class Build(packageConfig: PackageConfig,
-                     webSocket: Option[WebSocketConfig],
-                     watch: Boolean,
-                     modules: List[String]
-                    ) extends Command
-    case class Link(packageConfig: PackageConfig,
-                    webSocket: Option[WebSocketConfig],
-                    watch: Boolean,
-                    modules: List[String]
-                   ) extends Command
+    case object Init    extends Command
+    case class Server(packageConfig: PackageConfig, webSocket: WebSocketConfig)
+        extends Command
+    case class Build(
+      packageConfig: PackageConfig,
+      webSocket: Option[WebSocketConfig],
+      watch: Boolean,
+      modules: List[String]
+    ) extends Command
+    case class Link(
+      packageConfig: PackageConfig,
+      webSocket: Option[WebSocketConfig],
+      watch: Boolean,
+      modules: List[String]
+    ) extends Command
     case class BuildEvents(webSocket: WebSocketConfig) extends Command
-    case class Update(preRelease: Boolean) extends Command
-    case class Package(packageConfig: PackageConfig,
-                       libs: Boolean,
-                       output: Option[Path],
-                       module: String
-                      ) extends Command
+    case class Update(preRelease: Boolean)             extends Command
+    case class Package(
+      packageConfig: PackageConfig,
+      libs: Boolean,
+      output: Option[Path],
+      module: String
+    ) extends Command
 
     sealed trait Generate extends Command {
       def packageConfig: PackageConfig
@@ -62,14 +66,16 @@ object Cli {
 
   def parseWebSocketArg(arg: String, name: String): Try[Cli.WebSocketConfig] = {
     val parts = arg.split(':').toList
-    if (parts.length != 2 || parts.exists(_.isEmpty) || parts(1).exists(!_.isDigit))
+    if (parts.length != 2 || parts.exists(_.isEmpty) || parts(1).exists(
+          !_.isDigit
+        ))
       Failure(new Exception(s"Format: --$name=<host>:<port>"))
     else Success(WebSocketConfig(parts(0), parts(1).toShort))
   }
 
   val webSocketListenArg =
     optional[String]("--listen").flatMap {
-      case None => Success(webSocketDefaultConnection)
+      case None      => Success(webSocketDefaultConnection)
       case Some(arg) => parseWebSocketArg(arg, "listen")
     }
 
@@ -80,64 +86,66 @@ object Cli {
       case Some(arg) => parseWebSocketArg(arg, "connect").map(Some(_))
     }
 
-  val packageConfigArg = (
-    flag("--tmpfs") and
-    flag("--silent") and
-    optional[Path]("--ivy-path") and
-    optional[Path]("--cache-path")
-  ).to[PackageConfig]
+  val packageConfigArg =
+    flag("--tmpfs")
+      .and(flag("--silent"))
+      .and(optional[Path]("--ivy-path"))
+      .and(optional[Path]("--cache-path"))
+      .to[PackageConfig]
 
-  val serverCommand = (
-    packageConfigArg and
-    webSocketListenArg
-  ).to[Command.Server]
+  val serverCommand =
+    packageConfigArg
+      .and(webSocketListenArg)
+      .to[Command.Server]
 
-  val buildCommand = (
-    packageConfigArg and
-    webSocketConnectArg and
-    flag("--watch") and
-    repeatedAtLeastOnceFree[String]
-  ).to[Command.Build]
+  val buildCommand =
+    packageConfigArg
+      .and(webSocketConnectArg)
+      .and(flag("--watch"))
+      .and(repeatedAtLeastOnceFree[String])
+      .to[Command.Build]
 
-  val linkCommand = (
-    packageConfigArg and
-    webSocketConnectArg and
-    flag("--watch") and
-    repeatedAtLeastOnceFree[String]
-  ).to[Command.Link]
+  val linkCommand =
+    packageConfigArg
+      .and(webSocketConnectArg)
+      .and(flag("--watch"))
+      .and(repeatedAtLeastOnceFree[String])
+      .to[Command.Link]
 
   val buildEventsCommand =
-    webSocketConnectArg.map(_.getOrElse(webSocketDefaultConnection))
+    webSocketConnectArg
+      .map(_.getOrElse(webSocketDefaultConnection))
       .to[Command.BuildEvents]
 
-  val packageCommand = (
-    packageConfigArg and
-    flag("--libs") and
-    optional[Path]("--output") and
-    requiredFree[String]
-  ).to[Command.Package]
+  val packageCommand =
+    packageConfigArg
+      .and(flag("--libs"))
+      .and(optional[Path]("--output"))
+      .and(requiredFree[String])
+      .to[Command.Package]
 
-  val cliArgs = (
-    optional[Path]("--config") and
-    optional[Path]("--build").default(Paths.get("")) and
-    requiredBranch[Command](
-      "help" -> constant(Command.Help),
-      "version" -> constant(Command.Version),
-      "init" -> constant(Command.Init),
+  val cliArgs =
+    optional[Path]("--config")
+      .and(optional[Path]("--build").default(Paths.get("")))
+      .and(
+        requiredBranch[Command](
+          "help"        -> constant(Command.Help),
+          "version"     -> constant(Command.Version),
+          "init"        -> constant(Command.Init),
+          "idea"        -> packageConfigArg.to[Command.Idea],
+          "bloop"       -> packageConfigArg.to[Command.Bloop],
+          "all"         -> packageConfigArg.to[Command.All],
+          "server"      -> serverCommand,
+          "build"       -> buildCommand,
+          "link"        -> linkCommand,
+          "buildEvents" -> buildEventsCommand,
+          "update"      -> flag("--pre-releases").to[Command.Update],
+          "package"     -> packageCommand
+        )
+      )
+      .to[Config]
 
-      "idea"  -> packageConfigArg.to[Command.Idea],
-      "bloop" -> packageConfigArg.to[Command.Bloop],
-      "all" -> packageConfigArg.to[Command.All],
-
-      "server" -> serverCommand,
-      "build" -> buildCommand,
-      "link" -> linkCommand,
-      "buildEvents" -> buildEventsCommand,
-      "update" -> flag("--pre-releases").to[Command.Update],
-      "package" -> packageCommand,
-    )
-  ).to[Config]
-
+  // format: off
   def help(): Unit = {
     import seed.cli.util.Ansi._
 
@@ -209,6 +217,7 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
     ${italic("--output")}      Output path (default: ${Ansi.italic("build/dist/")})
     ${italic("<module>")}      Module to package""")
   }
+  // format: on
 
   def main(args: Array[String]): Unit =
     if (args.isEmpty) {
@@ -217,7 +226,7 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
       log.error("No command provided.")
       log.newLine()
 
-      log.info( "Create new Seed project file:")
+      log.info("Create new Seed project file:")
       log.debug(Ansi.foreground(ColourScheme.green2)("seed init"))
 
       log.info("Generate new Bloop configuration:")
@@ -237,46 +246,62 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
           sys.exit(0)
         case Success(Config(_, _, Command.Version)) =>
           val log = Log(SeedConfig.load(None))
-          log.info(Ansi.bold("Seed v" + BuildInfo.Version +
-                             " for Bloop v" + BuildInfo.Bloop + "+ " +
-                             "and Coursier v" + BuildInfo.Coursier))
+          log.info(
+            Ansi.bold(
+              "Seed v" + BuildInfo.Version +
+                " for Bloop v" + BuildInfo.Bloop + "+ " +
+                "and Coursier v" + BuildInfo.Coursier
+            )
+          )
         case Success(Config(configPath, buildPath, Command.Init)) =>
           val config = SeedConfig.load(configPath)
-          val log = Log(config)
+          val log    = Log(config)
           new cli.Scaffold(log).ui(buildPath)
-        case Success(Config(configPath, buildPath, Command.Update(preRelease))) =>
+        case Success(
+            Config(configPath, buildPath, Command.Update(preRelease))
+            ) =>
           val config = SeedConfig.load(configPath)
-          val log = Log(config)
+          val log    = Log(config)
           cli.Update.ui(buildPath, !preRelease, log)
         case Success(Config(configPath, buildPath, command: Command.Package)) =>
           import command._
           val config = SeedConfig.load(configPath)
-          val log = Log(config)
+          val log    = Log(config)
           val BuildConfig.Result(build, projectPath, _) =
             BuildConfig.load(buildPath, log).getOrElse(sys.exit(1))
-          cli.Package.ui(config, projectPath, build, module, output, libs,
-            packageConfig, log)
-        case Success(Config(configPath, buildPath, command: Command.Generate)) =>
+          cli.Package.ui(
+            config,
+            projectPath,
+            build,
+            module,
+            output,
+            libs,
+            packageConfig,
+            log
+          )
+        case Success(
+            Config(configPath, buildPath, command: Command.Generate)
+            ) =>
           val config = SeedConfig.load(configPath)
-          val log = Log(config)
+          val log    = Log(config)
           val BuildConfig.Result(build, projectPath, _) =
             BuildConfig.load(buildPath, log).getOrElse(sys.exit(1))
           cli.Generate.ui(config, projectPath, projectPath, build, command, log)
         case Success(Config(configPath, _, command: Command.Server)) =>
           val config = SeedConfig.load(configPath)
-          val log = Log(config)
+          val log    = Log(config)
           cli.Server.ui(config, command, log)
         case Success(Config(configPath, buildPath, command: Command.Build)) =>
           val config = SeedConfig.load(configPath)
-          val log = Log(config)
+          val log    = Log(config)
           cli.Build.ui(buildPath, config, command, log)
         case Success(Config(configPath, buildPath, command: Command.Link)) =>
           val config = SeedConfig.load(configPath)
-          val log = Log(config)
+          val log    = Log(config)
           cli.Link.ui(buildPath, config, command, log)
         case Success(Config(configPath, _, command: Command.BuildEvents)) =>
           val config = SeedConfig.load(configPath)
-          val log = Log(config)
+          val log    = Log(config)
           cli.BuildEvents.ui(command, log)
         case Failure(e) =>
           help()
