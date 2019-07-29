@@ -7,13 +7,17 @@ object Target {
   case class ModuleRef(name: String, module: Module)
   case class TargetRef(name: String, target: Build.Target)
 
-  case class Parsed(module: ModuleRef, target: Option[Either[Platform, TargetRef]])
+  case class Parsed(
+    module: ModuleRef,
+    target: Option[Either[Platform, TargetRef]]
+  )
 
-  def parseModuleString(build: Build)(module: String): Either[String, Parsed] = {
+  def parseModuleString(build: Build)(module: String): Either[String, Parsed] =
     if (module.isEmpty) Left("Module name cannot be empty")
     else {
       def invalidName(name: String) =
-        Left(s"Invalid module name: ${Ansi.italic(name)}. Valid names: ${build.module.keys.mkString(", ")}")
+        Left(s"Invalid module name: ${Ansi
+          .italic(name)}. Valid names: ${build.module.keys.mkString(", ")}")
 
       if (!module.contains(":")) {
         if (!build.module.contains(module)) invalidName(module)
@@ -27,11 +31,19 @@ object Target {
 
           if (!build.module.contains(name)) invalidName(name)
           else {
-            build.module(name).targets.find(_.id == target).map(Left(_)).orElse(
-              build.module(name).target.get(target)
-                .map(tgt => Right(TargetRef(target, tgt)))
-            ) match {
-              case None      =>
+            build
+              .module(name)
+              .targets
+              .find(_.id == target)
+              .map(Left(_))
+              .orElse(
+                build
+                  .module(name)
+                  .target
+                  .get(target)
+                  .map(tgt => Right(TargetRef(target, tgt)))
+              ) match {
+              case None =>
                 Left(s"Invalid build target ${Ansi.italic(target)} provided")
               case Some(tgt) =>
                 Right(Parsed(ModuleRef(name, build.module(name)), Some(tgt)))
@@ -40,5 +52,4 @@ object Target {
         }
       }
     }
-  }
 }

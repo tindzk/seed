@@ -12,7 +12,12 @@ import seed.Cli.Command
 import zio._
 
 object Link {
-  def ui(buildPath: Path, seedConfig: Config, command: Command.Link, log: Log): Unit =
+  def ui(
+    buildPath: Path,
+    seedConfig: Config,
+    command: Command.Link,
+    log: Log
+  ): Unit =
     command.webSocket match {
       case Some(connection) =>
         if (command.watch)
@@ -31,7 +36,14 @@ object Link {
 
       case None =>
         val tmpfs = command.packageConfig.tmpfs || seedConfig.build.tmpfs
-        link(buildPath, command.modules, command.watch, tmpfs, log, _ => println) match {
+        link(
+          buildPath,
+          command.modules,
+          command.watch,
+          tmpfs,
+          log,
+          _ => println
+        ) match {
           case Left(errors) =>
             errors.foreach(log.error)
             sys.exit(1)
@@ -41,20 +53,28 @@ object Link {
         }
     }
 
-  def link(buildPath: Path,
-           modules: List[String],
-           watch: Boolean,
-           tmpfs: Boolean,
-           log: Log,
-           onStdOut: model.Build => String => Unit
-          ): Either[List[String], UIO[Unit]] =
+  def link(
+    buildPath: Path,
+    modules: List[String],
+    watch: Boolean,
+    tmpfs: Boolean,
+    log: Log,
+    onStdOut: model.Build => String => Unit
+  ): Either[List[String], UIO[Unit]] =
     BuildConfig.load(buildPath, log) match {
       case None => Left(List())
       case Some(BuildConfig.Result(build, projectPath, moduleProjectPaths)) =>
         val parsedModules = modules.map(util.Target.parseModuleString(build))
         util.Validation.unpack(parsedModules).right.map { allModules =>
-          val processes = BuildTarget.buildTargets(build, allModules,
-            projectPath, moduleProjectPaths, watch, tmpfs, log)
+          val processes = BuildTarget.buildTargets(
+            build,
+            allModules,
+            projectPath,
+            moduleProjectPaths,
+            watch,
+            tmpfs,
+            log
+          )
 
           val linkModules = allModules.flatMap {
             case util.Target.Parsed(module, None) =>
@@ -64,11 +84,18 @@ object Link {
             case util.Target.Parsed(_, Some(Right(_))) => List()
           }
 
-          val bloop = util.BloopCli.link(
-            build, projectPath, linkModules, watch, log, onStdOut(build)
-          ).getOrElse(ZIO.unit)
+          val bloop = util.BloopCli
+            .link(
+              build,
+              projectPath,
+              linkModules,
+              watch,
+              log,
+              onStdOut(build)
+            )
+            .getOrElse(ZIO.unit)
 
-          val await = processes.collect { case Left(p) => p }
+          val await = processes.collect { case Left(p)  => p }
           val async = processes.collect { case Right(p) => p }
 
           if (await.nonEmpty)

@@ -4,53 +4,59 @@ import scala.collection.JavaConverters._
 
 def parseVersion(file: Path): Option[String] =
   if (!Files.exists(file)) None
-  else Files.readAllLines(file).asScala.filter(!_.startsWith("#"))
-    .find(_.nonEmpty).map(_.trim)
+  else
+    Files
+      .readAllLines(file)
+      .asScala
+      .filter(!_.startsWith("#"))
+      .find(_.nonEmpty)
+      .map(_.trim)
 
-def seedVersion = parseVersion(Paths.get("SEED"))  // CI
-  .getOrElse(Seq("git", "describe", "--tags").!!.trim)  // Local development
-def bloopVersion = parseVersion(Paths.get("BLOOP")).get
+def seedVersion =
+  parseVersion(Paths.get("SEED"))                        // CI
+    .getOrElse(Seq("git", "describe", "--tags").!!.trim) // Local development
+def bloopVersion         = parseVersion(Paths.get("BLOOP")).get
 def bloopCoursierVersion = parseVersion(Paths.get("COURSIER")).get
 
-organization      := "tindzk"
-version           := seedVersion
-scalaVersion      := "2.12.4-bin-typelevel-4"
+organization := "tindzk"
+version := seedVersion
+scalaVersion := "2.12.4-bin-typelevel-4"
 scalaOrganization := "org.typelevel"
-scalacOptions     += "-Yliteral-types"
+scalacOptions += "-Yliteral-types"
 
 Compile / sourceGenerators += Def.task {
   val file = (Compile / sourceManaged).value / "seed" / "BuildInfo.scala"
-  IO.write(file,
+  IO.write(
+    file,
     s"""package seed
        |
        |object BuildInfo {
        |  val Version  = "$seedVersion"
        |  val Bloop    = "$bloopVersion"
        |  val Coursier = "$bloopCoursierVersion"
-       |}"""
-      .stripMargin)
+       |}""".stripMargin
+  )
 
   Seq(file)
 }.taskValue
 
 libraryDependencies ++= Seq(
-  "com.lihaoyi"        %% "fansi"          % "0.2.7",
-  "io.get-coursier"    %% "coursier"       % bloopCoursierVersion,
-  "io.get-coursier"    %% "coursier-cache" % bloopCoursierVersion,
-  "tech.sparse"        %% "toml-scala"     % "0.2.0",
-  "tech.sparse"        %% "pine"           % "0.1.4",
-  "ch.epfl.scala"      %% "bloop-config"   % bloopVersion,
-  "com.joefkelley"     %% "argyle"         % "1.0.0",
-  "org.scalaj"         %% "scalaj-http"    % "2.4.2",
-  "dev.zio"            %% "zio"            % "1.0.0-RC10-1",
-  "io.circe"           %% "circe-core"     % "0.11.1",
-  "commons-io"         %  "commons-io"     % "2.6",
-  "com.zaxxer"         %  "nuprocess"      % "1.2.4",
-  "org.java-websocket" %  "Java-WebSocket" % "1.4.0",
-  "org.slf4j"          %  "slf4j-simple"   % "2.0.0-alpha0",
-  "io.monix"           %% "minitest"       % "2.5.0" % "test",
-
-  scalaOrganization.value % "scala-reflect" % scalaVersion.value
+  "com.lihaoyi"           %% "fansi"          % "0.2.7",
+  "io.get-coursier"       %% "coursier"       % bloopCoursierVersion,
+  "io.get-coursier"       %% "coursier-cache" % bloopCoursierVersion,
+  "tech.sparse"           %% "toml-scala"     % "0.2.0",
+  "tech.sparse"           %% "pine"           % "0.1.4",
+  "ch.epfl.scala"         %% "bloop-config"   % bloopVersion,
+  "com.joefkelley"        %% "argyle"         % "1.0.0",
+  "org.scalaj"            %% "scalaj-http"    % "2.4.2",
+  "dev.zio"               %% "zio"            % "1.0.0-RC10-1",
+  "io.circe"              %% "circe-core"     % "0.11.1",
+  "commons-io"            % "commons-io"      % "2.6",
+  "com.zaxxer"            % "nuprocess"       % "1.2.4",
+  "org.java-websocket"    % "Java-WebSocket"  % "1.4.0",
+  "org.slf4j"             % "slf4j-simple"    % "2.0.0-alpha0",
+  "io.monix"              %% "minitest"       % "2.5.0" % "test",
+  scalaOrganization.value % "scala-reflect"   % scalaVersion.value
 )
 
 run / fork := true

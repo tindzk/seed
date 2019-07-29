@@ -20,7 +20,9 @@ object ScaffoldSpec extends SimpleTestSuite {
 
     val project = result.nodes(0).asInstanceOf[NamedTable]
     assert(project.values("scalaVersion").asInstanceOf[Str].value.nonEmpty)
-    assert(project.values("scalaNativeVersion").asInstanceOf[Str].value.nonEmpty)
+    assert(
+      project.values("scalaNativeVersion").asInstanceOf[Str].value.nonEmpty
+    )
     assert(!project.values.isDefinedAt("testFrameworks"))
 
     val module = result.nodes(1).asInstanceOf[NamedTable]
@@ -31,31 +33,73 @@ object ScaffoldSpec extends SimpleTestSuite {
 
   test("Fetch compatible compiler versions for Typelevel Scala (stable)") {
     val compilerVersions = scaffold.fetchCompilerVersions(
-      "org.typelevel", Set(Platform.JavaScript), stable = true)
+      "org.typelevel",
+      Set(Platform.JavaScript),
+      stable = true
+    )
 
-    assertEquals(compilerVersions,
+    assertEquals(
+      compilerVersions,
       Map(
-        Platform.JVM -> List("2.11.7", "2.11.8", "2.11.11-bin-typelevel-4",
-          "2.12.0", "2.12.1", "2.12.2-bin-typelevel-4",
-          "2.12.3-bin-typelevel-4", "2.12.4-bin-typelevel-4"),
+        Platform.JVM -> List(
+          "2.11.7",
+          "2.11.8",
+          "2.11.11-bin-typelevel-4",
+          "2.12.0",
+          "2.12.1",
+          "2.12.2-bin-typelevel-4",
+          "2.12.3-bin-typelevel-4",
+          "2.12.4-bin-typelevel-4"
+        ),
         Platform.JavaScript -> List(
-          "2.11.7", "2.11.8", "2.11.11", "2.12.0", "2.12.1", "2.12.2", "2.12.3",
-          "2.12.4")))
+          "2.11.7",
+          "2.11.8",
+          "2.11.11",
+          "2.12.0",
+          "2.12.1",
+          "2.12.2",
+          "2.12.3",
+          "2.12.4"
+        )
+      )
+    )
   }
 
   test("Fetch compatible compiler versions for Typelevel Scala (unstable)") {
     val compilerVersions = scaffold.fetchCompilerVersions(
-      "org.typelevel", Set(Platform.JavaScript), stable = false)
+      "org.typelevel",
+      Set(Platform.JavaScript),
+      stable = false
+    )
 
-    assertEquals(compilerVersions,
+    assertEquals(
+      compilerVersions,
       Map(
-        Platform.JVM -> List("2.11.7", "2.11.8", "2.11.11-bin-typelevel-4",
-          "2.12.0-RC2", "2.12.0", "2.12.1", "2.12.2-bin-typelevel-4",
-          "2.12.3-bin-typelevel-4", "2.12.4-bin-typelevel-4",
+        Platform.JVM -> List(
+          "2.11.7",
+          "2.11.8",
+          "2.11.11-bin-typelevel-4",
+          "2.12.0-RC2",
+          "2.12.0",
+          "2.12.1",
+          "2.12.2-bin-typelevel-4",
+          "2.12.3-bin-typelevel-4",
+          "2.12.4-bin-typelevel-4",
           "2.13.0-M2-bin-typelevel-4"
         ),
         Platform.JavaScript -> List(
-          "2.11.7", "2.11.8", "2.11.11", "2.12.0-RC2", "2.12.0", "2.12.1",
-          "2.12.2", "2.12.3", "2.12.4", "2.13.0-M2")))
+          "2.11.7",
+          "2.11.8",
+          "2.11.11",
+          "2.12.0-RC2",
+          "2.12.0",
+          "2.12.1",
+          "2.12.2",
+          "2.12.3",
+          "2.12.4",
+          "2.13.0-M2"
+        )
+      )
+    )
   }
 }

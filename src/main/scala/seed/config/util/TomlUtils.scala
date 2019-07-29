@@ -17,8 +17,13 @@ object TomlUtils {
       case (Value.Str(level), _, _) =>
         LogLevel.All.get(level) match {
           case None =>
-            Left((List(), s"Invalid log level ${Ansi.italic(level)} provided. Choose one of: " +
-                          LogLevel.All.keys.map(Ansi.italic).mkString(", ")))
+            Left(
+              (
+                List(),
+                s"Invalid log level ${Ansi.italic(level)} provided. Choose one of: " +
+                  LogLevel.All.keys.map(Ansi.italic).mkString(", ")
+              )
+            )
           case Some(l) => Right(l)
         }
 
@@ -29,60 +34,87 @@ object TomlUtils {
     implicit val platformCodec: Codec[Platform] = Codec {
       case (Value.Str(id), _, _) =>
         Platform.All.keys.find(_.id == id) match {
-          case None    => Left((List(), s"Invalid target platform provided. Choose one of: " +
-                                        Platform.All.keys.toList.sorted(Platform.Ordering)
-                                          .map(p => Ansi.italic(p.id)).mkString(", ")))
+          case None =>
+            Left(
+              (
+                List(),
+                s"Invalid target platform provided. Choose one of: " +
+                  Platform.All.keys.toList
+                    .sorted(Platform.Ordering)
+                    .map(p => Ansi.italic(p.id))
+                    .mkString(", ")
+              )
+            )
           case Some(p) => Right(p)
         }
 
-      case (value, _, _) => Left((List(), s"Platform expected, $value provided"))
+      case (value, _, _) =>
+        Left((List(), s"Platform expected, $value provided"))
     }
 
     implicit val versionTagCodec: Codec[VersionTag] = Codec {
       case (Value.Str(id), _, _) =>
         id match {
-          case "full" => Right(VersionTag.Full)
-          case "binary" => Right(VersionTag.Binary)
+          case "full"           => Right(VersionTag.Full)
+          case "binary"         => Right(VersionTag.Binary)
           case "platformBinary" => Right(VersionTag.PlatformBinary)
-          case _ => Left((List(), "Invalid version tag provided"))
+          case _                => Left((List(), "Invalid version tag provided"))
         }
 
-      case (value, _, _) => Left((List(), s"Version tag expected, $value provided"))
+      case (value, _, _) =>
+        Left((List(), s"Version tag expected, $value provided"))
     }
 
     def pathCodec(f: Path => Path): Codec[Path] = Codec {
       case (Value.Str(path), _, _) => Right(f(Paths.get(path)))
-      case (value, _, _) => Left((List(), s"Path expected, $value provided"))
+      case (value, _, _)           => Left((List(), s"Path expected, $value provided"))
     }
 
     implicit val platformModuleCodec: Codec[PlatformModule] = Codec {
       case (Value.Str(platformModule), _, _) =>
         val parts = platformModule.split(":")
         if (parts.length != 2)
-          Left((List(), s"Expected format: ${Ansi.italic("<module>:<platform>")}"))
+          Left(
+            (List(), s"Expected format: ${Ansi.italic("<module>:<platform>")}")
+          )
         else {
           val (name, target) = (parts(0), parts(1))
 
           Platform.All.keys.find(_.id == target) match {
-            case None      => Left((List(), s"Invalid platform ${Ansi.italic(target)} provided"))
+            case None =>
+              Left(
+                (List(), s"Invalid platform ${Ansi.italic(target)} provided")
+              )
             case Some(tgt) => Right(PlatformModule(name, tgt))
           }
         }
 
-      case (value, _, _) => Left((List(), s"String (<module>:<platform>) expected, $value provided"))
+      case (value, _, _) =>
+        Left(
+          (List(), s"String (<module>:<platform>) expected, $value provided")
+        )
     }
   }
 
-  def parseFile[T](path: Path, f: String => Either[Codec.Error, T], description: String, log: Log): Option[T] =
+  def parseFile[T](
+    path: Path,
+    f: String => Either[Codec.Error, T],
+    description: String,
+    log: Log
+  ): Option[T] =
     Try(FileUtils.readFileToString(path.toFile, "UTF-8")).toOption match {
       case None =>
-        log.error(s"The $description ${Ansi.italic(path.toString)} could not be loaded")
+        log.error(
+          s"The $description ${Ansi.italic(path.toString)} could not be loaded"
+        )
         None
 
       case Some(content) =>
         f(content) match {
           case Left((address, message)) =>
-            log.error(s"The $description ${Ansi.italic(path.toString)} is malformed")
+            log.error(
+              s"The $description ${Ansi.italic(path.toString)} is malformed"
+            )
             log.detail(s"${Ansi.bold("Message:")} $message")
 
             if (address.nonEmpty) {
@@ -100,7 +132,9 @@ object TomlUtils {
     if (path.toString.startsWith("/")) path
     else projectPath.resolve(path).normalize()
 
-  def parseBuildToml(projectPath: Path)(content: String): Either[Codec.Error, Build] = {
+  def parseBuildToml(
+    projectPath: Path
+  )(content: String): Either[Codec.Error, Build] = {
     import toml._
     import toml.Codecs._
     import seed.config.util.TomlUtils.Codecs._

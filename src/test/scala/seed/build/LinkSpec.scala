@@ -12,10 +12,10 @@ import seed.generation.util.TestProcessHelper.ec
 import seed.generation.util.BuildUtil.tempPath
 
 object LinkSpec extends TestSuite[Unit] {
-  override def setupSuite(): Unit = TestProcessHelper.semaphore.acquire()
+  override def setupSuite(): Unit    = TestProcessHelper.semaphore.acquire()
   override def tearDownSuite(): Unit = TestProcessHelper.semaphore.release()
 
-  override def setup(): Unit = ()
+  override def setup(): Unit             = ()
   override def tearDown(env: Unit): Unit = ()
 
   testAsync("Link module and interpret Bloop events") { _ =>
@@ -29,7 +29,13 @@ object LinkSpec extends TestSuite[Unit] {
       BloopCli.parseStdOut(build)(output).foreach(events += _)
 
     val process = BloopCli.link(
-      build, projectPath, List("example-js"), watch = false, Log.urgent, onStdOut)
+      build,
+      projectPath,
+      List("example-js"),
+      watch = false,
+      Log.urgent,
+      onStdOut
+    )
 
     assert(process.isDefined)
 
@@ -40,8 +46,12 @@ object LinkSpec extends TestSuite[Unit] {
       require(events(0) == BuildEvent.Compiling("example", Platform.JavaScript))
       require(events(1) == BuildEvent.Compiled("example", Platform.JavaScript))
       require(events(2).isInstanceOf[BuildEvent.Linked])
-      require(events(2).asInstanceOf[BuildEvent.Linked]
-        .path.endsWith("module-link/build/example.js"))
+      require(
+        events(2)
+          .asInstanceOf[BuildEvent.Linked]
+          .path
+          .endsWith("module-link/build/example.js")
+      )
     }
   }
 }
