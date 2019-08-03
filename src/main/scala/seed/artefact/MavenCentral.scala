@@ -43,7 +43,7 @@ object MavenCentral {
         _.byTagAll["version"]
           .flatMap(_.children.headOption)
           .collect { case pine.Text(t) => t }
-          .sorted(new SemanticVersioning(log).versionOrdering)
+          .sorted(new SemanticVersioning(log).stringVersionOrdering)
       )
 
     if (stable && versions.exists(isArtefactEligible(stable, log)))
@@ -87,7 +87,7 @@ object MavenCentral {
           isArtefactEligible(stable, log)(a._2) &&
             isArtefactEligible(stable, log)(a._3)
       )
-      .sortBy(_._2)(new SemanticVersioning(log).versionOrdering)
+      .sortBy(_._2)(new SemanticVersioning(log).stringVersionOrdering)
 
   /** @param stable Only consider stable artefacts (as opposed to pre-releases)
     * @return Found versions in ascending order

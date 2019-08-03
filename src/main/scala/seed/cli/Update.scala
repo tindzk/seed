@@ -26,7 +26,7 @@ object Update {
         )
 
       case Some(newVersion) =>
-        val change = new SemanticVersioning(log).versionOrdering
+        val change = new SemanticVersioning(log).stringVersionOrdering
           .compare(oldVersion, newVersion)
         val versionChange = fansi.Str("(") ++ fansi.Bold.On(oldVersion) ++
           " → " ++ fansi.Bold.On(newVersion) ++ ")"

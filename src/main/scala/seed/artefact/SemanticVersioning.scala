@@ -11,14 +11,16 @@ object SemanticVersioning {
   case object ReleaseCandidate extends PreRelease
   case object Nightly          extends PreRelease
   case object Snapshot         extends PreRelease
+  case object Commit           extends PreRelease
 
   val PreReleaseOrdering = Map[PreRelease, Int](
     Alpha            -> 0,
     Beta             -> 1,
     Milestone        -> 2,
-    ReleaseCandidate -> 3,
-    Nightly          -> 4,
-    Snapshot         -> 5
+    Nightly          -> 3,
+    Snapshot         -> 4,
+    ReleaseCandidate -> 5,
+    Commit           -> 7
   )
 
   private val Release = 6
@@ -30,7 +32,8 @@ object SemanticVersioning {
     "rc"       -> ReleaseCandidate,
     "r"        -> Snapshot,
     "snapshot" -> Snapshot,
-    "snap"     -> Snapshot
+    "snap"     -> Snapshot,
+    "g"        -> Commit // Git commit
   )
 
   case class Version(
@@ -38,13 +41,11 @@ object SemanticVersioning {
     minor: Int = 0,
     patch: Int = 0,
     preRelease: Option[PreRelease] = None,
-    preReleaseVersion: Int = 0
+    preReleaseVersion: Long = 0
   )
 
   def isPreRelease(version: String): Boolean =
-    parseVersion(version).fold(false)(
-      v => v.preRelease.isDefined || v.preReleaseVersion > 0
-    )
+    parseVersion(version).fold(false)(_.preRelease.isDefined)
 
   def parseVersionParts(parts: List[String]): Option[(Int, Int, Int)] =
     if (!parts.forall(_.forall(_.isDigit))) None
@@ -54,29 +55,33 @@ object SemanticVersioning {
       Some((parts(0).toInt, parts(1).toInt, parts(2).toInt))
     else None
 
-  def parsePreReleaseParts(parts: List[String]): (Option[PreRelease], Int) =
-    if (parts.isEmpty) (None, 0)
-    else if (parts.head.forall(_.isDigit)) (None, parts.head.toInt)
-    else {
-      val prp = parts.head.toLowerCase
+  def parsePreReleaseParts(parts: List[String]): (Option[PreRelease], Long) = {
+    val preReleaseComponent =
+      parts.find(p => p.length > 1 && p(0).isLetter).map(_.toLowerCase)
+    val versionComponent =
+      parts.find(p => p.length > 0 && p.forall(_.isDigit)).map(_.toLong)
 
-      PreReleaseMapping.view
-        .flatMap {
+    preReleaseComponent
+      .flatMap { prc =>
+        PreReleaseMapping.view.flatMap {
           case (prefix, preRelease) =>
-            if (!prp.startsWith(prefix)) None
+            if (!prc.startsWith(prefix)) None
             else {
-              val version = prp.drop(prefix.length)
-              if (version.nonEmpty && version.forall(_.isDigit))
-                Some((Some(preRelease), version.toInt))
-              else if (parts.length >= 2 && parts(1).nonEmpty && parts(1)
-                         .forall(_.isDigit))
-                Some((Some(preRelease), parts(1).toInt))
-              else Some((Some(preRelease), 0))
+              val v = versionComponent.getOrElse {
+                val version = prc.drop(prefix.length)
+                if (version.nonEmpty && version.forall(_.isDigit))
+                  version.toLong
+                else if (parts.length >= 2 && parts(1).nonEmpty && parts(1)
+                           .forall(_.isDigit)) parts(1).toLong
+                else 0L
+              }
+
+              Some((Some(preRelease), v))
             }
-        }
-        .headOption
-        .getOrElse((None, 0))
-    }
+        }.headOption
+      }
+      .getOrElse((None, versionComponent.getOrElse(0L)))
+  }
 
   def parseVersion(version: String): Option[Version] = {
     val versionWithoutMetaData = version.split('+').head
@@ -100,31 +105,35 @@ object SemanticVersioning {
   }
 
   private val comparator = new NaturalOrderComparator
+
+  implicit val versionOrdering = new Ordering[Version] {
+    override def compare(v1: Version, v2: Version): Int =
+      implicitly[Ordering[(Int, Int, Int, Int, Long)]].compare(
+        (
+          v1.major,
+          v1.minor,
+          v1.patch,
+          v1.preRelease.map(PreReleaseOrdering).getOrElse(Release),
+          v1.preReleaseVersion
+        ),
+        (
+          v2.major,
+          v2.minor,
+          v2.patch,
+          v2.preRelease.map(PreReleaseOrdering).getOrElse(Release),
+          v2.preReleaseVersion
+        )
+      )
+  }
 }
 
 class SemanticVersioning(log: Log) {
   import SemanticVersioning._
 
-  val versionOrdering = new Ordering[String] {
+  val stringVersionOrdering = new Ordering[String] {
     override def compare(x: String, y: String): Int =
       (parseVersion(x), parseVersion(y)) match {
-        case (Some(v1), Some(v2)) =>
-          implicitly[Ordering[(Int, Int, Int, Int, Int)]].compare(
-            (
-              v1.major,
-              v1.minor,
-              v1.patch,
-              v1.preRelease.map(PreReleaseOrdering).getOrElse(Release),
-              v1.preReleaseVersion
-            ),
-            (
-              v2.major,
-              v2.minor,
-              v2.patch,
-              v2.preRelease.map(PreReleaseOrdering).getOrElse(Release),
-              v2.preReleaseVersion
-            )
-          )
+        case (Some(v1), Some(v2)) => versionOrdering.compare(v1, v2)
         case (v1, _) =>
           val version = if (v1.isEmpty) x else y
           log.error(
