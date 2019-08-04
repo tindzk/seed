@@ -32,6 +32,7 @@ object LinkSpec extends TestSuite[Unit] {
       build,
       projectPath,
       List("example-js"),
+      optimise = false,
       watch = false,
       Log.urgent,
       onStdOut

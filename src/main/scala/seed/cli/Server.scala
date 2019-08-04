@@ -17,7 +17,8 @@ import scala.collection.mutable
 
 sealed abstract class WsCommand(val description: String)
 object WsCommand {
-  case class Link(build: Path, modules: List[String]) extends WsCommand("Link")
+  case class Link(build: Path, modules: List[String], optimise: Boolean = false)
+      extends WsCommand("Link")
   case class Build(build: Path, targets: List[String])
       extends WsCommand("Build")
   case object BuildEvents extends WsCommand("Build events")
@@ -132,10 +133,11 @@ object Server {
             // TODO Send success state to client too
             RTS.unsafeRunAsync(uio)(_ => wsClient.close())
         }
-      case WsCommand.Link(buildPath, modules) =>
+      case WsCommand.Link(buildPath, modules, optimise) =>
         seed.cli.Link.link(
           buildPath,
           modules,
+          optimise = optimise,
           watch = false,
           tmpfs,
           clientLog,

@@ -29,7 +29,8 @@ object Link {
             import io.circe.syntax._
             val build =
               if (buildPath.isAbsolute) buildPath else buildPath.toAbsolutePath
-            (WsCommand.Link(build, command.modules): WsCommand).asJson.noSpaces
+            (WsCommand
+              .Link(build, command.modules, command.optimise): WsCommand).asJson.noSpaces
           }, log)
           client.connect()
         }
@@ -39,6 +40,7 @@ object Link {
         link(
           buildPath,
           command.modules,
+          command.optimise,
           command.watch,
           tmpfs,
           log,
@@ -56,6 +58,7 @@ object Link {
   def link(
     buildPath: Path,
     modules: List[String],
+    optimise: Boolean,
     watch: Boolean,
     tmpfs: Boolean,
     log: Log,
@@ -89,6 +92,7 @@ object Link {
               build,
               projectPath,
               linkModules,
+              optimise,
               watch,
               log,
               onStdOut(build)

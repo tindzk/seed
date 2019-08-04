@@ -38,6 +38,7 @@ object Cli {
       packageConfig: PackageConfig,
       webSocket: Option[WebSocketConfig],
       watch: Boolean,
+      optimise: Boolean,
       modules: List[String]
     ) extends Command
     case class BuildEvents(webSocket: WebSocketConfig) extends Command
@@ -109,6 +110,7 @@ object Cli {
     packageConfigArg
       .and(webSocketConnectArg)
       .and(flag("--watch"))
+      .and(flag("--optimise"))
       .and(repeatedAtLeastOnceFree[String])
       .to[Command.Link]
 
@@ -191,8 +193,9 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
                   - app:native   Only compile Native platform of module ${Ansi.italic("app")}
                   - app:<target> Only build ${Ansi.italic("<target>")} of the module ${Ansi.italic("app")}
 
-  ${bold("Command:")} ${underlined("link")} [--connect[=${webSocketDefaultConnection.format}]] [--watch] <modules>
+  ${bold("Command:")} ${underlined("link")} [--connect[=${webSocketDefaultConnection.format}]] [--optimise] [--watch] <modules>
     ${italic("--connect")}     Run link command on remote Seed server
+    ${italic("--optimise")}    Instruct the linker to perform optimisations on the build
     ${italic("--watch")}       Link upon source changes (cannot be combined with ${Ansi.italic("--connect")})
     ${italic("<modules>")}     One or multiple space-separated modules. The syntax of a module is: ${italic("<name>")} or ${italic("<name>:<platform>")}
                   ${italic("Examples:")}
