@@ -313,6 +313,11 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
         .resolve("demo.json")
       val result = readBloopJson(path)
 
+      // Do not include the `utils` classpath since the module is only a custom
+      // build target and does not have a JVM target.
+      assert(!result.project.classpath.exists(_.toString.contains("/utils")))
+      assert(result.project.classpath.forall(Files.exists(_)))
+
       // Should not include "utils" dependency since it does not have any
       // Scala sources and no Bloop module.
       assertEquals(result.project.dependencies, List())

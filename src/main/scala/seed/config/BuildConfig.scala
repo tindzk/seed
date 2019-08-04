@@ -357,33 +357,51 @@ object BuildConfig {
     build: Build,
     module: Module
   ): List[Path] =
-    jsModuleDeps(module).flatMap(
-      name =>
-        buildPath.resolve(targetName(build, name, JavaScript)) +:
-          collectJsClassPath(buildPath, build, build.module(name))
-    )
+    jsModuleDeps(module)
+      .filter(name => hasTarget(build, name, Platform.JavaScript))
+      .flatMap(
+        name =>
+          buildPath
+            .resolve(targetName(build, name, JavaScript)) +: collectJsClassPath(
+            buildPath,
+            build,
+            build.module(name)
+          )
+      )
 
   def collectNativeClassPath(
     buildPath: Path,
     build: Build,
     module: Module
   ): List[Path] =
-    nativeModuleDeps(module).flatMap(
-      name =>
-        buildPath.resolve(targetName(build, name, Native)) +:
-          collectNativeClassPath(buildPath, build, build.module(name))
-    )
+    nativeModuleDeps(module)
+      .filter(name => hasTarget(build, name, Platform.Native))
+      .flatMap(
+        name =>
+          buildPath
+            .resolve(targetName(build, name, Native)) +: collectNativeClassPath(
+            buildPath,
+            build,
+            build.module(name)
+          )
+      )
 
   def collectJvmClassPath(
     buildPath: Path,
     build: Build,
     module: Module
   ): List[Path] =
-    jvmModuleDeps(module).flatMap(
-      name =>
-        buildPath.resolve(targetName(build, name, JVM)) +:
-          collectJvmClassPath(buildPath, build, build.module(name))
-    )
+    jvmModuleDeps(module)
+      .filter(name => hasTarget(build, name, Platform.JVM))
+      .flatMap(
+        name =>
+          buildPath
+            .resolve(targetName(build, name, JVM)) +: collectJvmClassPath(
+            buildPath,
+            build,
+            build.module(name)
+          )
+      )
 
   def collectJsDeps(build: Build, module: Module): List[ScalaDep] =
     module.scalaDeps ++ module.js.map(_.scalaDeps).getOrElse(List()) ++
