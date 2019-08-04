@@ -149,7 +149,7 @@ class Scaffold(log: Log, silent: Boolean = false) {
           }
           .toList
           .distinct
-          .sortBy(_._1)(new SemanticVersioning(log).versionOrdering)
+          .sortBy(_._1)(new SemanticVersioning(log).stringVersionOrdering)
 
         val platformCompilerVersions =
           compilerVersions(platform).map(MavenCentral.trimCompilerVersion).toSet

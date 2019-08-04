@@ -3,12 +3,13 @@ package seed.artefact
 import minitest.SimpleTestSuite
 import seed.Log
 import seed.artefact.SemanticVersioning._
+import scala.math.Ordering.Implicits._
 
 import scala.util.Random
 
 object SemanticVersioningSpec extends SimpleTestSuite {
   private val versionOrdering =
-    new SemanticVersioning(Log.urgent).versionOrdering
+    new SemanticVersioning(Log.urgent).stringVersionOrdering
 
   test("Parse semantic versions") {
     assertEquals(parseVersion("1"), Some(Version(1)))
@@ -22,6 +23,12 @@ object SemanticVersioningSpec extends SimpleTestSuite {
       parseVersion("1.0.0-rc.1"),
       Some(Version(1, 0, 0, Some(ReleaseCandidate), 1))
     )
+
+    // From https://repo1.maven.org/maven2/org/eclipse/jgit/org.eclipse.jgit/maven-metadata.xml
+    assertEquals(
+      parseVersion("1.3.0.201202151440-r"),
+      Some(Version(1, 3, 0, None, 201202151440L))
+    )
   }
 
   test("Detect pre-releases") {
@@ -29,6 +36,9 @@ object SemanticVersioningSpec extends SimpleTestSuite {
     assert(!isPreRelease("1.0.1"))
     assert(isPreRelease("1.0.0-beta"))
     assert(isPreRelease("1.0.0-rc"))
+    assert(!isPreRelease("1.3.0.201202151440-r"))
+    assert(isPreRelease("2.8.0.Beta1-RC1"))
+    assert(isPreRelease("2.8.0.r18462-b20090811081019"))
   }
 
   test("Parse Scala's semantic versioning") {
@@ -46,7 +56,7 @@ object SemanticVersioningSpec extends SimpleTestSuite {
     )
     assertEquals(
       parseVersion("2.11.11-bin-typelevel-4"),
-      Some(Version(2, 11, 11))
+      Some(Version(2, 11, 11, None, 4))
     )
     assertEquals(
       parseVersion("0.1.2-SNAPSHOT"),
@@ -78,6 +88,15 @@ object SemanticVersioningSpec extends SimpleTestSuite {
     assertEquals(Random.shuffle(versions).sorted(versionOrdering), versions)
   }
 
+  test("Compare pre-release versions") {
+    // From https://mvnrepository.com/artifact/org.scalactic/scalactic_2.12
+    assert(parseVersion("3.0.5") > parseVersion("3.0.5-M1"))
+    assert(parseVersion("3.0.6") > parseVersion("3.0.6-SNAP6"))
+    assert(parseVersion("3.0.6-SNAP6") > parseVersion("3.0.6-SNAP5"))
+    assert(parseVersion("3.0.6-SNAP10") > parseVersion("3.0.6-SNAP6"))
+    assert(parseVersion("3.1.0-RC1") > parseVersion("3.1.0-SNAP13"))
+  }
+
   test("Order Scala's semantic versions") {
     val versions = List(
       "2.11.9",
@@ -97,16 +116,18 @@ object SemanticVersioningSpec extends SimpleTestSuite {
     assertEquals(Random.shuffle(versions).sorted(versionOrdering), versions)
   }
 
-  test("Order pre-release versions in Git notation") {
+  test("Parse and order pre-release versions in Git notation") {
     // The second version is 14 commits away from the first one
-    val versions = List("0.1.1", "0.1.1-14-g80f67e7")
+    val versions = List("0.1.1", "0.1.1-14-g80f67e7", "0.1.1-20-gac74eb0g")
+    val parsed   = versions.map(parseVersion)
 
-    // The only difference is in the preReleaseVersion
-    assertEquals(parseVersion(versions(0)), Some(Version(0, 1, 1, None, 0)))
-    assertEquals(parseVersion(versions(1)), Some(Version(0, 1, 1, None, 14)))
+    assertEquals(parsed(0), Some(Version(0, 1, 1, None, 0)))
+    assertEquals(parsed(1), Some(Version(0, 1, 1, Some(Commit), 14)))
+    assertEquals(parsed(2), Some(Version(0, 1, 1, Some(Commit), 20)))
 
     assert(!isPreRelease(versions(0)))
     assert(isPreRelease(versions(1)))
+    assert(isPreRelease(versions(2)))
 
     assertEquals(versions.reverse.sorted(versionOrdering), versions)
   }
