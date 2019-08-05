@@ -76,13 +76,17 @@ object BloopCli {
     build: Build,
     projectPath: Path,
     bloopModules: List[String],
+    optimise: Boolean,
     watch: Boolean,
     log: Log,
     onStdOut: String => Unit
   ): Option[ProcessHelper.Process] =
     if (bloopModules.isEmpty) None
     else {
-      val args = "link" +: ((if (!watch) List() else List("--watch")) ++ bloopModules)
+      val watchParam = if (!watch) List() else List("--watch")
+      val optimiseParam =
+        if (!optimise) List() else List("--optimize", "release")
+      val args = List("link") ++ bloopModules ++ watchParam ++ optimiseParam
       Some(ProcessHelper.runBloop(projectPath, log, onStdOut)(args: _*))
     }
 }
