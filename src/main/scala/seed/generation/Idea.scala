@@ -226,27 +226,30 @@ object Idea {
   ): List[String] = {
     val isCrossBuild = module.targets.toSet.size > 1
 
+    val jsModule  = module.js.getOrElse(Module())
+    val jsSources = jsModule.sources
+    val jsTests   = module.test.toList.flatMap(_.js.toList.flatMap(_.sources))
     val js =
-      if (!module.js.exists(_.sources.nonEmpty)) List()
+      if (jsSources.isEmpty && jsTests.isEmpty) List()
       else {
         val moduleName = if (!isCrossBuild) name else name + "-js"
         log.info(s"Creating JavaScript project ${Ansi.italic(moduleName)}...")
 
-        if (module.js.get.root.isEmpty) {
+        if (jsModule.root.isEmpty) {
           log.error(
             s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping..."
           )
           List()
         } else {
           val scalaVersion =
-            BuildConfig.scalaVersion(build.project, List(module.js.get, module))
+            BuildConfig.scalaVersion(build.project, List(jsModule, module))
 
           createModule(
             build = build,
-            root = module.js.get.root.get,
+            root = jsModule.root.get,
             name = moduleName,
-            sources = module.js.get.sources,
-            tests = module.test.toList.flatMap(_.js.toList.flatMap(_.sources)),
+            sources = jsSources,
+            tests = jsTests,
             resolvedDeps = Coursier.localArtefacts(
               resolution,
               collectJsDeps(build, module)
@@ -296,13 +299,16 @@ object Idea {
         }
       }
 
+    val jvmModule  = module.jvm.getOrElse(Module())
+    val jvmSources = jvmModule.sources
+    val jvmTests   = module.test.toList.flatMap(_.jvm.toList.flatMap(_.sources))
     val jvm =
-      if (!module.jvm.exists(_.sources.nonEmpty)) List()
+      if (jvmSources.isEmpty && jvmTests.isEmpty) List()
       else {
         val moduleName = if (!isCrossBuild) name else name + "-jvm"
         log.info(s"Creating JVM project ${Ansi.italic(moduleName)}...")
 
-        if (module.jvm.get.root.isEmpty) {
+        if (jvmModule.root.isEmpty) {
           log.error(
             s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping..."
           )
@@ -310,15 +316,15 @@ object Idea {
         } else {
           val scalaVersion = BuildConfig.scalaVersion(
             build.project,
-            List(module.jvm.get, module)
+            List(jvmModule, module)
           )
 
           createModule(
             build = build,
-            root = module.jvm.get.root.get,
+            root = jvmModule.root.get,
             name = moduleName,
-            sources = module.jvm.get.sources,
-            tests = module.test.toList.flatMap(_.jvm.toList.flatMap(_.sources)),
+            sources = jvmSources,
+            tests = jvmTests,
             resolvedDeps = Coursier.localArtefacts(
               resolution,
               collectJvmJavaDeps(build, module).toSet ++
@@ -370,30 +376,31 @@ object Idea {
         }
       }
 
+    val nativeModule  = module.native.getOrElse(Module())
+    val nativeSources = nativeModule.sources
+    val nativeTests =
+      module.test.toList.flatMap(_.native.toList.flatMap(_.sources))
     val native =
-      if (!module.native.exists(_.sources.nonEmpty)) List()
+      if (nativeSources.isEmpty && nativeTests.isEmpty) List()
       else {
         val moduleName = if (!isCrossBuild) name else name + "-native"
         log.info(s"Creating native project ${Ansi.italic(moduleName)}...")
 
-        if (module.native.get.root.isEmpty) {
+        if (nativeModule.root.isEmpty) {
           log.error(
             s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping..."
           )
           List()
         } else {
-          val scalaVersion = BuildConfig.scalaVersion(
-            build.project,
-            List(module.native.get, module)
-          )
+          val scalaVersion =
+            BuildConfig.scalaVersion(build.project, List(nativeModule, module))
 
           createModule(
             build = build,
-            root = module.native.get.root.get,
+            root = nativeModule.root.get,
             name = moduleName,
-            sources = module.native.get.sources,
-            tests =
-              module.test.toList.flatMap(_.native.toList.flatMap(_.sources)),
+            sources = nativeSources,
+            tests = nativeTests,
             resolvedDeps = Coursier.localArtefacts(
               resolution,
               collectNativeDeps(build, module)
@@ -443,8 +450,10 @@ object Idea {
         }
       }
 
+    val sharedSources = module.sources
+    val sharedTests   = module.test.toList.flatMap(_.sources)
     val shared =
-      if (module.sources.isEmpty) List()
+      if (sharedSources.isEmpty && sharedTests.isEmpty) List()
       else {
         log.info(s"Create shared project ${Ansi.italic(name)}...")
 
@@ -461,8 +470,8 @@ object Idea {
             build = build,
             root = module.root.get,
             name = name,
-            sources = module.sources,
-            tests = module.test.toList.flatMap(_.sources),
+            sources = sharedSources,
+            tests = sharedTests,
             resolvedDeps = Coursier.localArtefacts(
               resolution,
               collectJvmJavaDeps(build, module).toSet ++

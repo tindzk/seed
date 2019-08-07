@@ -75,6 +75,14 @@ object IdeaSpec extends SimpleTestSuite {
               )
             ),
             target = Map("assets" -> Build.Target(Some(Paths.get("b/assets"))))
+          ),
+          "c" -> Module(
+            // Module that only has test sources
+            targets = List(JVM),
+            jvm = Some(Module(root = Some(Paths.get("c")))),
+            test = Some(
+              Module(jvm = Some(Module(sources = List(Paths.get("c/test")))))
+            )
           )
         )
       )
@@ -104,19 +112,13 @@ object IdeaSpec extends SimpleTestSuite {
       Log.silent
     )
 
-    assertEquals(
-      Files.exists(
-        outputPath.resolve(".idea").resolve("modules").resolve("a-assets.iml")
-      ),
-      false
-    )
+    val modulesPath = outputPath.resolve(".idea").resolve("modules")
 
-    assertEquals(
-      Files.exists(
-        outputPath.resolve(".idea").resolve("modules").resolve("b-assets.iml")
-      ),
-      true
-    )
+    assert(Files.exists(modulesPath.resolve("a.iml")))
+    assert(!Files.exists(modulesPath.resolve("a-assets.iml")))
+    assert(Files.exists(modulesPath.resolve("b.iml")))
+    assert(Files.exists(modulesPath.resolve("b-assets.iml")))
+    assert(Files.exists(modulesPath.resolve("c.iml")))
   }
 
   test("Generate project with custom compiler options") {
