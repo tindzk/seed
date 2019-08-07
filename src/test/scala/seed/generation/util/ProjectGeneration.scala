@@ -1,12 +1,14 @@
 package seed.generation.util
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 
 import org.apache.commons.io.FileUtils
 import seed.Log
 import seed.artefact.{ArtefactResolution, Coursier}
+import seed.config.BuildConfig
+import seed.config.BuildConfig.{Build, ModuleConfig}
 import seed.generation.Bloop
-import seed.model.Build.JavaDep
+import seed.model.Build.{JavaDep, Resolvers}
 import seed.model.{Build, Platform}
 
 object ProjectGeneration {
@@ -21,14 +23,14 @@ object ProjectGeneration {
     val resolvedIvyPath   = Coursier.DefaultIvyPath
     val resolvedCachePath = Coursier.DefaultCachePath
 
-    val compilerDeps0 = ArtefactResolution.allCompilerDeps(build)
-    val platformDeps  = ArtefactResolution.allPlatformDeps(build)
-    val libraryDeps   = ArtefactResolution.allLibraryDeps(build)
+    val compilerDeps = ArtefactResolution.allCompilerDeps(build)
+    val platformDeps = ArtefactResolution.allPlatformDeps(build)
+    val libraryDeps  = ArtefactResolution.allLibraryDeps(build)
 
     val resolution =
       Coursier.resolveAndDownload(
         platformDeps ++ libraryDeps,
-        build.resolvers,
+        Resolvers(),
         resolvedIvyPath,
         resolvedCachePath,
         optionalArtefacts = false,
@@ -36,11 +38,11 @@ object ProjectGeneration {
         Log.urgent
       )
     val compilerResolution =
-      compilerDeps0.map(
+      compilerDeps.map(
         d =>
           Coursier.resolveAndDownload(
             d,
-            build.resolvers,
+            Resolvers(),
             resolvedIvyPath,
             resolvedCachePath,
             optionalArtefacts = false,
@@ -49,7 +51,7 @@ object ProjectGeneration {
           )
       )
 
-    build.module.foreach {
+    build.foreach {
       case (id, module) =>
         Bloop.buildModule(
           projectPath,
@@ -60,31 +62,36 @@ object ProjectGeneration {
           resolution,
           compilerResolution,
           id,
-          module,
+          module.module,
           optionalArtefacts = false,
           Log.urgent
         )
     }
   }
 
-  def generateJavaDepBloopProject(projectPath: Path): Unit = {
-    val build = Build(
-      project = Build.Project("2.12.8"),
-      module = Map(
-        "base" -> Build.Module(
-          targets = List(Platform.JVM),
-          javaDeps = List(JavaDep("org.postgresql", "postgresql", "42.2.5"))
-        ),
-        "example" -> Build.Module(
-          moduleDeps = List("base"),
-          targets = List(Platform.JVM),
-          jvm = Some(Build.Module()),
-          test = Some(Build.Module(jvm = Some(Build.Module())))
-        )
+  def toBuild(modules: Map[String, Build.Module]): Build = {
+    val build = modules.mapValues(BuildConfig.inheritSettings(Build.Module()))
+    build.mapValues(m => ModuleConfig(m, Paths.get(".")))
+  }
+
+  def generateJavaDepBloopProject(projectPath: Path): Build = {
+    val modules = Map(
+      "base" -> Build.Module(
+        scalaVersion = Some("2.12.8"),
+        targets = List(Platform.JVM),
+        javaDeps = List(JavaDep("org.postgresql", "postgresql", "42.2.5"))
+      ),
+      "example" -> Build.Module(
+        scalaVersion = Some("2.12.8"),
+        moduleDeps = List("base"),
+        jvm = Some(Build.Module()),
+        test = Some(Build.Module(jvm = Some(Build.Module())))
       )
     )
 
+    val build = toBuild(modules)
     generate(projectPath, build)
+    build
   }
 
   /** Generate project compiling to JavaScript and JVM */
@@ -92,15 +99,16 @@ object ProjectGeneration {
     val sourcePath = projectPath.resolve("src")
     Files.createDirectories(sourcePath)
 
-    val build = Build(
-      project = Build.Project("2.12.8", scalaJsVersion = Some("0.6.26")),
-      module = Map(
-        "example" -> Build.Module(
-          sources = List(sourcePath),
-          targets = List(Platform.JVM, Platform.JavaScript)
-        )
+    val modules = Map(
+      "example" -> Build.Module(
+        scalaVersion = Some("2.12.8"),
+        scalaJsVersion = Some("0.6.26"),
+        sources = List(sourcePath),
+        targets = List(Platform.JVM, Platform.JavaScript)
       )
     )
+
+    val build = toBuild(modules)
 
     generate(projectPath, build)
 

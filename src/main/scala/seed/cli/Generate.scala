@@ -6,13 +6,16 @@ import seed.{Log, model}
 import seed.Cli.Command
 import seed.generation.{Bloop, Idea}
 import seed.artefact.ArtefactResolution
+import seed.config.BuildConfig.Build
+import seed.model.Build.Resolvers
 
 object Generate {
   def ui(
     seedConfig: model.Config,
     projectPath: Path,
     outputPath: Path,
-    build: model.Build,
+    resolvers: Resolvers,
+    build: Build,
     command: Command.Generate,
     log: Log
   ): Unit = {
@@ -31,6 +34,7 @@ object Generate {
     val (_, platformResolution, compilerResolution) =
       ArtefactResolution.resolution(
         seedConfig,
+        resolvers,
         build,
         command.packageConfig,
         optionalArtefacts,

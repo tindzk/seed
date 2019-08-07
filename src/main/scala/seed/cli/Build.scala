@@ -6,9 +6,9 @@ import java.nio.file.Path
 import seed.Log
 import seed.cli.util.{Ansi, RTS, WsClient}
 import seed.config.BuildConfig
-import seed.model
 import seed.model.Config
 import seed.Cli.Command
+import seed.config.BuildConfig.Build
 import zio._
 
 object Build {
@@ -61,20 +61,20 @@ object Build {
     watch: Boolean,
     tmpfs: Boolean,
     log: Log,
-    onStdOut: model.Build => String => Unit
+    onStdOut: Build => String => Unit
   ): Either[List[String], UIO[Unit]] =
     BuildConfig.load(buildPath, log) match {
       case None => Left(List())
-      case Some(
-          BuildConfig.Result(build, buildProjectPath, moduleProjectPaths)
-          ) =>
+      case Some(result) =>
+        import result.{projectPath => buildProjectPath}
+        val build = result.build
+
         val parsedModules = modules.map(util.Target.parseModuleString(build))
         util.Validation.unpack(parsedModules).right.map { allModules =>
           val processes = BuildTarget.buildTargets(
             build,
             allModules,
             projectPath.getOrElse(buildProjectPath),
-            moduleProjectPaths,
             watch,
             tmpfs,
             log

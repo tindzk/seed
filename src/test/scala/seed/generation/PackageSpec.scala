@@ -11,6 +11,7 @@ import seed.generation.util.TestProcessHelper
 import seed.generation.util.TestProcessHelper.ec
 import seed.model.Config
 import seed.generation.util.BuildUtil.tempPath
+import seed.model.Build.Resolvers
 
 object PackageSpec extends TestSuite[Unit] {
   override def setupSuite(): Unit    = TestProcessHelper.semaphore.acquire()
@@ -22,8 +23,7 @@ object PackageSpec extends TestSuite[Unit] {
   testAsync("Package modules with same package") { _ =>
     val path = Paths.get("test/package-modules")
 
-    val BuildConfig.Result(build, projectPath, _) =
-      BuildConfig.load(path, Log.urgent).get
+    val config     = BuildConfig.load(path, Log.urgent).get
     val outputPath = tempPath.resolve("package-modules")
     Files.createDirectory(outputPath)
     val buildPath = outputPath.resolve("build")
@@ -35,9 +35,10 @@ object PackageSpec extends TestSuite[Unit] {
     )
     cli.Generate.ui(
       Config(),
-      projectPath,
+      config.projectPath,
       outputPath,
-      build,
+      config.resolvers,
+      config.build,
       Command.Bloop(packageConfig),
       Log.urgent
     )
@@ -58,7 +59,8 @@ object PackageSpec extends TestSuite[Unit] {
         cli.Package.ui(
           Config(),
           outputPath,
-          build,
+          Resolvers(),
+          config.build,
           "app",
           Some(buildPath),
           libs = true,

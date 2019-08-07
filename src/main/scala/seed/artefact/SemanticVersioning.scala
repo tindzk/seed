@@ -104,6 +104,9 @@ object SemanticVersioning {
     }
   }
 
+  def majorMinorVersion(version: String): String =
+    version.reverse.dropWhile(_ != '.').tail.reverse
+
   private val comparator = new NaturalOrderComparator
 
   implicit val versionOrdering = new Ordering[Version] {

@@ -8,8 +8,8 @@ import io.circe.{Decoder, DecodingFailure, Encoder, Json}
 import org.java_websocket.WebSocket
 import seed.Log
 import seed.cli.util.{BloopCli, RTS, WsServer}
-import seed.model
 import seed.Cli.Command
+import seed.config.BuildConfig.Build
 import seed.model.Config
 
 import scala.collection.JavaConverters._
@@ -87,7 +87,7 @@ object Server {
   def onStdOut(
     wsServer: WsServer,
     wsClient: WebSocket,
-    build: model.Build,
+    build: Build,
     serverLog: Log
   )(message: String): Unit = {
     wsClient.send(message)

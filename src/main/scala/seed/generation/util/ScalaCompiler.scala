@@ -5,6 +5,7 @@ import java.nio.file.Path
 import seed.artefact.Coursier
 import seed.config.BuildConfig
 import seed.artefact.ArtefactResolution
+import seed.config.BuildConfig.Build
 import seed.model.Build.Module
 import seed.model.Platform.{JavaScript, Native}
 import seed.model.{Artefact, Build, Platform}
@@ -43,9 +44,9 @@ object ScalaCompiler {
   ): List[String] = {
     import ArtefactResolution.mergeDeps
 
-    val platformVer = BuildConfig.platformVersion(build, module, platform)
+    val platformVer = BuildConfig.platformVersion(module, platform)
     val moduleDeps  = BuildConfig.collectModuleDeps(build, module, platform)
-    val modules     = moduleDeps.map(build.module) :+ module
+    val modules     = moduleDeps.map(build(_).module) :+ module
     val artefacts =
       (if (platform == JavaScript) List(Artefact.ScalaJsCompiler -> platformVer)
        else if (platform == Native)

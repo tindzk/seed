@@ -1,5 +1,6 @@
 package seed.cli.util
 
+import seed.config.BuildConfig.Build
 import seed.model.Build.Module
 import seed.model.{Build, Platform}
 
@@ -17,11 +18,11 @@ object Target {
     else {
       def invalidName(name: String) =
         Left(s"Invalid module name: ${Ansi
-          .italic(name)}. Valid names: ${build.module.keys.mkString(", ")}")
+          .italic(name)}. Valid names: ${build.keys.mkString(", ")}")
 
       if (!module.contains(":")) {
-        if (!build.module.contains(module)) invalidName(module)
-        else Right(Parsed(ModuleRef(module, build.module(module)), None))
+        if (!build.contains(module)) invalidName(module)
+        else Right(Parsed(ModuleRef(module, build(module).module), None))
       } else {
         val parts = module.split(":")
         if (parts.length != 2) {
@@ -29,24 +30,20 @@ object Target {
         } else {
           val (name, target) = (parts(0), parts(1))
 
-          if (!build.module.contains(name)) invalidName(name)
+          if (!build.contains(name)) invalidName(name)
           else {
-            build
-              .module(name)
-              .targets
+            build(name).module.targets
               .find(_.id == target)
               .map(Left(_))
               .orElse(
-                build
-                  .module(name)
-                  .target
+                build(name).module.target
                   .get(target)
                   .map(tgt => Right(TargetRef(target, tgt)))
               ) match {
               case None =>
                 Left(s"Invalid build target ${Ansi.italic(target)} provided")
               case Some(tgt) =>
-                Right(Parsed(ModuleRef(name, build.module(name)), Some(tgt)))
+                Right(Parsed(ModuleRef(name, build(name).module), Some(tgt)))
             }
           }
         }

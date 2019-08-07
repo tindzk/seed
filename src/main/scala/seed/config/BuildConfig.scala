@@ -1,31 +1,29 @@
 package seed.config
 
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path}
 
 import seed.cli.util.{Ansi, ColourScheme}
-import seed.model.Build.{JavaDep, Module, Project, ScalaDep}
+import seed.model.Build.{JavaDep, Module, ScalaDep}
 import seed.model.Platform.{JVM, JavaScript, Native}
-import seed.model.{Build, Platform}
+import seed.model.{Build, Organisation, Platform, TomlBuild}
 import seed.Log
+import seed.artefact.{ArtefactResolution, SemanticVersioning}
 import seed.config.util.TomlUtils
-
-import scala.collection.mutable
 
 object BuildConfig {
   import TomlUtils.parseBuildToml
 
-  case class Result(
-    build: Build,
-    projectPath: Path,
-    moduleProjectPaths: Map[String, Path]
-  )
+  case class ModuleConfig(module: Module, path: Path)
+  type Build = Map[String, ModuleConfig]
+
+  case class Result(projectPath: Path, resolvers: Build.Resolvers, build: Build)
 
   def load(path: Path, log: Log): Option[Result] =
     loadInternal(path, log).filter(
       result =>
-        result.build.module.toList.forall {
+        result.build.toList.forall {
           case (name, module) =>
-            checkModule(result.build, name, module, log)
+            checkModule(result.build, name, module.module, log)
         }
     )
 
@@ -63,111 +61,131 @@ object BuildConfig {
             log
           )
           .map { parsed =>
-            val (build, moduleProjectPaths) = processBuild(
+            val modules = processBuild(
               parsed,
-              projectPath, { path =>
-                loadInternal(path, log).map {
-                  case Result(build, projectPath, moduleProjectPaths) =>
-                    parsed.module.keySet
-                      .intersect(build.module.keySet)
-                      .foreach(
-                        name =>
-                          log.error(
-                            s"Module name ${Ansi.italic(name)} is not unique"
-                          )
-                      )
-                    (build, moduleProjectPaths)
-                }
-              }
+              projectPath,
+              path => loadInternal(path, log),
+              log
             )
-
-            Result(build, projectPath.normalize(), moduleProjectPaths)
+            Result(projectPath.normalize(), parsed.resolvers, modules)
           }
       }
     }
 
   def processBuild(
-    build: Build,
+    build: TomlBuild,
     projectPath: Path,
-    parse: Path => Option[(Build, Map[String, Path])]
-  ): (Build, Map[String, Path]) = {
-    val parsed = build.copy(
-      module = build.module.mapValues { module =>
-        val parentTargets = moduleTargets(module, module.targets)
-        module.copy(
-          targets = parentTargets,
-          test = module.test.map { module =>
-            module.copy(
-              targets = moduleTargets(
-                module,
-                if (module.targets.isEmpty) parentTargets
-                else module.targets
-              )
-            )
-          }
-        )
-      }
-    )
+    parse: Path => Option[Result],
+    log: Log
+  ): Build = {
+    val modules =
+      build.module.mapValues(inheritSettings(build.project.toModule))
+    val imported = build.`import`.flatMap(parse(_))
 
-    val imported = parsed.`import`.flatMap(parse(_))
+    modules.keySet
+      .intersect(imported.flatMap(_.build).map(_._1).toSet)
+      .foreach(
+        name => log.error(s"Module name ${Ansi.italic(name)} is not unique")
+      )
 
-    val parsedModules =
-      parsed.module.mapValues(inheritCompilerDeps(parsed.project))
-
-    val importedModules = imported.foldLeft(Map.empty[String, Module]) {
-      case (acc, (importedBuild, importedPaths)) =>
-        acc ++ importedBuild.module.mapValues(
-          inheritCompilerDeps(importedBuild.project)
-        )
-    }
-
-    val combinedBuild = parsed.copy(
-      project = parsed.project.copy(
-        testFrameworks = (parsed.project.testFrameworks ++ imported.flatMap(
-          _._1.project.testFrameworks
-        )).distinct
-      ),
-      module = parsedModules ++ importedModules
-    )
-
-    val moduleProjectPaths =
-      imported.flatMap(_._2).toMap ++
-        parsed.module.keys.map(m => m -> projectPath).toMap
-
-    (combinedBuild, moduleProjectPaths)
+    (imported.flatMap(_.build) ++ modules.mapValues(
+      ModuleConfig(_, projectPath)
+    )).toMap
   }
 
-  def inheritCompilerDeps(project: Project)(module: Module): Module =
-    module.copy(
-      compilerDeps = (project.compilerDeps ++ module.compilerDeps).distinct,
-      jvm = module.jvm.map(inheritCompilerDeps(project)),
-      js = module.js.map(inheritCompilerDeps(project)),
-      native = module.native.map(inheritCompilerDeps(project))
+  def inherit(parent: Module)(m: Module): Module = {
+    val inheritTargets = if (m.targets.isEmpty) parent.targets else m.targets
+
+    m.copy(
+      targets = (targetsFromPlatformModules(m) ++ inheritTargets).distinct,
+      scalaVersion = m.scalaVersion.orElse(parent.scalaVersion),
+      scalaJsVersion = m.scalaJsVersion.orElse(parent.scalaJsVersion),
+      scalaNativeVersion =
+        m.scalaNativeVersion.orElse(parent.scalaNativeVersion),
+      scalaOptions = (parent.scalaOptions ++ m.scalaOptions).distinct,
+      scalaOrganisation = m.scalaOrganisation
+        .orElse(parent.scalaOrganisation)
+        .orElse(Some(Organisation.Lightbend.packageName)),
+      compilerDeps =
+        ArtefactResolution.mergeDeps(parent.compilerDeps ++ m.compilerDeps),
+      testFrameworks = (parent.testFrameworks ++ m.testFrameworks).distinct,
+      mainClass = m.mainClass.orElse(parent.mainClass),
+      moduleDeps = (parent.moduleDeps ++ m.moduleDeps).distinct,
+      scalaDeps = ArtefactResolution.mergeDeps(parent.scalaDeps ++ m.scalaDeps),
+      javaDeps = ArtefactResolution.mergeDeps(parent.javaDeps ++ m.javaDeps)
+    )
+  }
+
+  def inheritSettings(parent: Module)(module: Module): Module = {
+    val mergedModule = inherit(parent)(module)
+
+    val result = mergedModule.copy(
+      jvm = module.jvm
+        .orElse(
+          if (!module.targets.contains(Platform.JVM)) None
+          else Some(Module())
+        )
+        .map(inherit(mergedModule))
+        .map(_.copy(targets = List())),
+      js = module.js
+        .orElse(
+          if (!module.targets.contains(Platform.JavaScript)) None
+          else Some(Module())
+        )
+        .map(inherit(mergedModule))
+        .map(_.copy(targets = List())),
+      native = module.native
+        .orElse(
+          if (!module.targets.contains(Platform.Native)) None
+          else Some(Module())
+        )
+        .map(inherit(mergedModule))
+        .map(_.copy(targets = List()))
     )
 
-  def moduleTargets(
-    module: Build.Module,
-    otherTargets: List[Platform]
-  ): List[Platform] =
-    (
-      otherTargets ++
-        (if (module.jvm.nonEmpty) List(JVM) else List()) ++
-        (if (module.js.nonEmpty) List(JavaScript) else List()) ++
-        (if (module.native.nonEmpty) List(Native) else List())
-    ).distinct
+    // For test modules, some settings should not be inherited at this stage yet
+    def stripSettings(module: Module): Module =
+      module.copy(
+        scalaDeps = List(),
+        javaDeps = List(),
+        compilerDeps = List(),
+        mainClass = None
+      )
 
-  def platformModule(
-    module: Build.Module,
-    platform: Platform
-  ): Option[Build.Module] =
-    platform match {
-      case JVM        => module.jvm
-      case JavaScript => module.js
-      case Native     => module.native
-    }
-
-  def buildTargets(build: Build): Set[Platform] =
-    build.module.flatMap { case (_, module) => module.targets }.toSet
+    result.copy(
+      test = result.test
+        .map(inheritSettings(stripSettings(result)))
+        .map(
+          t =>
+            t.copy(
+              jvm = t.jvm
+                .orElse(
+                  if (!result.targets.contains(Platform.JVM)) None
+                  else Some(Module())
+                )
+                .map(inherit(stripSettings(result.jvm.getOrElse(Module()))))
+                .map(inherit(t))
+                .map(_.copy(targets = List())),
+              js = t.js
+                .orElse(
+                  if (!result.targets.contains(Platform.JavaScript)) None
+                  else Some(Module())
+                )
+                .map(inherit(stripSettings(result.js.getOrElse(Module()))))
+                .map(inherit(t))
+                .map(_.copy(targets = List())),
+              native = t.native
+                .orElse(
+                  if (!result.targets.contains(Platform.Native)) None
+                  else Some(Module())
+                )
+                .map(inherit(stripSettings(result.native.getOrElse(Module()))))
+                .map(inherit(t))
+                .map(_.copy(targets = List()))
+            )
+        )
+    )
+  }
 
   def checkModule(
     build: Build,
@@ -175,21 +193,54 @@ object BuildConfig {
     module: Build.Module,
     log: Log
   ): Boolean = {
+    import SemanticVersioning.majorMinorVersion
+
     def error(message: String): Boolean = {
       log.error(message)
       false
     }
 
     val invalidModuleDeps =
-      module.moduleDeps.filter(!build.module.isDefinedAt(_))
+      module.moduleDeps.filter(!build.isDefinedAt(_))
     val invalidTargetModules =
       module.target.toList
         .flatMap(_._2.`class`)
         .map(_.module.module)
-        .filter(!build.module.isDefinedAt(_))
+        .filter(!build.isDefinedAt(_))
     val invalidTargetModules2 =
       module.target.keys
         .filter(id => Platform.All.keys.exists(_.id == id))
+
+    val incompatibleScalaVersion = {
+      def f(platform: Platform) = platformModule(module, platform).flatMap {
+        pm =>
+          pm.scalaVersion.flatMap(
+            v =>
+              pm.moduleDeps
+                .find { m =>
+                  val version = build
+                    .get(m)
+                    .map(_.module)
+                    .flatMap(
+                      m => platformModule(m, platform).flatMap(_.scalaVersion)
+                    )
+                  version
+                    .fold(false)(majorMinorVersion(_) != majorMinorVersion(v))
+                }
+                .map(
+                  m =>
+                    (
+                      platform,
+                      v,
+                      m,
+                      platformModule(build(m).module, platform).get.scalaVersion.get
+                    )
+                )
+          )
+      }
+
+      Platform.All.keys.flatMap(f).headOption
+    }
 
     val moduleName = Ansi.italic(name)
 
@@ -198,20 +249,34 @@ object BuildConfig {
         s"No target platforms were set on module $moduleName. Example: ${Ansi.italic("""targets = ["js"]""")}"
       )
     else if (module.sources.isEmpty && module.js.exists(_.sources.isEmpty))
-      error(
-        s"Source paths must be set on root or JavaScript module $moduleName"
-      )
+      error(s"Source paths must be set on JavaScript module $moduleName")
     else if (module.sources.isEmpty && module.jvm.exists(_.sources.isEmpty))
-      error(s"Source paths must be set on root or JVM module $moduleName")
+      error(s"Source paths must be set on JVM module $moduleName")
     else if (module.sources.isEmpty && module.native.exists(_.sources.isEmpty))
-      error(s"Source paths must be set on root or native module $moduleName")
-    else if (module.targets.contains(JavaScript) && build.project.scalaJsVersion.isEmpty)
+      error(s"Source paths must be set on native module $moduleName")
+    else if (module.targets.contains(JVM) && !module.jvm.exists(
+               _.scalaVersion.isDefined
+             ))
+      error(s"Scala version must be set on JVM module $moduleName")
+    else if (module.targets.contains(JavaScript) && !module.js.exists(
+               _.scalaVersion.isDefined
+             ))
+      error(s"Scala version must be set on JavaScript module $moduleName")
+    else if (module.targets.contains(Native) && !module.native.exists(
+               _.scalaVersion.isDefined
+             ))
+      error(s"Scala version must be set on native module $moduleName")
+    else if (module.targets.contains(JavaScript) && !module.js.exists(
+               _.scalaJsVersion.isDefined
+             ))
       error(
-        s"Module $moduleName has JavaScript target, but Scala.js version not set"
+        s"Module $moduleName has JavaScript target, but Scala.js version was not set"
       )
-    else if (module.targets.contains(Native) && build.project.scalaNativeVersion.isEmpty)
+    else if (module.targets.contains(Native) && !module.native.exists(
+               _.scalaNativeVersion.isDefined
+             ))
       error(
-        s"Module $moduleName has native target, but Scala Native version not set"
+        s"Module $moduleName has native target, but Scala Native version was not set"
       )
     else if (module.test.exists(_.test.nonEmpty))
       error(s"Test module $moduleName cannot contain another test module")
@@ -251,89 +316,103 @@ object BuildConfig {
       )
     else if (invalidTargetModules2.nonEmpty)
       error(
-        s"A target module in `$moduleName` has the same name as a Scala platform"
+        s"A target module in $moduleName has the same name as a Scala platform"
+      )
+    else if (incompatibleScalaVersion.nonEmpty)
+      error(
+        s"Scala version of ${Ansi.italic(
+          s"$name:${incompatibleScalaVersion.get._1.id}"
+        )} (${incompatibleScalaVersion.get._2}) is incompatible with ${Ansi.italic(
+          s"${incompatibleScalaVersion.get._3}:${incompatibleScalaVersion.get._1.id}"
+        )} (${incompatibleScalaVersion.get._4})"
       )
     else true
   }
 
-  def scalaVersion(project: Project, stack: List[Module]): String =
-    stack
-      .find(_.scalaVersion.isDefined)
-      .flatMap(_.scalaVersion)
-      .getOrElse(project.scalaVersion)
-
-  def platformVersion(
-    build: Build,
-    module: Module,
-    platform: Platform
-  ): String =
+  def platformVersion(module: Module, platform: Platform): String =
     platform match {
-      case JVM        => BuildConfig.scalaVersion(build.project, List(module))
-      case JavaScript => build.project.scalaJsVersion.get
-      case Native     => build.project.scalaNativeVersion.get
+      case JVM        => module.scalaVersion.get
+      case JavaScript => module.scalaJsVersion.get
+      case Native     => module.scalaNativeVersion.get
     }
 
   def isCrossBuild(module: Module): Boolean = module.targets.toSet.size > 1
 
-  def hasTarget(build: Build, name: String, platform: Platform): Boolean =
-    build.module(name).targets.contains(platform)
+  def hasTarget(modules: Build, name: String, platform: Platform): Boolean =
+    modules(name).module.targets.contains(platform)
 
   def targetName(build: Build, name: String, platform: Platform): String =
-    if (!isCrossBuild(build.module(name))) name else name + "-" + platform.id
+    if (!isCrossBuild(build(name).module)) name else name + "-" + platform.id
 
   def buildTargets(build: Build, module: String): List[String] = {
-    val m = build.module(module)
+    val m = build(module).module
     val p = m.targets
     p.map(p => targetName(build, module, p))
   }
 
   def linkTargets(build: Build, module: String): List[String] = {
-    val m = build.module(module)
+    val m = build(module).module
     val p = m.targets.diff(List(JVM))
     p.map(p => targetName(build, module, p))
   }
 
+  def targetsFromPlatformModules(module: Build.Module): List[Platform] =
+    (if (module.jvm.nonEmpty) List(JVM) else List()) ++
+      (if (module.js.nonEmpty) List(JavaScript) else List()) ++
+      (if (module.native.nonEmpty) List(Native) else List())
+
+  def buildTargets(build: Build): Set[Platform] =
+    build.flatMap { case (_, module) => module.module.targets }.toSet
+
   def platformModule(
-    build: Build,
-    name: String,
+    module: Build.Module,
     platform: Platform
-  ): Option[Module] =
-    if (platform == JavaScript) build.module(name).js
-    else if (platform == JVM) build.module(name).jvm
-    else if (platform == Native) build.module(name).native
-    else throw new IllegalArgumentException()
+  ): Option[Build.Module] =
+    platform match {
+      case JVM        => module.jvm
+      case JavaScript => module.js
+      case Native     => module.native
+    }
+
+  def updatePlatformModule(
+    module: Module,
+    platform: Platform,
+    platformModule: Option[Module]
+  ): Module =
+    platform match {
+      case JVM        => module.copy(jvm = platformModule)
+      case JavaScript => module.copy(js = platformModule)
+      case Native     => module.copy(native = platformModule)
+    }
 
   def targetNames(
-    build: Build,
+    modules: Build,
     name: String,
     platform: Platform
   ): List[String] =
-    if (!isCrossBuild(build.module(name))) List(name)
-    else if (platformModule(build, name, platform).isEmpty) List(name)
+    if (!isCrossBuild(modules(name).module)) List(name)
+    else if (platformModule(modules(name).module, platform).isEmpty) List(name)
     else List(name, name + "-" + platform.id)
 
-  def jsModuleDeps(module: Module): List[String] =
-    module.moduleDeps ++ module.js.map(_.moduleDeps).getOrElse(List())
-
-  def nativeModuleDeps(module: Module): List[String] =
-    module.moduleDeps ++ module.native.map(_.moduleDeps).getOrElse(List())
-
-  def jvmModuleDeps(module: Module): List[String] =
-    module.moduleDeps ++ module.jvm.map(_.moduleDeps).getOrElse(List())
-
-  def collectJsModuleDeps(build: Build, module: Module): List[String] =
-    jsModuleDeps(module).flatMap(
-      m => List(m) ++ collectJsModuleDeps(build, build.module(m))
+  def collectJsModuleDeps(modules: Build, module: Module): List[String] =
+    module.moduleDeps.flatMap(
+      m =>
+        List(m) ++ modules(m).module.js.toList
+          .flatMap(collectJsModuleDeps(modules, _))
     )
 
   def collectNativeModuleDeps(build: Build, module: Module): List[String] =
-    nativeModuleDeps(module).flatMap(
-      m => List(m) ++ collectNativeModuleDeps(build, build.module(m))
+    module.moduleDeps.flatMap(
+      m =>
+        List(m) ++ build(m).module.native.toList
+          .flatMap(collectNativeModuleDeps(build, _))
     )
 
   def collectJvmModuleDeps(build: Build, module: Module): List[String] =
-    jvmModuleDeps(module).flatMap(
-      m => List(m) ++ collectJvmModuleDeps(build, build.module(m))
+    module.moduleDeps.flatMap(
+      m =>
+        List(m) ++ build(m).module.jvm.toList
+          .flatMap(collectJvmModuleDeps(build, _))
     )
 
   def collectModuleDeps(
@@ -347,9 +426,23 @@ object BuildConfig {
       case Native     => collectNativeModuleDeps(build, module)
     }
 
+  def collectModuleDepsBase(
+    build: Build,
+    module: Module,
+    platform: Platform
+  ): List[String] = {
+    require(module.targets.contains(platform))
+    platform match {
+      case JVM        => collectJvmModuleDeps(build, module.jvm.get)
+      case JavaScript => collectJsModuleDeps(build, module.js.get)
+      case Native     => collectNativeModuleDeps(build, module.native.get)
+    }
+  }
+
   def collectModuleDeps(build: Build, module: Module): List[String] =
     Platform.All.keys.toList
-      .flatMap(p => collectModuleDeps(build, module, p))
+      .filter(module.targets.contains)
+      .flatMap(p => collectModuleDepsBase(build, module, p))
       .distinct
 
   def collectJsClassPath(
@@ -357,7 +450,7 @@ object BuildConfig {
     build: Build,
     module: Module
   ): List[Path] =
-    jsModuleDeps(module)
+    module.moduleDeps
       .filter(name => hasTarget(build, name, Platform.JavaScript))
       .flatMap(
         name =>
@@ -365,7 +458,7 @@ object BuildConfig {
             .resolve(targetName(build, name, JavaScript)) +: collectJsClassPath(
             buildPath,
             build,
-            build.module(name)
+            build(name).module
           )
       )
 
@@ -374,7 +467,7 @@ object BuildConfig {
     build: Build,
     module: Module
   ): List[Path] =
-    nativeModuleDeps(module)
+    module.moduleDeps
       .filter(name => hasTarget(build, name, Platform.Native))
       .flatMap(
         name =>
@@ -382,7 +475,7 @@ object BuildConfig {
             .resolve(targetName(build, name, Native)) +: collectNativeClassPath(
             buildPath,
             build,
-            build.module(name)
+            build(name).module
           )
       )
 
@@ -391,37 +484,127 @@ object BuildConfig {
     build: Build,
     module: Module
   ): List[Path] =
-    jvmModuleDeps(module)
+    module.moduleDeps
       .filter(name => hasTarget(build, name, Platform.JVM))
       .flatMap(
         name =>
-          buildPath
-            .resolve(targetName(build, name, JVM)) +: collectJvmClassPath(
-            buildPath,
-            build,
-            build.module(name)
-          )
+          buildPath.resolve(targetName(build, name, JVM)) +:
+            collectJvmClassPath(
+              buildPath,
+              build,
+              build(name).module
+            )
       )
 
-  def collectJsDeps(build: Build, module: Module): List[ScalaDep] =
-    module.scalaDeps ++ module.js.map(_.scalaDeps).getOrElse(List()) ++
-      jsModuleDeps(module).flatMap(m => collectJsDeps(build, build.module(m)))
+  def collectJsDeps(
+    build: Build,
+    test: Boolean,
+    module: Module
+  ): List[ScalaDep] =
+    module.scalaDeps ++
+      module.moduleDeps
+        .flatMap(
+          d =>
+            if (!test) Some(build(d).module)
+            else build(d).module.test
+        )
+        .flatMap(_.js)
+        .flatMap(collectJsDeps(build, test, _))
 
-  def collectNativeDeps(build: Build, module: Module): List[ScalaDep] =
-    module.scalaDeps ++ module.native.map(_.scalaDeps).getOrElse(List()) ++
-      nativeModuleDeps(module).flatMap(
-        m => collectNativeDeps(build, build.module(m))
-      )
+  def collectNativeDeps(
+    build: Build,
+    test: Boolean,
+    module: Module
+  ): List[ScalaDep] =
+    module.scalaDeps ++
+      module.moduleDeps
+        .flatMap(
+          d =>
+            if (!test) Some(build(d).module)
+            else build(d).module.test
+        )
+        .flatMap(_.native)
+        .flatMap(collectNativeDeps(build, test, _))
 
-  def collectJvmScalaDeps(build: Build, module: Module): List[ScalaDep] =
-    module.scalaDeps ++ module.jvm.map(_.scalaDeps).getOrElse(List()) ++
-      jvmModuleDeps(module).flatMap(
-        m => collectJvmScalaDeps(build, build.module(m))
-      )
+  def collectJvmScalaDeps(
+    build: Build,
+    test: Boolean,
+    module: Module
+  ): List[ScalaDep] =
+    module.scalaDeps ++
+      module.moduleDeps
+        .flatMap(
+          d =>
+            if (!test) Some(build(d).module)
+            else build(d).module.test
+        )
+        .flatMap(_.jvm)
+        .flatMap(collectJvmScalaDeps(build, test, _))
 
-  def collectJvmJavaDeps(build: Build, module: Module): List[JavaDep] =
-    module.javaDeps ++ module.jvm.map(_.javaDeps).getOrElse(List()) ++
-      jvmModuleDeps(module).flatMap(
-        m => collectJvmJavaDeps(build, build.module(m))
-      )
+  def collectJvmJavaDeps(
+    build: Build,
+    test: Boolean,
+    module: Module
+  ): List[JavaDep] =
+    module.javaDeps ++
+      module.moduleDeps
+        .flatMap(
+          d =>
+            if (!test) Some(build(d).module)
+            else build(d).module.test
+        )
+        .flatMap(_.jvm)
+        .flatMap(collectJvmJavaDeps(build, test, _))
+
+  /**
+    * Resolves platform-specific test module and inherits dependencies from
+    * regular module. This is needed for Bloop to construct the the classpath.
+    */
+  def mergeTestModule(
+    build: Build,
+    module: Module,
+    platform: Platform
+  ): Module = {
+    val newPlatformModule = module.test.flatMap(
+      t =>
+        platformModule(t, platform).map {
+          testPlatformModule =>
+            platformModule(module, platform)
+              .map { platformModule =>
+                testPlatformModule.copy(
+                  scalaDeps =
+                    if (platform == Platform.JVM)
+                      ArtefactResolution.mergeDeps(
+                        collectJvmScalaDeps(build, false, platformModule) ++
+                          collectJvmScalaDeps(build, true, testPlatformModule)
+                      )
+                    else if (platform == Platform.JavaScript)
+                      ArtefactResolution.mergeDeps(
+                        collectJsDeps(build, false, platformModule) ++
+                          collectJsDeps(build, true, testPlatformModule)
+                      )
+                    else
+                      ArtefactResolution.mergeDeps(
+                        collectNativeDeps(build, false, platformModule) ++
+                          collectNativeDeps(build, true, testPlatformModule)
+                      ),
+                  javaDeps =
+                    if (platform != JVM) List()
+                    else
+                      ArtefactResolution.mergeDeps(
+                        collectJvmJavaDeps(build, false, platformModule) ++
+                          collectJvmJavaDeps(build, true, testPlatformModule)
+                      )
+                )
+              }
+              .getOrElse(testPlatformModule)
+        }
+    )
+
+    updatePlatformModule(
+      module.test.getOrElse(Module()),
+      platform,
+      newPlatformModule
+    )
+  }
 }

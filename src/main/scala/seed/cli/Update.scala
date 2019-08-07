@@ -64,15 +64,19 @@ object Update {
     }
 
   def ui(path: Path, stable: Boolean, log: Log): Unit = {
-    val BuildConfig.Result(build, projectPath, _) = BuildConfig
-      .load(path, log)
-      .getOrElse(sys.exit(1))
+    val result = BuildConfig.load(path, log).getOrElse(sys.exit(1))
+    import result.build
 
-    val buildArtefacts = ArtefactResolution.allLibraryArtefacts(build)
+    // As a heuristic, sort by number of dependencies to place root modules at
+    // the beginning.
+    val modules = build.values.map(_.module).toList.sortBy(_.moduleDeps.length)
+
+    val buildArtefacts    = ArtefactResolution.allLibraryArtefacts(build)
+    val scalaOrganisation = modules.flatMap(_.scalaOrganisation).head
 
     val (compilerVersions, platformVersions, libraryArtefacts) =
       new Scaffold(log).checkVersions(
-        build.project.scalaOrganisation,
+        scalaOrganisation,
         BuildConfig.buildTargets(build),
         buildArtefacts.mapValues(_.map(Artefact.fromDep)),
         stable
@@ -83,12 +87,10 @@ object Update {
     BuildConfig.buildTargets(build).toList.sorted(Platform.Ordering).foreach {
       platform =>
         val oldCompilerVersion =
-          build.module.values
-            .flatMap(BuildConfig.platformModule(_, platform))
-            .view
+          modules
+            .flatMap(m => BuildConfig.platformModule(m, platform))
             .flatMap(_.scalaVersion)
-            .headOption
-            .getOrElse(build.project.scalaVersion)
+            .head
         val newCompilerVersion = compilerVersions.get(platform)
 
         compareVersion(
@@ -99,7 +101,8 @@ object Update {
         )
 
         if (platform == JavaScript) {
-          val oldPlatformVersion = build.project.scalaJsVersion.get
+          val oldPlatformVersion =
+            modules.flatMap(_.js).flatMap(_.scalaJsVersion).head
           val newPlatformVersion = platformVersions.get(platform)
 
           compareVersion(
@@ -109,7 +112,8 @@ object Update {
             log
           )
         } else if (platform == Native) {
-          val oldPlatformVersion = build.project.scalaNativeVersion.get
+          val oldPlatformVersion =
+            modules.flatMap(_.native).flatMap(_.scalaNativeVersion).head
           val newPlatformVersion = platformVersions.get(platform)
 
           compareVersion(

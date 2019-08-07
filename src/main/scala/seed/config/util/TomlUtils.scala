@@ -6,7 +6,7 @@ import org.apache.commons.io.FileUtils
 import seed.{Log, LogLevel}
 import seed.cli.util.Ansi
 import seed.model.Build.{PlatformModule, VersionTag}
-import seed.model.{Build, Platform}
+import seed.model.{Platform, TomlBuild}
 import toml.{Codec, Value}
 
 import scala.util.Try
@@ -134,13 +134,13 @@ object TomlUtils {
 
   def parseBuildToml(
     projectPath: Path
-  )(content: String): Either[Codec.Error, Build] = {
+  )(content: String): Either[Codec.Error, TomlBuild] = {
     import toml._
     import toml.Codecs._
     import seed.config.util.TomlUtils.Codecs._
 
     implicit val pCodec = pathCodec(fixPath(projectPath, _))
 
-    Toml.parseAs[Build](content)
+    Toml.parseAs[TomlBuild](content)
   }
 }

@@ -1,0 +1,18 @@
+[project]
+scalaVersion   = "2.12.8"
+scalaJsVersion = "0.6.28"
+testFrameworks = ["minitest.runner.Framework"]
+
+[module.base.jvm]
+root      = "base"
+sources   = ["base/src"]
+scalaDeps = [["com.lihaoyi", "sourcecode", "0.1.5"]]
+
+[module.example.jvm]
+root       = "example"
+sources    = ["example/src"]
+moduleDeps = ["base"]
+
+# Do not inherit scalaDeps from `base` in generated IDEA module
+[module.example.test.jvm]
+sources = ["example/test"]

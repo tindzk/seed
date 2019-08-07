@@ -83,6 +83,9 @@ object Log {
   def apply(seedConfig: seed.model.Config): Log =
     new Log(println, identity, seedConfig.cli.level, seedConfig.cli.unicode)
 
+  /** For test cases, only use for debugging purposes */
+  def debug: Log = new Log(println, identity, LogLevel.Debug, false)
+
   /** For test cases, only use when errors should be silenced */
   def silent: Log = new Log(println, identity, LogLevel.Silent, false)
 

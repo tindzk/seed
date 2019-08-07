@@ -1,5 +1,6 @@
 package seed.generation.util
 
+import seed.artefact.SemanticVersioning
 import seed.generation.Bloop
 
 import pine._
@@ -95,7 +96,7 @@ object IdeaFile {
     val languageLevel =
       library.compilerInfo.map {
         case CompilerInfo(version, _) =>
-          val level = "Scala_" + Bloop
+          val level = "Scala_" + SemanticVersioning
             .majorMinorVersion(version)
             .replaceAllLiterally(".", "_")
           xml"""<language-level>$level</language-level>"""

@@ -6,10 +6,10 @@ import scala.collection.JavaConverters._
 import seed.artefact.{ArtefactResolution, Coursier}
 import seed.cli.util.Ansi
 import seed.config.BuildConfig
+import seed.config.BuildConfig.Build
 import seed.generation.util.PathUtil
-import seed.model
-import seed.model.Build.{JavaDep, Module}
-import seed.model.{Build, Config}
+import seed.model.Build.{JavaDep, Module, Resolvers}
+import seed.model.Config
 import seed.model.Platform.JVM
 import seed.{Cli, Log}
 
@@ -17,7 +17,8 @@ object Package {
   def ui(
     seedConfig: Config,
     projectPath: Path,
-    build: model.Build,
+    resolvers: Resolvers,
+    build: Build,
     module: String,
     output: Option[Path],
     libs: Boolean,
@@ -30,16 +31,16 @@ object Package {
     val platform       = JVM
     val outputPath     = output.getOrElse(buildPath.resolve("dist"))
 
-    build.module.get(module) match {
+    build.get(module) match {
       case None => log.error(s"Module ${Ansi.italic(module)} does not exist")
       case Some(resolvedModule) =>
+        val jvmModule =
+          resolvedModule.module.jvm.getOrElse(resolvedModule.module)
+
         val paths = (
-          List(module) ++ BuildConfig.collectJvmModuleDeps(
-            build,
-            resolvedModule
-          )
+          List(module) ++ BuildConfig.collectJvmModuleDeps(build, jvmModule)
         ).map { name =>
-          if (BuildConfig.isCrossBuild(build.module(name)))
+          if (BuildConfig.isCrossBuild(build(name).module))
             bloopBuildPath.resolve(name + "-" + platform.id)
           else
             bloopBuildPath.resolve(name)
@@ -53,8 +54,7 @@ object Package {
         else if (paths.isEmpty)
           log.error(s"No build paths were found")
         else {
-          val files     = collectFiles(paths)
-          val jvmModule = resolvedModule.jvm.getOrElse(resolvedModule)
+          val files = collectFiles(paths)
 
           val classPath =
             if (!libs) List()
@@ -62,6 +62,7 @@ object Package {
               getLibraryClassPath(
                 seedConfig,
                 packageConfig,
+                resolvers,
                 build,
                 jvmModule,
                 outputPath,
@@ -105,22 +106,24 @@ object Package {
   def getLibraryClassPath(
     seedConfig: Config,
     packageConfig: Cli.PackageConfig,
+    resolvers: Resolvers,
     build: Build,
     jvmModule: Module,
     outputPath: Path,
     log: Log
   ): List[String] = {
-    val scalaVersion = BuildConfig.scalaVersion(build.project, List(jvmModule))
+    val scalaVersion = jvmModule.scalaVersion.get
     val scalaLibraryDep =
-      JavaDep(build.project.scalaOrganisation, "scala-library", scalaVersion)
+      JavaDep(jvmModule.scalaOrganisation.get, "scala-library", scalaVersion)
     val scalaReflectDep =
-      JavaDep(build.project.scalaOrganisation, "scala-reflect", scalaVersion)
+      JavaDep(jvmModule.scalaOrganisation.get, "scala-reflect", scalaVersion)
     val platformDeps = Set(scalaLibraryDep, scalaReflectDep)
 
     val libraryDeps = ArtefactResolution.allLibraryDeps(build, Set(JVM))
     val (resolvedDepPath, libraryResolution, platformResolution) =
       ArtefactResolution.resolution(
         seedConfig,
+        resolvers,
         build,
         packageConfig,
         optionalArtefacts = false,
