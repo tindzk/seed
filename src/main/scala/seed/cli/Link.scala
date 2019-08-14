@@ -9,6 +9,7 @@ import seed.config.BuildConfig
 import seed.model
 import seed.model.Config
 import seed.Cli.Command
+import seed.config.BuildConfig.Build
 import zio._
 
 object Link {
@@ -62,18 +63,19 @@ object Link {
     watch: Boolean,
     tmpfs: Boolean,
     log: Log,
-    onStdOut: model.Build => String => Unit
+    onStdOut: Build => String => Unit
   ): Either[List[String], UIO[Unit]] =
     BuildConfig.load(buildPath, log) match {
       case None => Left(List())
-      case Some(BuildConfig.Result(build, projectPath, moduleProjectPaths)) =>
-        val parsedModules = modules.map(util.Target.parseModuleString(build))
+      case Some(result) =>
+        import result.{build, projectPath}
+        val parsedModules =
+          modules.map(util.Target.parseModuleString(result.build))
         util.Validation.unpack(parsedModules).right.map { allModules =>
           val processes = BuildTarget.buildTargets(
             build,
             allModules,
             projectPath,
-            moduleProjectPaths,
             watch,
             tmpfs,
             log

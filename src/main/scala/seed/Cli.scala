@@ -270,12 +270,13 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
           import command._
           val config = SeedConfig.load(configPath)
           val log    = Log(config)
-          val BuildConfig.Result(build, projectPath, _) =
+          val result =
             BuildConfig.load(buildPath, log).getOrElse(sys.exit(1))
           cli.Package.ui(
             config,
-            projectPath,
-            build,
+            result.projectPath,
+            result.resolvers,
+            result.build,
             module,
             output,
             libs,
@@ -287,9 +288,17 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
             ) =>
           val config = SeedConfig.load(configPath)
           val log    = Log(config)
-          val BuildConfig.Result(build, projectPath, _) =
+          val result =
             BuildConfig.load(buildPath, log).getOrElse(sys.exit(1))
-          cli.Generate.ui(config, projectPath, projectPath, build, command, log)
+          cli.Generate.ui(
+            config,
+            result.projectPath,
+            result.projectPath,
+            result.resolvers,
+            result.build,
+            command,
+            log
+          )
         case Success(Config(configPath, _, command: Command.Server)) =>
           val config = SeedConfig.load(configPath)
           val log    = Log(config)

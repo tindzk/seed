@@ -3,10 +3,10 @@ package seed.artefact
 import java.nio.file.Paths
 
 import minitest.SimpleTestSuite
-import seed.model.Build.{JavaDep, Module, Project, ScalaDep, VersionTag}
-import seed.model.Platform.JavaScript
-import seed.model.Platform.JVM
-import seed.model.Build
+import seed.config.BuildConfig
+import seed.generation.util.ProjectGeneration
+import seed.model.Build.{JavaDep, Module, ScalaDep, VersionTag}
+import seed.model.Platform.{JVM, JavaScript, Native}
 
 object ArtefactResolutionSpec extends SimpleTestSuite {
   test("dependencyFromScalaDep() with Scala.js dependency") {
@@ -37,21 +37,34 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
   }
 
   test("Extract platform dependencies of test module in libraryDeps()") {
-    val build =
-      Build(
-        project = Project("2.12.8", scalaJsVersion = Some("0.6.26")),
-        module = Map(
-          "a" -> Module(
-            targets = List(JVM, JavaScript),
-            test = Some(
-              Module(
-                sources = List(Paths.get("a/test")),
-                scalaDeps = List(ScalaDep("io.monix", "minitest", "2.3.2"))
-              )
-            )
+    val modules = Map(
+      "a" -> Module(
+        scalaVersion = Some("2.12.8"),
+        scalaJsVersion = Some("0.6.26"),
+        targets = List(JVM, JavaScript),
+        test = Some(
+          Module(
+            sources = List(Paths.get("a/test")),
+            scalaDeps = List(ScalaDep("io.monix", "minitest", "2.3.2"))
           )
         )
       )
+    )
+
+    val build = ProjectGeneration.toBuild(modules)
+
+    val testJvm = build("a").module.test.get.jvm
+    assertEquals(
+      testJvm,
+      Some(
+        Module(
+          scalaVersion = Some("2.12.8"),
+          scalaJsVersion = Some("0.6.26"),
+          scalaOrganisation = Some("org.scala-lang"),
+          scalaDeps = List(ScalaDep("io.monix", "minitest", "2.3.2"))
+        )
+      )
+    )
 
     val libraryDeps = ArtefactResolution.allLibraryDeps(build)
     assertEquals(
@@ -64,12 +77,12 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
   }
 
   test("jvmDeps()") {
-    val build = Build(project = Project("2.12.8"), module = Map())
     val module = Module(
+      scalaVersion = Some("2.12.8"),
       scalaDeps = List(ScalaDep("io.monix", "minitest", "2.3.2")),
       javaDeps = List(JavaDep("net.java.dev.jna", "jna", "4.5.1"))
     )
-    val deps = ArtefactResolution.jvmDeps(build, List(module))
+    val deps = ArtefactResolution.jvmDeps(module)
     assertEquals(
       deps,
       Set(
@@ -80,11 +93,9 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
   }
 
   test("Inherit compiler dependencies") {
-    val build = Build(
-      project = Project("2.12.8", scalaJsVersion = Some("0.6.26")),
-      module = Map()
-    )
     val module = Module(
+      scalaVersion = Some("2.12.8"),
+      scalaJsVersion = Some("0.6.26"),
       targets = List(JVM, JavaScript),
       compilerDeps =
         List(ScalaDep("org.scalamacros", "paradise", "2.1.1", VersionTag.Full)),
@@ -102,7 +113,10 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
         )
       )
     )
-    val deps = ArtefactResolution.compilerDeps(build, module)
+
+    val deps = ArtefactResolution.compilerDeps(
+      BuildConfig.inheritSettings(Module())(module)
+    )
 
     assertEquals(
       deps,
@@ -111,26 +125,24 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
           JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
           JavaDep("org.scala-lang", "scala-library", "2.12.8"),
           JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
-          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1")
+          JavaDep("org.scala-js", "scalajs-compiler_2.12.8", "0.6.26"),
+          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1"),
+          JavaDep("com.softwaremill.clippy", "plugin_2.12", "0.6.0")
         ),
         Set(
           JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
           JavaDep("org.scala-lang", "scala-library", "2.12.8"),
           JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
-          JavaDep("org.scala-js", "scalajs-compiler_2.12.8", "0.6.26"),
-          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1"),
-          JavaDep("com.softwaremill.clippy", "plugin_2.12", "0.6.0")
+          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1")
         )
       )
     )
   }
 
   test("Compiler dependency with overridden version in platform module") {
-    val build = Build(
-      project = Project("2.12.8", scalaJsVersion = Some("0.6.26")),
-      module = Map()
-    )
     val module = Module(
+      scalaVersion = Some("2.12.8"),
+      scalaJsVersion = Some("0.6.26"),
       targets = List(JVM, JavaScript),
       compilerDeps =
         List(ScalaDep("org.scalamacros", "paradise", "2.1.0", VersionTag.Full)),
@@ -142,7 +154,10 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
         )
       )
     )
-    val deps = ArtefactResolution.compilerDeps(build, module)
+
+    val deps = ArtefactResolution.compilerDeps(
+      BuildConfig.inheritSettings(Module())(module)
+    )
 
     assertEquals(
       deps,
@@ -151,14 +166,14 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
           JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
           JavaDep("org.scala-lang", "scala-library", "2.12.8"),
           JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
-          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.0")
+          JavaDep("org.scala-js", "scalajs-compiler_2.12.8", "0.6.26"),
+          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1")
         ),
         Set(
           JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
           JavaDep("org.scala-lang", "scala-library", "2.12.8"),
           JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
-          JavaDep("org.scala-js", "scalajs-compiler_2.12.8", "0.6.26"),
-          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1")
+          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.0")
         )
       )
     )
@@ -174,6 +189,64 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
     assertEquals(
       ArtefactResolution.mergeDeps(deps),
       List(ScalaDep("org.scalamacros", "paradise", "2.1.1", VersionTag.Full))
+    )
+  }
+
+  test("Set parent target when native module is defined") {
+    val module = Module(
+      native = Some(
+        Module(
+          scalaVersion = Some("2.11.11"),
+          scalaNativeVersion = Some("0.3.7"),
+          sources = List(Paths.get("src"))
+        )
+      )
+    )
+
+    val expected = Module(
+      targets = List(Native),
+      scalaOrganisation = Some("org.scala-lang"),
+      native = Some(
+        Module(
+          scalaOrganisation = Some("org.scala-lang"),
+          scalaVersion = Some("2.11.11"),
+          scalaNativeVersion = Some("0.3.7"),
+          sources = List(Paths.get("src"))
+        )
+      )
+    )
+
+    assertEquals(BuildConfig.inheritSettings(Module())(module), expected)
+  }
+
+  test("Resolve Scala Native compiler dependencies") {
+    val module = Module(
+      targets = List(Native),
+      scalaOrganisation = Some("org.scala-lang"),
+      native = Some(
+        Module(
+          scalaOrganisation = Some("org.scala-lang"),
+          scalaVersion = Some("2.11.11"),
+          scalaNativeVersion = Some("0.3.7"),
+          sources = List(Paths.get("src"))
+        )
+      )
+    )
+
+    val deps = ArtefactResolution.compilerDeps(
+      BuildConfig.inheritSettings(Module())(module)
+    )
+
+    assertEquals(
+      deps,
+      List(
+        Set(
+          JavaDep("org.scala-lang", "scala-compiler", "2.11.11"),
+          JavaDep("org.scala-lang", "scala-library", "2.11.11"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.11.11"),
+          JavaDep("org.scala-native", "nscplugin_2.11.11", "0.3.7")
+        )
+      )
     )
   }
 }

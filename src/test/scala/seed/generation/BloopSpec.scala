@@ -18,7 +18,9 @@ object BloopSpec extends SimpleTestSuite {
     Files.createDirectory(projectPath)
 
     val bloopPath = projectPath.resolve(".bloop")
-    util.ProjectGeneration.generateJavaDepBloopProject(projectPath)
+    val build     = util.ProjectGeneration.generateJavaDepBloopProject(projectPath)
+
+    assertEquals(build("example").module.jvm.get.moduleDeps, List("base"))
 
     val base = parseBloopFile(bloopPath.resolve("base.json"))
     assert(

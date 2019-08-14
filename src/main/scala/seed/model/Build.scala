@@ -4,9 +4,9 @@ import java.nio.file.Path
 
 import seed.artefact.MavenCentral
 
-case class Build(
+case class TomlBuild(
   `import`: List[Path] = List(),
-  project: Build.Project,
+  project: Build.Project = Build.Project(),
   resolvers: Build.Resolvers = Build.Resolvers(),
   module: Map[String, Build.Module]
 )
@@ -58,17 +58,35 @@ object Build {
   )
 
   case class Project(
-    scalaVersion: String,
+    scalaVersion: Option[String] = None,
     scalaJsVersion: Option[String] = None,
     scalaNativeVersion: Option[String] = None,
     scalaOptions: List[String] = List(),
-    scalaOrganisation: String = Organisation.Lightbend.packageName,
+    scalaOrganisation: Option[String] = None,
     testFrameworks: List[String] = List(),
     compilerDeps: List[ScalaDep] = List()
-  )
+  ) {
+    def toModule =
+      Module(
+        scalaVersion = scalaVersion,
+        scalaJsVersion = scalaJsVersion,
+        scalaNativeVersion = scalaNativeVersion,
+        scalaOptions = scalaOptions,
+        scalaOrganisation = scalaOrganisation,
+        testFrameworks = testFrameworks,
+        compilerDeps = compilerDeps
+      )
+  }
 
+  // TODO Instead of using this `case class` directly, create a polymorphic
+  //      version for different platform types
   case class Module(
     scalaVersion: Option[String] = None,
+    scalaJsVersion: Option[String] = None,
+    scalaNativeVersion: Option[String] = None,
+    scalaOptions: List[String] = List(),
+    scalaOrganisation: Option[String] = None,
+    testFrameworks: List[String] = List(),
     root: Option[Path] = None,
     sources: List[Path] = List(),
     resources: List[Path] = List(),
@@ -81,10 +99,10 @@ object Build {
     // If this was a Path, it would include the directory
     // relative to the build file.
     output: Option[String] = None,
-    // JavaScript
+    // --- JavaScript
     jsdom: Boolean = false,
     emitSourceMaps: Boolean = true,
-    // Native
+    // --- Native
     gc: Option[String] = None,
     targetTriple: Option[String] = None,
     clang: Option[Path] = None,
@@ -92,10 +110,11 @@ object Build {
     linkerOptions: Option[List[String]] = None,
     compilerOptions: Option[List[String]] = None,
     linkStubs: Boolean = false,
-    test: Option[Module] = None,
+    // ---
     js: Option[Module] = None,
     jvm: Option[Module] = None,
     native: Option[Module] = None,
+    test: Option[Module] = None,
     target: Map[String, Build.Target] = Map()
   )
 

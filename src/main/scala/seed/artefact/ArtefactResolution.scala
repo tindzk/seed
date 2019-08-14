@@ -5,11 +5,12 @@ import java.nio.file.Path
 import seed.Cli.PackageConfig
 import MavenCentral.{CompilerVersion, PlatformVersion}
 import seed.cli.util.Ansi
-import seed.model.Build.{Dep, JavaDep, Module, ScalaDep}
+import seed.model.Build.{Dep, JavaDep, Module, Resolvers, ScalaDep}
 import seed.model.Platform.{JVM, JavaScript, Native}
-import seed.model.{Artefact, Build, Platform, Resolution}
+import seed.model.{Artefact, Platform, Resolution}
 import seed.Log
 import seed.config.BuildConfig
+import seed.config.BuildConfig.Build
 
 object ArtefactResolution {
   def javaDepFromScalaDep(
@@ -52,9 +53,9 @@ object ArtefactResolution {
       version
     )
 
-  def jsPlatformDeps(build: Build, module: Module): Set[JavaDep] = {
-    val scalaVersion   = BuildConfig.scalaVersion(build.project, List(module))
-    val scalaJsVersion = build.project.scalaJsVersion.get
+  def jsPlatformDeps(module: Module): Set[JavaDep] = {
+    val scalaVersion   = module.scalaVersion.get
+    val scalaJsVersion = module.scalaJsVersion.get
 
     Set(
       Artefact.ScalaJsLibrary
@@ -70,9 +71,9 @@ object ArtefactResolution {
     )
   }
 
-  def nativePlatformDeps(build: Build, modules: List[Module]): Set[JavaDep] = {
-    val scalaVersion       = BuildConfig.scalaVersion(build.project, modules)
-    val scalaNativeVersion = build.project.scalaNativeVersion.get
+  def nativePlatformDeps(module: Module): Set[JavaDep] = {
+    val scalaVersion       = module.scalaVersion.get
+    val scalaNativeVersion = module.scalaNativeVersion.get
 
     Set(
       Artefact.ScalaNativeJavalib,
@@ -91,9 +92,9 @@ object ArtefactResolution {
     )
   }
 
-  def nativeLibraryDep(build: Build, modules: List[Module]): JavaDep = {
-    val scalaVersion       = BuildConfig.scalaVersion(build.project, modules)
-    val scalaNativeVersion = build.project.scalaNativeVersion.get
+  def nativeLibraryDep(module: Module): JavaDep = {
+    val scalaVersion       = module.scalaVersion.get
+    val scalaNativeVersion = module.scalaNativeVersion.get
 
     javaDepFromArtefact(
       Artefact.ScalaNativeNativelib,
@@ -104,77 +105,73 @@ object ArtefactResolution {
     )
   }
 
-  def jvmArtefacts(stack: List[Module]): Set[(Platform, Dep)] =
-    stack.flatMap(_.scalaDeps).map(dep => JVM  -> dep).toSet ++
-      stack.flatMap(_.javaDeps).map(dep => JVM -> dep).toSet
+  def jvmArtefacts(module: Module): Set[(Platform, Dep)] =
+    (module.scalaDeps ++ module.javaDeps).map(dep => JVM -> dep).toSet
 
-  def jvmDeps(build: Build, stack: List[Module]): Set[JavaDep] = {
-    val scalaVersion = BuildConfig.scalaVersion(build.project, stack)
-
-    stack
-      .flatMap(_.scalaDeps)
-      .map(dep => javaDepFromScalaDep(dep, JVM, scalaVersion, scalaVersion))
+  def jvmDeps(module: Module): Set[JavaDep] =
+    module.scalaDeps
+      .map(
+        dep =>
+          javaDepFromScalaDep(
+            dep,
+            JVM,
+            module.scalaVersion.get,
+            module.scalaVersion.get
+          )
+      )
       .toSet ++
-      stack.flatMap(_.javaDeps).toSet
-  }
+      module.javaDeps.toSet
 
-  def jsArtefacts(stack: List[Module]): Set[(Platform, Dep)] =
-    stack.flatMap(_.scalaDeps).map(dep => JavaScript -> dep).toSet
+  def jsArtefacts(module: Module): Set[(Platform, Dep)] =
+    module.scalaDeps.map(dep => JavaScript -> dep).toSet
 
-  def jsDeps(build: Build, stack: List[Module]): Set[JavaDep] =
-    build.project.scalaJsVersion match {
-      case None => Set()
-      case Some(scalaJsVersion) =>
-        val scalaVersion = BuildConfig.scalaVersion(build.project, stack)
-        stack
-          .flatMap(_.scalaDeps)
-          .map(
-            dep =>
-              javaDepFromScalaDep(dep, JavaScript, scalaJsVersion, scalaVersion)
+  def jsDeps(module: Module): Set[JavaDep] =
+    module.scalaDeps
+      .map(
+        dep =>
+          javaDepFromScalaDep(
+            dep,
+            JavaScript,
+            module.scalaJsVersion.get,
+            module.scalaVersion.get
           )
-          .toSet
-    }
+      )
+      .toSet
 
-  def nativeArtefacts(stack: List[Module]): Set[(Platform, Dep)] =
-    stack.flatMap(_.scalaDeps).map(dep => Native -> dep).toSet
+  def nativeArtefacts(module: Module): Set[(Platform, Dep)] =
+    module.scalaDeps.map(dep => Native -> dep).toSet
 
-  def nativeDeps(build: Build, stack: List[Module]): Set[JavaDep] =
-    build.project.scalaNativeVersion match {
-      case None => Set()
-      case Some(scalaNativeVersion) =>
-        val scalaVersion = BuildConfig.scalaVersion(build.project, stack)
-        stack
-          .flatMap(_.scalaDeps)
-          .map(
-            dep =>
-              javaDepFromScalaDep(dep, Native, scalaNativeVersion, scalaVersion)
+  def nativeDeps(module: Module): Set[JavaDep] =
+    module.scalaDeps
+      .map(
+        dep =>
+          javaDepFromScalaDep(
+            dep,
+            Native,
+            module.scalaNativeVersion.get,
+            module.scalaVersion.get
           )
-          .toSet
-    }
+      )
+      .toSet
 
-  def compilerDeps(build: Build, module: Module): List[Set[JavaDep]] = {
-    def f(build: Build, module: Module, platform: Platform): Set[JavaDep] = {
-      import build.project.scalaOrganisation
-      val platformModule = BuildConfig.platformModule(module, platform)
+  def compilerDeps(module: Module): List[Set[JavaDep]] = {
+    def f(module: Module, platform: Platform): Set[JavaDep] = {
+      val platformModule = BuildConfig.platformModule(module, platform).get
 
-      val platformVer = BuildConfig.platformVersion(build, module, platform)
-      val compilerVer =
-        BuildConfig.scalaVersion(build.project, platformModule.toList :+ module)
+      val platformVer  = BuildConfig.platformVersion(platformModule, platform)
+      val compilerVer  = platformModule.scalaVersion.get
+      val organisation = platformModule.scalaOrganisation.get
 
       val scalaDeps = Set(
-        Artefact.scalaCompiler(scalaOrganisation) -> compilerVer,
-        Artefact.scalaLibrary(scalaOrganisation)  -> compilerVer,
-        Artefact.scalaReflect(scalaOrganisation)  -> compilerVer
+        Artefact.scalaCompiler(organisation) -> compilerVer,
+        Artefact.scalaLibrary(organisation)  -> compilerVer,
+        Artefact.scalaReflect(organisation)  -> compilerVer
       ) ++ (
         if (platform == Platform.Native)
           Set(Artefact.ScalaNativePlugin -> platformVer)
         else if (platform == Platform.JavaScript)
           Set(Artefact.ScalaJsCompiler -> platformVer)
         else Set()
-      )
-
-      val dependencies = mergeDeps[ScalaDep](
-        module.compilerDeps ++ platformModule.toList.flatMap(_.compilerDeps)
       )
 
       scalaDeps.map {
@@ -186,110 +183,51 @@ object ArtefactResolution {
             platformVer,
             compilerVer
           )
-      } ++ dependencies.map(
+      } ++ platformModule.compilerDeps.map(
         dep => javaDepFromScalaDep(dep, platform, platformVer, compilerVer)
       )
     }
 
-    module.targets.map(target => f(build, module, target)).filter(_.nonEmpty)
+    module.targets.map(target => f(module, target)).filter(_.nonEmpty)
   }
 
   def allCompilerDeps(build: Build): List[Set[JavaDep]] =
-    build.module.values.toList.flatMap(compilerDeps(build, _)).distinct
+    build.values.toList.flatMap(m => compilerDeps(m.module)).distinct
 
   def platformDeps(build: Build, module: Module): Set[JavaDep] =
     module.targets.toSet[Platform].flatMap { target =>
-      if (target == JavaScript)
-        jsPlatformDeps(build, module.js.getOrElse(Module()))
-      else if (target == Native)
-        nativePlatformDeps(build, module.native.toList)
+      if (target == JavaScript) jsPlatformDeps(module.js.get)
+      else if (target == Native) nativePlatformDeps(module.native.get)
       else Set[JavaDep]()
     }
 
-  def libraryDeps(
-    build: Build,
-    module: Module,
-    platforms: Set[Platform],
-    parent: Module = Module()
-  ): Set[JavaDep] = {
-    val targets = if (module.targets.isEmpty) parent.targets else module.targets
-    targets.toSet[Platform].intersect(platforms).flatMap { target =>
-      // Shared libraries
-      if (target == JVM)
-        jvmDeps(
-          build,
-          module.jvm.toList ++ parent.jvm.toList ++ List(module, parent)
-        )
-      else if (target == JavaScript)
-        jsDeps(
-          build,
-          module.js.toList ++ parent.js.toList ++ List(module, parent)
-        )
-      else
-        nativeDeps(
-          build,
-          module.native.toList ++ parent.native.toList ++ List(module, parent)
-        )
-    } ++
-      (if (!platforms.contains(JVM)) Set()
-       else
-         module.jvm.toSet.flatMap(
-           jvm =>
-             jvmDeps(build, List(jvm, parent.jvm.getOrElse(Module()), module))
-         )) ++
+  def libraryDeps(module: Module, platforms: Set[Platform]): Set[JavaDep] =
+    (if (!platforms.contains(JVM)) Set()
+     else module.jvm.toSet.flatMap(jvmDeps)) ++
       (if (!platforms.contains(JavaScript)) Set()
-       else
-         module.js.toSet.flatMap(
-           js => jsDeps(build, List(js, parent.js.getOrElse(Module()), module))
-         )) ++
+       else module.js.toSet.flatMap(jsDeps)) ++
       (if (!platforms.contains(Native)) Set()
-       else
-         module.native.toSet.flatMap(
-           native =>
-             nativeDeps(
-               build,
-               List(native, parent.native.getOrElse(Module()), module)
-             )
-         )) ++
-      module.test.toSet.flatMap(libraryDeps(build, _, platforms, module))
-  }
+       else module.native.toSet.flatMap(nativeDeps)) ++
+      module.test.toSet.flatMap(libraryDeps(_, platforms))
 
-  def libraryArtefacts(
-    build: Build,
-    module: Module,
-    parent: Module = Module()
-  ): Set[(Platform, Dep)] =
-    module.targets.toSet[Platform].flatMap { target =>
-      if (target == JVM) jvmArtefacts(List(module, parent))
-      else if (target == JavaScript) jsArtefacts(List(module, parent))
-      else nativeArtefacts(List(module, parent))
-    } ++
-      module.jvm.toSet.flatMap(
-        jvm => jvmArtefacts(List(jvm, parent.jvm.getOrElse(Module()), module))
-      ) ++
-      module.js.toSet.flatMap(
-        js => jsArtefacts(List(js, parent.js.getOrElse(Module()), module))
-      ) ++
-      module.native.toSet.flatMap(
-        native =>
-          nativeArtefacts(
-            List(native, parent.native.getOrElse(Module()), module)
-          )
-      ) ++
-      module.test.toSet.flatMap(libraryArtefacts(build, _, module))
+  def libraryArtefacts(module: Module): Set[(Platform, Dep)] =
+    module.jvm.toSet.flatMap(jvmArtefacts) ++
+      module.js.toSet.flatMap(jsArtefacts) ++
+      module.native.toSet.flatMap(nativeArtefacts) ++
+      module.test.toSet.flatMap(libraryArtefacts)
 
   def allPlatformDeps(build: Build): Set[JavaDep] =
-    build.module.values.toSet.flatMap(platformDeps(build, _))
+    build.values.toSet.flatMap(m => platformDeps(build, m.module))
 
   def allLibraryDeps(
     build: Build,
     platforms: Set[Platform] = Set(JVM, JavaScript, Native)
   ): Set[JavaDep] =
-    build.module.values.toSet.flatMap(libraryDeps(build, _, platforms))
+    build.values.toSet.flatMap(m => libraryDeps(m.module, platforms))
 
   def allLibraryArtefacts(build: Build): Map[Platform, Set[Dep]] =
-    build.module.values.toSet
-      .flatMap(libraryArtefacts(build, _))
+    build.values.toSet
+      .flatMap(m => libraryArtefacts(m.module))
       .groupBy(_._1)
       .mapValues(_.map(_._2))
 
@@ -305,6 +243,8 @@ object ArtefactResolution {
     classPath: List[Path],
     optionalArtefacts: Boolean
   ): Resolution.ScalaCompiler = {
+    require(classPath.length == classPath.distinct.length)
+
     val compilerDep = JavaDep(scalaOrganisation, "scala-compiler", scalaVersion)
     val libraryDep  = JavaDep(scalaOrganisation, "scala-library", scalaVersion)
     val reflectDep  = JavaDep(scalaOrganisation, "scala-reflect", scalaVersion)
@@ -340,6 +280,7 @@ object ArtefactResolution {
 
   def resolution(
     seedConfig: seed.model.Config,
+    resolvers: Resolvers,
     build: Build,
     packageConfig: PackageConfig,
     optionalArtefacts: Boolean,
@@ -356,15 +297,15 @@ object ArtefactResolution {
     log.info("Configured resolvers:")
     log.detail("- " + Ansi.italic(resolvedIvyPath.toString) + " (Ivy)")
     log.detail("- " + Ansi.italic(resolvedCachePath.toString) + " (Coursier)")
-    build.resolvers.ivy
+    resolvers.ivy
       .foreach(ivy => log.detail("- " + Ansi.italic(ivy.url) + " (Ivy)"))
-    build.resolvers.maven
+    resolvers.maven
       .foreach(maven => log.detail("- " + Ansi.italic(maven) + " (Maven)"))
 
     def resolve(deps: Set[JavaDep]) =
       Coursier.resolveAndDownload(
         deps,
-        build.resolvers,
+        resolvers,
         resolvedIvyPath,
         resolvedCachePath,
         optionalArtefacts,

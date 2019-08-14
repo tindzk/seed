@@ -58,8 +58,9 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   testAsync(
     "Build project with compiler plug-in defined on cross-platform module"
   ) { _ =>
-    val BuildConfig.Result(build, projectPath, _) =
+    val config =
       BuildConfig.load(Paths.get("test/example-paradise"), Log.urgent).get
+    import config._
     val buildPath = tempPath.resolve("example-paradise")
     Files.createDirectory(buildPath)
     val packageConfig = PackageConfig(
@@ -72,6 +73,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       Config(),
       projectPath,
       buildPath,
+      resolvers,
       build,
       Command.Bloop(packageConfig),
       Log.urgent
@@ -81,9 +83,10 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
 
   testAsync("Build project with compiler plug-in defined on platform modules") {
     _ =>
-      val BuildConfig.Result(build, projectPath, _) = BuildConfig
+      val config = BuildConfig
         .load(Paths.get("test/example-paradise-platform"), Log.urgent)
         .get
+      import config._
       val buildPath = tempPath.resolve("example-paradise-platform")
       Files.createDirectory(buildPath)
       val packageConfig = PackageConfig(
@@ -96,6 +99,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
         Config(),
         projectPath,
         buildPath,
+        resolvers,
         build,
         Command.Bloop(packageConfig),
         Log.urgent
@@ -104,8 +108,9 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   }
 
   testAsync("Link JavaScript modules with custom target path") { _ =>
-    val BuildConfig.Result(build, projectPath, _) =
+    val config =
       BuildConfig.load(Paths.get("test/submodule-output-path"), Log.urgent).get
+    import config._
     val buildPath = tempPath.resolve("submodule-output-path")
     Files.createDirectory(buildPath)
     val packageConfig = PackageConfig(
@@ -118,6 +123,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       Config(),
       projectPath,
       buildPath,
+      resolvers,
       build,
       Command.Bloop(packageConfig),
       Log.urgent
@@ -140,8 +146,8 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
 
   testAsync("Build project with overridden compiler plug-in version") { _ =>
     val projectPath = Paths.get("test/example-paradise-versions")
-    val BuildConfig.Result(build, _, _) =
-      BuildConfig.load(projectPath, Log.urgent).get
+    val result      = BuildConfig.load(projectPath, Log.urgent).get
+    import result._
     val buildPath = tempPath.resolve("example-paradise-versions")
     Files.createDirectory(buildPath)
     val packageConfig = PackageConfig(
@@ -154,6 +160,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       Config(),
       projectPath,
       buildPath,
+      resolvers,
       build,
       Command.Bloop(packageConfig),
       Log.urgent
@@ -221,9 +228,10 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   }
 
   testAsync("Build modules with different Scala versions") { _ =>
-    val BuildConfig.Result(build, projectPath, _) = BuildConfig
+    val config = BuildConfig
       .load(Paths.get("test/multiple-scala-versions"), Log.urgent)
       .get
+    import config._
     val buildPath = tempPath.resolve("multiple-scala-versions-bloop")
     Files.createDirectory(buildPath)
     val packageConfig = PackageConfig(
@@ -236,6 +244,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       Config(),
       projectPath,
       buildPath,
+      resolvers,
       build,
       Command.Bloop(packageConfig),
       Log.urgent
@@ -255,8 +264,8 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   ): Future[Unit] = {
     val path = Paths.get(s"test/$name")
 
-    val BuildConfig.Result(build, projectPath, _) =
-      BuildConfig.load(path, Log.urgent).get
+    val config = BuildConfig.load(path, Log.urgent).get
+    import config._
     val buildPath = tempPath.resolve(name)
     Files.createDirectory(buildPath)
     val generatedFile = projectPath.resolve("demo").resolve("Generated.scala")
@@ -270,6 +279,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       Config(),
       projectPath,
       buildPath,
+      resolvers,
       build,
       Command.Bloop(packageConfig),
       Log.urgent

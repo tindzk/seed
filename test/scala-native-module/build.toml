@@ -1,0 +1,5 @@
+[module.demo.native]
+root               = "."
+scalaVersion       = "2.11.11"
+scalaNativeVersion = "0.3.7"
+sources            = ["src/"]

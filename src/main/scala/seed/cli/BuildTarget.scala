@@ -5,18 +5,16 @@ import java.nio.file.{Files, Path}
 import seed.Log
 import seed.cli.util.Ansi
 import seed.config.BuildConfig
+import seed.config.BuildConfig.Build
 import seed.generation.util.PathUtil
-import seed.model
 import seed.process.ProcessHelper
-
 import zio._
 
 object BuildTarget {
   def buildTargets(
-    build: model.Build,
+    build: Build,
     modules: List[util.Target.Parsed],
     projectPath: Path,
-    moduleProjectPaths: Map[String, Path],
     watch: Boolean,
     tmpfs: Boolean,
     log: Log
@@ -33,12 +31,12 @@ object BuildTarget {
     val inheritedTargets = modules
       .flatMap {
         case util.Target.Parsed(module, Some(Left(platform))) =>
-          BuildConfig.collectModuleDeps(build, module.module, platform)
+          BuildConfig.collectModuleDepsBase(build, module.module, platform)
         case util.Target.Parsed(_, Some(Right(_))) => List()
         case util.Target.Parsed(module, None) =>
           module.name +: BuildConfig.collectModuleDeps(build, module.module)
       }
-      .flatMap(m => build.module(m).target.keys.toList.map(m -> _))
+      .flatMap(m => build(m).module.target.keys.toList.map(m -> _))
       .distinct
 
     if (targets.nonEmpty)
@@ -57,8 +55,8 @@ object BuildTarget {
       case (m, t) =>
         val customLog = log.prefix(Ansi.bold(s"[${format(m, t)}]: "))
 
-        val modulePath = moduleProjectPaths(m)
-        val target     = build.module(m).target(t)
+        val modulePath = build(m).path
+        val target     = build(m).module.target(t)
 
         target.`class` match {
           case Some(c) =>

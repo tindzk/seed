@@ -8,11 +8,10 @@ import seed.Cli.{Command, PackageConfig}
 import seed.{Log, cli}
 import seed.artefact.ArtefactResolution
 import seed.config.BuildConfig
+import seed.config.BuildConfig.ModuleConfig
 import seed.generation.util.PathUtil
-import seed.model.Build.{Module, Project}
-import seed.model.Platform.JVM
+import seed.model.Build.{Module, Resolvers}
 import seed.model.{Build, Config}
-
 import seed.generation.util.BuildUtil.tempPath
 
 object IdeaSpec extends SimpleTestSuite {
@@ -53,38 +52,38 @@ object IdeaSpec extends SimpleTestSuite {
 
   test("Generate modules") {
     val build =
-      Build(
-        project = Project("2.12.8"),
-        module = Map(
-          "a" -> Module(
-            targets = List(JVM),
-            jvm = Some(
-              Module(
-                root = Some(Paths.get("a")),
-                sources = List(Paths.get("a/src"))
-              )
-            ),
-            target = Map("assets" -> Build.Target())
-          ),
-          "b" -> Module(
-            targets = List(JVM),
-            jvm = Some(
-              Module(
-                root = Some(Paths.get("b")),
-                sources = List(Paths.get("b/src"))
-              )
-            ),
-            target = Map("assets" -> Build.Target(Some(Paths.get("b/assets"))))
-          ),
-          "c" -> Module(
-            // Module that only has test sources
-            targets = List(JVM),
-            jvm = Some(Module(root = Some(Paths.get("c")))),
-            test = Some(
-              Module(jvm = Some(Module(sources = List(Paths.get("c/test")))))
+      Map(
+        "a" -> Module(
+          scalaVersion = Some("2.12.8"),
+          jvm = Some(
+            Module(
+              root = Some(Paths.get("a")),
+              sources = List(Paths.get("a/src"))
             )
+          ),
+          target = Map("assets" -> Build.Target())
+        ),
+        "b" -> Module(
+          scalaVersion = Some("2.12.8"),
+          jvm = Some(
+            Module(
+              root = Some(Paths.get("b")),
+              sources = List(Paths.get("b/src"))
+            )
+          ),
+          target = Map("assets" -> Build.Target(Some(Paths.get("b/assets"))))
+        ),
+        "c" -> Module(
+          scalaVersion = Some("2.12.8"),
+          // Module that only has test sources
+          jvm = Some(Module(root = Some(Paths.get("c")))),
+          test = Some(
+            Module(jvm = Some(Module(sources = List(Paths.get("c/test")))))
           )
         )
+      ).mapValues(
+        m =>
+          ModuleConfig(BuildConfig.inheritSettings(Module())(m), Paths.get("."))
       )
 
     val projectPath   = Paths.get(".")
@@ -94,6 +93,7 @@ object IdeaSpec extends SimpleTestSuite {
     val (_, platformResolution, compilerResolution) =
       ArtefactResolution.resolution(
         seed.model.Config(),
+        Resolvers(),
         build,
         packageConfig,
         optionalArtefacts = false,
@@ -122,7 +122,7 @@ object IdeaSpec extends SimpleTestSuite {
   }
 
   test("Generate project with custom compiler options") {
-    val BuildConfig.Result(build, projectPath, _) =
+    val result =
       BuildConfig.load(Paths.get("test/compiler-options"), Log.urgent).get
     val packageConfig = PackageConfig(
       tmpfs = false,
@@ -134,9 +134,10 @@ object IdeaSpec extends SimpleTestSuite {
     Files.createDirectory(outputPath)
     cli.Generate.ui(
       Config(),
-      projectPath,
+      result.projectPath,
       outputPath,
-      build,
+      result.resolvers,
+      result.build,
       Command.Idea(packageConfig),
       Log.urgent
     )
@@ -161,10 +162,27 @@ object IdeaSpec extends SimpleTestSuite {
       profileNodes.head.byTag["parameter"].attr("value"),
       Some("-Yliteral-types")
     )
+
+    val modulesPath = ideaPath.resolve("modules")
+    val demoJvm =
+      pine.XmlParser.fromString(
+        FileUtils.readFileToString(
+          modulesPath.resolve("demo-jvm.iml").toFile,
+          "UTF-8"
+        )
+      )
+
+    val sourceFolderNodes = demoJvm.byTagAll["sourceFolder"]
+    assertEquals(
+      sourceFolderNodes
+        .flatMap(_.attr("url"))
+        .map(_.split("compiler-options").last),
+      List("/jvm/src")
+    )
   }
 
   test("Generate project with different Scala versions") {
-    val BuildConfig.Result(build, projectPath, _) = BuildConfig
+    val result = BuildConfig
       .load(Paths.get("test/multiple-scala-versions"), Log.urgent)
       .get
     val packageConfig = PackageConfig(
@@ -177,9 +195,10 @@ object IdeaSpec extends SimpleTestSuite {
     Files.createDirectory(outputPath)
     cli.Generate.ui(
       Config(),
-      projectPath,
+      result.projectPath,
       outputPath,
-      build,
+      result.resolvers,
+      result.build,
       Command.Idea(packageConfig),
       Log.urgent
     )
@@ -257,6 +276,67 @@ object IdeaSpec extends SimpleTestSuite {
     assertEquals(
       libraries212,
       List("org.scala-lang-2.12.8", "sourcecode_2.12-0.1.5.jar")
+    )
+  }
+
+  test("Generate project with test project") {
+    val result =
+      BuildConfig.load(Paths.get("test/test-module"), Log.urgent).get
+    val packageConfig = PackageConfig(
+      tmpfs = false,
+      silent = false,
+      ivyPath = None,
+      cachePath = None
+    )
+    val outputPath = tempPath.resolve("test-module")
+    Files.createDirectory(outputPath)
+    cli.Generate.ui(
+      Config(),
+      result.projectPath,
+      outputPath,
+      result.resolvers,
+      result.build,
+      Command.Idea(packageConfig),
+      Log.urgent
+    )
+
+    val ideaPath = outputPath.resolve(".idea")
+    val exampleModule =
+      pine.XmlParser.fromString(
+        FileUtils.readFileToString(
+          ideaPath.resolve("modules").resolve("example.iml").toFile,
+          "UTF-8"
+        )
+      )
+    val exampleLibraries = exampleModule
+      .byTagAll["orderEntry"]
+      .filter(_.attr("type").contains("library"))
+      .flatMap(l => l.attr("name").map(_ -> l.attr("scope")))
+    assertEquals(
+      exampleLibraries,
+      List("org.scala-lang-2.12.8" -> None, "sourcecode_2.12-0.1.5.jar" -> None)
+    )
+  }
+
+  test("Generate Scala Native project") {
+    val result =
+      BuildConfig.load(Paths.get("test/scala-native-module"), Log.urgent).get
+    val packageConfig = PackageConfig(
+      tmpfs = false,
+      silent = false,
+      ivyPath = None,
+      cachePath = None
+    )
+    val outputPath = tempPath.resolve("scala-native-module")
+    Files.createDirectory(outputPath)
+    cli.Generate.ui(
+      Config(),
+      result.projectPath,
+      outputPath,
+      result.resolvers,
+      result.build,
+      Command.Idea(packageConfig),
+      Log.urgent
     )
   }
 }

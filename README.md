@@ -83,12 +83,11 @@ This Docker image can be used in CI setups. [Here](https://github.com/sparsetech
 In a previous section, you already saw Seed's project creation wizard (`init`). To illustrate the build format, we will now create a project manually. A complete Scala Native project can be defined in only five lines of TOML:
 
 ```toml
-[project]
+[module.demo.native]
+root               = "."
 scalaVersion       = "2.11.11"
 scalaNativeVersion = "0.3.7"
-
-[module.demo.native]
-sources = ["src/"]
+sources            = ["src/"]
 ```
 
 This build defines a Scala Native module with the name `demo`. Save the content to `build.toml`. Then, create the file `src/Main.scala` containing:
@@ -165,77 +164,83 @@ This compiles the module to `build/` and runs it.
     * Tiny code base
 
 ## Build Configuration
+The default build file is named `build.toml`. You can specify a custom path with the `--build` parameter. A build file corresponds to a *project* which can contain multiple *modules*.
+
 This section explains the components of build configurations and provides examples you can use in your own build files.
 
 ### Project
-The default build file is named `build.toml`. You can specify a custom path with the `--build` parameter. A build file corresponds to one project and can contain multiple modules. All project-wide settings are defined in the `project` section:
+Project-wide settings are defined in the optional `[project]` section and are inherited by all modules defined in the same file:
 
 ```toml
 [project]
-scalaVersion       = "2.12.4-bin-typelevel-4"  # Mandatory; Scala version to be used by all modules
-                                               # This value can be overridden by modules
-scalaJsVersion     = "0.6.23"         # Optional; only needed for JavaScript compilation
-scalaNativeVersion = "0.3.7"          # Optional; only needed for native compilation
-scalaOrganisation  = "org.typelevel"  # Optional; defaults to `org.scala-lang`
-scalaOptions       = [                # Optional; empty by default
-  "-encoding", "UTF-8",
-  "-unchecked",
-  "-deprecation",
-  "-Xfuture",
-  "-Yno-adapted-args",
-  "-Ywarn-numeric-widen",
-  "-feature",
-  "-Yliteral-types"
-]
-
-# Entry points for test frameworks (explained in section "Test module" below)
-testFrameworks = ["org.scalatest.tools.Framework"]
+scalaVersion       = "2.12.4-bin-typelevel-4"       # Mandatory; Scala version to be used by all modules
+scalaJsVersion     = "0.6.23"                       # Optional; only needed for JavaScript compilation
+scalaNativeVersion = "0.3.7"                        # Optional; only needed for native compilation
+scalaOrganisation  = "org.typelevel"                # Optional; defaults to `org.scala-lang`
+scalaOptions       = ["-Yliteral-types"]            # Optional; empty by default
+testFrameworks     = ["minitest.runner.Framework"]  # Entry points for test frameworks
+                                                    # Explained in section "Test module" below
 ```
 
+All of these settings can be overridden by modules.
+
 ### Module
-A module groups source paths and related settings into a compilation unit. The syntax for various module types is as follows:
+A module groups source paths and related settings into a compilation unit. The basic syntax of a module as follows:
 
 ```toml
-# Cross-compiled module
 [module.myModule]
 targets = ["jvm", "js"]
 root    = "src"
 sources = ["src"]
+```
 
-# Test module (cross-compiled)
-# Inherits all settings from parent module (i.e. root, targets and sources)
+This defines a *cross-compiled module* with a JVM and JavaScript target. For every module, a list of source paths has to be specified. The source paths can be files and directories. You also have to define a root path (`root` setting) if you would like to generate an IntelliJ project.
+
+Since Seed is platform-agnostic, every module needs to specify a target platform. This is either achieved with the `targets` setting or by including the platform in the module header definition:
+
+```toml
+[module.myModule2.jvm]
+sources = ["src"]
+
+[module.myModule2.js]
+sources = ["src"]
+```
+
+These two definitions are called *platform-specific modules*. Both modules are equivalent to `myModule`.
+
+A module can have an optional test module:
+
+```toml
+# Cross-compiled
+# Inherits all settings from base module (e.g. root, targets and sources)
 [module.myModule.test]
 sources = ["test"]
 
-# Platform-specific modules
-# These two modules are equivalent to the previous definition of myModule
-[module.myModule2.jvm]
-sources = ["src"]
-[module.myModule2.js]
-sources = ["src"]
-
-# Test module (platform-specific)
+# Platform-specific
 [module.myModule2.test.jvm]
 sources = ["test"]
 ```
-
-For each of these module types, a list of source paths has to be specified. The source paths can be files and directories. You also have to define a root path (`root` setting) if you would like to generate an IntelliJ project.
-
-Since Seed is platform-agnostic, every module needs to specify a target platform. This is either achieved with the `targets` setting or by including the platform in the module header definition. A module can depend on other modules and can have an optional test module. These concepts will be explained more in-depth in the following sections.
 
 For any module, the following options are available:
 
 ```toml
 [module.myModule]
-scalaVersion = ""  # If unset, the project-wide default will be used
-root         = ""  # Module root path for IntelliJ 
-sources      = []  # List of source directories and files
-scalaDeps    = []  # Module-specific Scala dependencies
-compilerDeps = []  # Compiler plug-ins (specified in the same format as scalaDeps)
-moduleDeps   = []  # Module dependencies
-mainClass    = ""  # Optional entry point; needed for running/packaging module
-targets      = []  # Platform targets
+scalaVersion       = ""  # Must be set on every module
+scalaJsVersion     = ""  # Only used if module has JavaScript target
+scalaNativeVersion = ""  # Only used if module has native target
+scalaOptions       = []  # Empty by default
+scalaOrganisation  = ""  # Defaults to `org.scala-lang`
+testFrameworks     = []  # Only used by test module
+root               = ""  # Module root path for IntelliJ
+sources            = []  # List of source directories and files
+scalaDeps          = []  # Module-specific Scala dependencies
+compilerDeps       = []  # Compiler plug-ins (specified in the same format as scalaDeps)
+moduleDeps         = []  # Module dependencies
+mainClass          = ""  # Optional entry point; needed for running/packaging module
+targets            = []  # Platform targets
 ```
+
+Unless overridden in the module, the settings are inherited from the `[project]` section.
 
 ### Cross-platform module
 A cross-platform module is a module that has one or multiple targets. The target platforms your code can be compiled to is only limited by the language features and libraries your code makes use of. Not all libraries and Scala features are available during JavaScript and native compilation. For most code, cross-platform support will be as simple as adding another target. For other projects, you will have to factor out platform-specific logic into a submodule (see next section).
@@ -262,13 +267,13 @@ In the Bloop configuration, this corresponds to an aggregate module `myModule` a
 Returning to our initial example from the "Getting Started" section, we can change it as follows to make it compile for JVM and native:
 
 ```toml
-[project]
+# Instead of `[module.demo.native]`
+[module.demo]
+root               = "."
 scalaVersion       = "2.11.11"
 scalaNativeVersion = "0.3.7"
-
-[module.demo]
-sources = ["src/"]
-targets = ["jvm", "native"]
+sources            = ["src/"]
+targets            = ["jvm", "native"]  # This line was added
 ```
 
 ### Platform-specific module
@@ -295,7 +300,7 @@ Here, we use a cross-platform module in conjunction with two platform-specific m
 
 In the base module, the source path is `src` which we extend in the JVM- and JavaScript-specific modules with platform-specific sources, i.e. `jvm/src` and `js/src`. For example, the command `bloop compile myProject-jvm` would compile all sources from the base module and additionally include files from `jvm/src`.
 
-It is possible to set a custom Scala version for modules. This is needed when a platform does not support the latest Scala version yet, as is the case with Scala Native. You can globally set the version to 2.12 which will be then used by JavaScript and JVM, but Scala Native will use 2.11:
+It is possible to set a custom Scala version for modules. This is needed when a platform does not support the latest Scala version yet, as is the case with Scala Native. You can globally set the version to 2.12 which will be then used by JavaScript and JVM, but the Scala Native module will use 2.11:
 
 ```toml
 [project]
@@ -478,10 +483,9 @@ root    = "fonts"
 command = "cp -Rv fonts $BUILD_PATH"
 ```
 
-
 By default, the process execution is asynchronous. If you need the process to complete first before continuing with the compilation process, you can override the `await` setting which is set to `false` by default:
 
-```
+```toml
 [module.template.target.gen-scala]
 await   = true
 command = "..."
@@ -538,7 +542,7 @@ compilerDeps = [
 ```
 
 Note that project-level plug-ins are inherited by all modules defined under the project, as well as any dependent modules such that `compilerDeps` only needs to be defined on the base project or module.
-In the example above, `module.macros.js` inherits the semanticdb plug-in from the *project* and adds a separate dependency on the macro paradise plug-in.        
+In the example above, `module.macros.js` inherits the semanticdb plug-in from the *project* and adds a separate dependency on the macro paradise plug-in.
 
 For a complete cross-compiled Macro Paradise example, please refer to [this project](test/example-paradise/).
 
@@ -677,12 +681,14 @@ The default values are indicated.
 
 ## Git
 ### .gitignore
-For a Seed project, `.gitignore` only needs to contain these three directories:
+For a Seed project, `.gitignore` only needs to contain these four directories:
 
 ```
-.idea/
-.bloop/
-build/
+/.idea/
+/.bloop/
+/.metals/
+
+/build/
 ```
 
 ### Dependencies

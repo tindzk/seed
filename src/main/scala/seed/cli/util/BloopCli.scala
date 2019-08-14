@@ -3,10 +3,8 @@ package seed.cli.util
 import java.nio.file.Path
 
 import seed.Log
-import seed.model.Build
+import seed.config.BuildConfig.Build
 import seed.process.ProcessHelper
-
-import seed.model
 import seed.model.BuildEvent
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.model.Platform
@@ -21,7 +19,7 @@ object BloopCli {
   def skipOutput(output: String): Boolean = output.contains("\u001b[H\u001b[2J")
 
   def parseBloopModule(
-    build: model.Build,
+    build: Build,
     bloopName: String
   ): (String, Platform) =
     if (bloopName.endsWith("-js"))
@@ -32,13 +30,13 @@ object BloopCli {
       (bloopName.dropRight("-native".length), Native)
     else {
       require(
-        build.module(bloopName).targets.length == 1,
+        build(bloopName).module.targets.length == 1,
         "Only one target expected"
       )
-      (bloopName, build.module(bloopName).targets.head)
+      (bloopName, build(bloopName).module.targets.head)
     }
 
-  def parseStdOut(build: model.Build)(message: String): Option[BuildEvent] = {
+  def parseStdOut(build: Build)(message: String): Option[BuildEvent] = {
     val parts = message.split(" ")
     if (parts(0) == "Compiling") {
       val (module, platform) = parseBloopModule(build, parts(1))
