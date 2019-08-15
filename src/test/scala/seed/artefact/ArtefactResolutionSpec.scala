@@ -1,9 +1,12 @@
 package seed.artefact
 
+import java.io.File
+import java.nio.charset.Charset
 import java.nio.file.Paths
 
 import minitest.SimpleTestSuite
-import seed.config.BuildConfig
+import org.apache.commons.io.FileUtils
+import seed.config.{BuildConfig, BuildConfigSpec}
 import seed.generation.util.ProjectGeneration
 import seed.model.Build.{JavaDep, Module, ScalaDep, VersionTag}
 import seed.model.Platform.{JVM, JavaScript, Native}
@@ -248,5 +251,17 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
         )
       )
     )
+  }
+
+  test("Resolve correct platform libraries on test module") {
+    // The test module overrides the target platforms. Therefore, no Scala
+    // Native dependencies should be fetched.
+    val path = new File("test", "test-module-dep")
+    val tomlBuild =
+      FileUtils.readFileToString(new File(path, "build.toml"), "UTF-8")
+    val build = BuildConfigSpec.parseBuild(tomlBuild)(_ => "")
+
+    val deps = ArtefactResolution.allLibraryDeps(build)
+    assertEquals(deps, Set(JavaDep("org.scalatest", "scalatest_2.11", "3.0.8")))
   }
 }

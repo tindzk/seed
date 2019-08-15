@@ -250,7 +250,11 @@ object ArtefactResolution {
     val reflectDep  = JavaDep(scalaOrganisation, "scala-reflect", scalaVersion)
 
     val resolution =
-      resolutionResult.find(r => Coursier.hasDep(r, compilerDep)).get
+      resolutionResult
+        .find(r => Coursier.hasDep(r, compilerDep))
+        .getOrElse(
+          throw new Exception(s"Could not find dependency $compilerDep")
+        )
 
     val compiler =
       Coursier.localArtefacts(resolution, Set(compilerDep), false)

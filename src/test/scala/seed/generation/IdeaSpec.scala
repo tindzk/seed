@@ -86,6 +86,11 @@ object IdeaSpec extends SimpleTestSuite {
           ModuleConfig(BuildConfig.inheritSettings(Module())(m), Paths.get("."))
       )
 
+    assertEquals(
+      build("c").module.test.get.jvm.get.sources,
+      List(Paths.get("c/test"))
+    )
+
     val projectPath   = Paths.get(".")
     val outputPath    = Paths.get("/tmp")
     val packageConfig = PackageConfig(false, false, None, None)
