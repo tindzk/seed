@@ -93,6 +93,9 @@ object BuildConfig {
     )).toMap
   }
 
+  /** @return Take all settings from `parent` and override them with values
+    *         from `m`
+    */
   def inherit(parent: Module)(m: Module): Module = {
     val inheritTargets = if (m.targets.isEmpty) parent.targets else m.targets
 
@@ -103,9 +106,7 @@ object BuildConfig {
       scalaNativeVersion =
         m.scalaNativeVersion.orElse(parent.scalaNativeVersion),
       scalaOptions = (parent.scalaOptions ++ m.scalaOptions).distinct,
-      scalaOrganisation = m.scalaOrganisation
-        .orElse(parent.scalaOrganisation)
-        .orElse(Some(Organisation.Lightbend.packageName)),
+      scalaOrganisation = m.scalaOrganisation.orElse(parent.scalaOrganisation),
       compilerDeps =
         ArtefactResolution.mergeDeps(parent.compilerDeps ++ m.compilerDeps),
       testFrameworks = (parent.testFrameworks ++ m.testFrameworks).distinct,
@@ -115,6 +116,16 @@ object BuildConfig {
       javaDeps = ArtefactResolution.mergeDeps(parent.javaDeps ++ m.javaDeps)
     )
   }
+
+  def defaultSettings(m: Module): Module =
+    m.copy(
+      scalaOrganisation =
+        m.scalaOrganisation.orElse(Some(Organisation.Lightbend.packageName)),
+      jvm = m.jvm.map(defaultSettings),
+      js = m.js.map(defaultSettings),
+      native = m.native.map(defaultSettings),
+      test = m.test.map(defaultSettings)
+    )
 
   def inheritSettings(parent: Module)(module: Module): Module = {
     val mergedModule = inherit(parent)(module)
@@ -152,38 +163,38 @@ object BuildConfig {
         mainClass = None
       )
 
-    result.copy(
-      test = result.test
-        .map(inheritSettings(stripSettings(result)))
-        .map(
-          t =>
-            t.copy(
-              jvm = t.jvm
-                .orElse(
-                  if (!result.targets.contains(Platform.JVM)) None
-                  else Some(Module())
-                )
-                .map(inherit(stripSettings(result.jvm.getOrElse(Module()))))
-                .map(inherit(t))
-                .map(_.copy(targets = List())),
-              js = t.js
-                .orElse(
-                  if (!result.targets.contains(Platform.JavaScript)) None
-                  else Some(Module())
-                )
-                .map(inherit(stripSettings(result.js.getOrElse(Module()))))
-                .map(inherit(t))
-                .map(_.copy(targets = List())),
-              native = t.native
-                .orElse(
-                  if (!result.targets.contains(Platform.Native)) None
-                  else Some(Module())
-                )
-                .map(inherit(stripSettings(result.native.getOrElse(Module()))))
-                .map(inherit(t))
-                .map(_.copy(targets = List()))
-            )
-        )
+    defaultSettings(
+      result.copy(
+        test = result.test
+          .map(inheritSettings(stripSettings(result)))
+          .map(
+            t =>
+              t.copy(
+                jvm =
+                  (if (!t.targets.contains(Platform.JVM)) None
+                   else Some(result.test.flatMap(_.jvm).getOrElse(Module())))
+                    .map(inherit(result.test.getOrElse(Module())))
+                    .map(inherit(stripSettings(result.jvm.getOrElse(Module()))))
+                    .map(inherit(stripSettings(result)))
+                    .map(_.copy(targets = List())),
+                js = (if (!t.targets.contains(Platform.JavaScript)) None
+                      else Some(result.test.flatMap(_.js).getOrElse(Module())))
+                  .map(inherit(result.test.getOrElse(Module())))
+                  .map(inherit(stripSettings(result.js.getOrElse(Module()))))
+                  .map(inherit(stripSettings(result)))
+                  .map(_.copy(targets = List())),
+                native =
+                  (if (!t.targets.contains(Platform.Native)) None
+                   else Some(result.test.flatMap(_.native).getOrElse(Module())))
+                    .map(inherit(result.test.getOrElse(Module())))
+                    .map(
+                      inherit(stripSettings(result.native.getOrElse(Module())))
+                    )
+                    .map(inherit(stripSettings(result)))
+                    .map(_.copy(targets = List()))
+              )
+          )
+      )
     )
   }
 

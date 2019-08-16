@@ -10,7 +10,7 @@ import seed.{Log, LogLevel}
 import seed.config.util.TomlUtils
 import seed.generation.util.BuildUtil
 import seed.model.Build.{JavaDep, Resolvers, ScalaDep, VersionTag}
-import seed.model.Platform.{JVM, JavaScript}
+import seed.model.Platform.{JVM, JavaScript, Native}
 import BuildUtil.tempPath
 import seed.cli.util.Ansi
 import seed.config.BuildConfig.{Build, Result}
@@ -301,6 +301,211 @@ object BuildConfigSpec extends SimpleTestSuite {
     assert(build("example").module.test.get.scalaDeps.isEmpty)
     assert(build("example").module.test.get.js.get.mainClass.isEmpty)
     assert(build("example").module.test.get.js.get.scalaDeps.isEmpty)
+  }
+
+  test("Override target platforms on test module") {
+    val toml =
+      """
+        |[project]
+        |scalaVersion       = "2.11.11"
+        |scalaJsVersion     = "0.6.28"
+        |scalaNativeVersion = "0.3.7"
+        |
+        |[module.example]
+        |sources = ["src/"]
+        |targets = ["jvm", "js", "native"]
+        |
+        |[module.example.test]
+        |sources = ["src/"]
+        |targets = ["jvm", "js"]
+      """.stripMargin
+
+    val build = parseBuild(toml)(_ => "")
+    assertEquals(build("example").module.targets, List(JVM, JavaScript, Native))
+    assertEquals(
+      build("example").module.test.get.targets,
+      List(JVM, JavaScript)
+    )
+    assertEquals(build("example").module.test.get.native, None)
+  }
+
+  test("Set Scala version on test module") {
+    val toml =
+      """
+        |[project]
+        |scalaVersion       = "2.13.0"
+        |scalaNativeVersion = "0.3.9"
+        |
+        |[module.example]
+        |sources = ["shared/src"]
+        |targets = ["jvm", "native"]
+        |
+        |[module.example.native]
+        |scalaVersion = "2.11.12"
+        |sources      = ["native/src"]
+        |
+        |[module.example.test.native]
+      """.stripMargin
+
+    val build = parseBuild(toml)(_ => "")
+    assertEquals(build("example").module.targets, List(Native, JVM))
+    assertEquals(
+      build("example").module.native.get.scalaVersion,
+      Some("2.11.12")
+    )
+    assertEquals(build("example").module.test.get.targets, List(Native, JVM))
+    assertEquals(
+      build("example").module.test.get.native.get.scalaVersion,
+      Some("2.11.12")
+    )
+    assertEquals(build("example").module.test.get.native.get.targets, List())
+  }
+
+  test("Set Scala version on test module (2)") {
+    val toml =
+      """
+        |[project]
+        |scalaVersion       = "2.13.0"
+        |scalaNativeVersion = "0.3.9"
+        |
+        |[module.example]
+        |sources = ["shared/src"]
+        |targets = ["jvm", "native"]
+        |
+        |[module.example.native]
+        |scalaVersion = "2.11.11"
+        |sources      = ["native/src"]
+        |
+        |[module.example.test.native]
+        |scalaVersion = "2.11.12"
+      """.stripMargin
+
+    val build = parseBuild(toml)(_ => "")
+    assertEquals(build("example").module.targets, List(Native, JVM))
+    assertEquals(
+      build("example").module.native.get.scalaVersion,
+      Some("2.11.11")
+    )
+    assertEquals(build("example").module.test.get.targets, List(Native, JVM))
+    assertEquals(
+      build("example").module.test.get.native.get.scalaVersion,
+      Some("2.11.12")
+    )
+    assertEquals(build("example").module.test.get.native.get.targets, List())
+  }
+
+  test("Set Scala version on test module (3)") {
+    val toml =
+      """
+        |[project]
+        |scalaVersion       = "2.13.0"
+        |scalaNativeVersion = "0.3.9"
+        |
+        |[module.example]
+        |sources = ["shared/src"]
+        |targets = ["jvm", "native"]
+        |
+        |[module.example.native]
+        |scalaVersion = "2.11.11"
+        |sources      = ["native/src"]
+        |
+        |[module.example.test.native]
+        |scalaVersion = "2.11.12"
+      """.stripMargin
+
+    val build = parseBuild(toml)(_ => "")
+    assertEquals(build("example").module.targets, List(Native, JVM))
+    assertEquals(
+      build("example").module.native.get.scalaVersion,
+      Some("2.11.11")
+    )
+    assertEquals(build("example").module.test.get.targets, List(Native, JVM))
+    assertEquals(
+      build("example").module.test.get.native.get.scalaVersion,
+      Some("2.11.12")
+    )
+    assertEquals(build("example").module.test.get.native.get.targets, List())
+
+    assertEquals(
+      build("example").module.scalaOrganisation,
+      Some("org.scala-lang")
+    )
+    assertEquals(
+      build("example").module.test.get.scalaOrganisation,
+      Some("org.scala-lang")
+    )
+    assertEquals(
+      build("example").module.test.get.jvm.get.scalaOrganisation,
+      Some("org.scala-lang")
+    )
+    assertEquals(
+      build("example").module.test.get.native.get.scalaOrganisation,
+      Some("org.scala-lang")
+    )
+  }
+
+  test("Set Scala organisation on test module") {
+    val toml =
+      """
+        |[project]
+        |scalaVersion      = "2.11.11-bin-typelevel-4"
+        |scalaJsVersion    = "0.6.28"
+        |scalaOrganisation = "org.typelevel"
+        |
+        |[module.example]
+        |sources = ["shared/src"]
+        |targets = ["js", "jvm"]
+        |
+        |[module.example.test]
+        |sources = ["shared/test"]
+        |targets = ["js", "jvm"]
+        |
+        |[module.example.test.js]
+        |sources = ["js/src"]
+      """.stripMargin
+
+    val build = parseBuild(toml)(_ => "")
+    assertEquals(
+      build("example").module.scalaOrganisation,
+      Some("org.typelevel")
+    )
+    assertEquals(
+      build("example").module.test.get.scalaOrganisation,
+      Some("org.typelevel")
+    )
+    assertEquals(
+      build("example").module.test.get.js.get.scalaOrganisation,
+      Some("org.typelevel")
+    )
+  }
+
+  test("Set Scala organisation on test module (2)") {
+    val toml =
+      """
+        |[module.example]
+        |scalaVersion      = "2.11.11-bin-typelevel-4"
+        |scalaJsVersion    = "0.6.28"
+        |scalaOrganisation = "org.typelevel"
+        |sources           = ["shared/src"]
+        |targets           = ["js", "jvm"]
+        |
+        |[module.example.test]
+        |sources = ["shared/test"]
+        |targets = ["js", "jvm"]
+        |
+        |[module.example.test.js]
+        |sources = ["js/src"]
+      """.stripMargin
+
+    val build = parseBuild(toml)(_ => "")
+    assertEquals(
+      build("example").module.scalaOrganisation,
+      Some("org.typelevel")
+    )
+    assertEquals(
+      build("example").module.test.get.js.get.scalaOrganisation,
+      Some("org.typelevel")
+    )
   }
 
   test("Parse TOML with full Scala dependency") {

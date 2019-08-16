@@ -1,0 +1,18 @@
+[project]
+scalaVersion       = "2.11.11"
+scalaNativeVersion = "0.3.7"
+testFrameworks     = ["org.scalatest.tools.Framework"]
+
+[module.example]
+sources = ["shared/src"]
+targets = ["jvm", "native"]
+
+[module.example.test]
+sources   = ["shared/test"]
+targets   = ["jvm"]
+scalaDeps = [
+  ["org.scalatest", "scalatest", "3.0.8"]
+]
+
+[module.example.jvm]
+sources = ["jvm/src"]
