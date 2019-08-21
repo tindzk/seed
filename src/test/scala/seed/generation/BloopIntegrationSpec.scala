@@ -49,6 +49,48 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     for { _ <- compile; _ <- run } yield ()
   }
 
+  private val packageConfig = PackageConfig(
+    tmpfs = false,
+    silent = false,
+    ivyPath = None,
+    cachePath = None
+  )
+
+  test(
+    "Generate project with duplicate transitive module dependencies"
+  ) { _ =>
+    val config =
+      BuildConfig
+        .load(Paths.get("test/duplicate-transitive-dep"), Log.urgent)
+        .get
+    import config._
+    val buildPath = tempPath.resolve("duplicate-transitive-dep")
+    Files.createDirectory(buildPath)
+    cli.Generate.ui(
+      Config(),
+      projectPath,
+      buildPath,
+      resolvers,
+      build,
+      Command.Bloop(packageConfig),
+      Log.urgent
+    )
+
+    val bloopBuildPath = buildPath.resolve("build").resolve("bloop")
+
+    val bloopPath = buildPath.resolve(".bloop")
+    val root      = readBloopJson(bloopPath.resolve("root.json"))
+    val paths     = root.project.classpath.filter(_.startsWith(buildPath))
+    assertEquals(
+      paths,
+      List(
+        bloopBuildPath.resolve("a"),
+        bloopBuildPath.resolve("b"),
+        bloopBuildPath.resolve("shared")
+      )
+    )
+  }
+
   testAsync("Generate and compile meta modules") { _ =>
     val projectPath = tempPath.resolve("meta-module")
     util.ProjectGeneration.generateBloopCrossProject(projectPath)
@@ -63,12 +105,6 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     import config._
     val buildPath = tempPath.resolve("example-paradise")
     Files.createDirectory(buildPath)
-    val packageConfig = PackageConfig(
-      tmpfs = false,
-      silent = false,
-      ivyPath = None,
-      cachePath = None
-    )
     cli.Generate.ui(
       Config(),
       projectPath,
@@ -89,12 +125,6 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       import config._
       val buildPath = tempPath.resolve("example-paradise-platform")
       Files.createDirectory(buildPath)
-      val packageConfig = PackageConfig(
-        tmpfs = false,
-        silent = false,
-        ivyPath = None,
-        cachePath = None
-      )
       cli.Generate.ui(
         Config(),
         projectPath,
@@ -113,12 +143,6 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     import config._
     val buildPath = tempPath.resolve("submodule-output-path")
     Files.createDirectory(buildPath)
-    val packageConfig = PackageConfig(
-      tmpfs = false,
-      silent = false,
-      ivyPath = None,
-      cachePath = None
-    )
     cli.Generate.ui(
       Config(),
       projectPath,
@@ -150,12 +174,6 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     import result._
     val buildPath = tempPath.resolve("example-paradise-versions")
     Files.createDirectory(buildPath)
-    val packageConfig = PackageConfig(
-      tmpfs = false,
-      silent = false,
-      ivyPath = None,
-      cachePath = None
-    )
     cli.Generate.ui(
       Config(),
       projectPath,
@@ -234,12 +252,6 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     import config._
     val buildPath = tempPath.resolve("multiple-scala-versions-bloop")
     Files.createDirectory(buildPath)
-    val packageConfig = PackageConfig(
-      tmpfs = false,
-      silent = false,
-      ivyPath = None,
-      cachePath = None
-    )
     cli.Generate.ui(
       Config(),
       projectPath,
@@ -269,12 +281,6 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     val buildPath = tempPath.resolve(name)
     Files.createDirectory(buildPath)
     val generatedFile = projectPath.resolve("demo").resolve("Generated.scala")
-    val packageConfig = PackageConfig(
-      tmpfs = false,
-      silent = false,
-      ivyPath = None,
-      cachePath = None
-    )
     cli.Generate.ui(
       Config(),
       projectPath,
