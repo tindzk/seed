@@ -1,0 +1,21 @@
+[project]
+scalaVersion = "2.12.8"
+
+[module.shared]
+sources = ["shared/"]
+targets = ["jvm"]
+
+[module.a]
+sources = ["a/"]
+targets = ["jvm"]
+moduleDeps = ["shared"]
+
+[module.b]
+sources = ["b/"]
+targets = ["jvm"]
+moduleDeps = ["shared"]
+
+[module.root]
+sources = ["root/"]
+targets = ["jvm"]
+moduleDeps = ["a", "b"]

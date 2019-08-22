@@ -472,6 +472,7 @@ object BuildConfig {
             build(name).module
           )
       )
+      .distinct
 
   def collectNativeClassPath(
     buildPath: Path,
@@ -489,6 +490,7 @@ object BuildConfig {
             build(name).module
           )
       )
+      .distinct
 
   def collectJvmClassPath(
     buildPath: Path,
@@ -506,6 +508,7 @@ object BuildConfig {
               build(name).module
             )
       )
+      .distinct
 
   def collectJsDeps(
     build: Build,
