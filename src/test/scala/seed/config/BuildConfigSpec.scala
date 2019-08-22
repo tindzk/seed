@@ -674,4 +674,27 @@ object BuildConfigSpec extends SimpleTestSuite {
       )
     )
   }
+
+  test("Detect wrong test module syntax") {
+    val buildToml = """
+      |[module.foo]
+      |sources = ["src"]
+      |scalaVersion = "2.11.11"
+      |
+      |[module.foo.jvm.test]
+      |sources = ["test"]
+    """.stripMargin
+
+    val messages = ListBuffer[String]()
+    val log      = new Log(messages += _, identity, LogLevel.Error, false)
+    parseBuild(buildToml, log, fail = true)(_ => "")
+    assert(
+      messages.exists(
+        _.contains(
+          s"A test module cannot be defined on the platform module ${Ansi
+            .italic("foo:jvm")}. Did you mean ${Ansi.italic("[module.foo.test.jvm]")}?"
+        )
+      )
+    )
+  }
 }
