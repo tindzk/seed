@@ -253,6 +253,12 @@ object BuildConfig {
       Platform.All.keys.flatMap(f).headOption
     }
 
+    val invalidPlatformTestModule = Platform.All
+      .flatMap(
+        p => platformModule(module, p._1).find(_.test.isDefined).map(_ => p._1)
+      )
+      .headOption
+
     val moduleName = Ansi.italic(name)
 
     if (module.targets.isEmpty && module.target.isEmpty)
@@ -336,6 +342,12 @@ object BuildConfig {
         )} (${incompatibleScalaVersion.get._2}) is incompatible with ${Ansi.italic(
           s"${incompatibleScalaVersion.get._3}:${incompatibleScalaVersion.get._1.id}"
         )} (${incompatibleScalaVersion.get._4})"
+      )
+    else if (invalidPlatformTestModule.nonEmpty)
+      error(
+        s"A test module cannot be defined on the platform module ${Ansi
+          .italic(s"$name:${invalidPlatformTestModule.get.id}")}. Did you mean ${Ansi
+          .italic(s"[module.$name.test.${invalidPlatformTestModule.get.id}]")}?"
       )
     else true
   }
