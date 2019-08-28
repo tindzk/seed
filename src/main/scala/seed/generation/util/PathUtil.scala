@@ -1,11 +1,14 @@
 package seed.generation.util
 
 import java.nio.file.{Files, Path, Paths}
+import java.security.AccessController
 
 import seed.Log
 import seed.cli.util.Ansi
 
 object PathUtil {
+  val TemporaryFolder = Paths.get(System.getProperty("java.io.tmpdir"))
+
   def tmpfsPath(projectPath: Path, log: Log): Path = {
     val name = projectPath.toAbsolutePath.getFileName.toString
     log.info("Build path set to tmpfs")

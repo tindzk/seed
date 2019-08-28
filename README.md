@@ -109,7 +109,7 @@ This downloads all dependencies to `$HOME/.coursier` and creates projects for ID
 The final step is to compile and run your program:
 
 ```shell
-$ bloop run demo
+$ seed run demo
 ```
 
 This compiles the module to `build/` and runs it.
@@ -148,6 +148,7 @@ This compiles the module to `build/` and runs it.
     * True colour output
     * User-friendly messages
     * Unicode characters
+    * Progress bars
 * Project creation wizard
 * Packaging support
     * Copy over dependencies
@@ -675,6 +676,9 @@ level = "debug"
 
 # Use Unicode characters to indicate log levels
 unicode = true
+
+# Show progress bars when compiling modules
+progress = true
 ```
 
 The default values are indicated.
@@ -714,7 +718,28 @@ This approach is easier to manage in CI setups as Git modules track a specific c
 ## Usage
 Seed delegates the compilation phase to an external tool. Bloop is an intuitive build server that runs on the same machine as a background service. Its architectural design allows for shorter compilation cycles and lower overall memory consumption when working on multiple projects at the same time.
 
-After having run `seed bloop`, the following Bloop commands can be used:
+### Building, linking and running
+After having created a Bloop project with `seed bloop`, you can compile, link and run modules directly from Seed:
+* `seed build <module>`  This will compile all platform modules
+* `seed link <module>`   This will link all platform modules which support linking (JavaScript and Native)
+* `seed run <module>`    This will run a compatible platform module (JVM, JavaScript and Native)
+
+You can select a specific platform:
+* `seed build <module>:js`  This will compile only the JavaScript module
+* `seed link <module>:js`   This will link only the JavaScript module
+* `seed run <module>:js`    This will run only the JavaScript module
+
+If you defined a [custom build target](#custom-build-targets), you can use the same syntax to build it:
+* `seed build <module>:<target>`
+
+If you run Seed in [server mode](#server-mode), you can connect to your remote Seed instance using the `--connect` parameter:
+* `seed build --connect <module>` Trigger compilation on remote Seed instance
+* `seed link --connect <module>`  Trigger linking on remote Seed instance
+* `seed run --connect <module>`   Trigger running on remote Seed instance
+
+Also, run `seed --help` to acquaint yourself with all the available commands.
+
+As Seed creates a regular Bloop project, the official Bloop CLI can be used as well:
 
 ```shell
 bloop compile <module>      # Compile module
@@ -724,25 +749,6 @@ bloop test <module>         # Run test cases
 ```
 
 For more detailed information, please refer to the official [Bloop user guide](https://scalacenter.github.io/bloop/).
-
-Also, run `seed --help` to acquaint yourself with all the available commands.
-
-### Compiling and Linking
-After having created the Bloop project, you can compile and link it directly from Seed:
-* `seed build <module>`  This will compile all platform modules
-* `seed link <module>`   This will link all platform modules which support linking (JavaScript and Native)
-
-You can select a specific platform:
-* `seed build <module>:js`  This will compile only the JavaScript module
-* `seed link <module>:js`   This will link only the JavaScript module
-
-If you defined a [custom build target](#custom-build-targets), you can use the same syntax to build it:
-* `seed build <module>:<target>`
-
-If you run Seed in [server mode](#server-mode), you can connect to your remote Seed instance using the `--connect` parameter:
-
-* `seed build --connect <module>` Trigger compilation on remote Seed instance
-* `seed link --connect <module>`  Trigger linking on remote Seed instance
 
 ### Server mode
 You can run Seed in server mode. By default, it will listen to JSON commands on the WebSocket server `localhost:8275`. It supports several commands:
@@ -822,10 +828,9 @@ As a workaround, you can open a terminal within IntelliJ and use Bloop, for exam
 ## Packaging
 In order to distribute your project, you may want to package the compiled sources. The approach chosen in Seed is to bundle them as a JAR file.
 
-To package the module `demo`, use the following commands:
+To build and package the module `demo`, use the following command:
 
 ```shell
-bloop compile demo
 seed package demo
 ```
 

@@ -297,8 +297,10 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       List("demo"),
       watch = false,
       tmpfs = false,
+      progress = false,
       if (expectFailure) Log.silent else Log.urgent,
-      _ => _ => ()
+      _ => (),
+      _ => ()
     )
 
     val uio = result.right.get
@@ -342,6 +344,10 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
 
   testAsync("Build project with failing custom command target") { _ =>
     buildCustomTarget("custom-command-target-fail", expectFailure = true)
+  }
+
+  testAsync("Build project with failing compilation") { _ =>
+    buildCustomTarget("compilation-failure", expectFailure = true)
   }
 
   testAsync("Generate non-JVM project") { _ =>

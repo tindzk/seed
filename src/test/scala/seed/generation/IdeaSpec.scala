@@ -169,7 +169,7 @@ object IdeaSpec extends SimpleTestSuite {
       .byTagAll["orderEntry"]
       .filter(_.attr("type").contains("module"))
       .flatMap(_.attr("module-name"))
-    assertEquals(moduleNames, List("core", "base"))
+    assertEquals(moduleNames, List("base", "core"))
   }
 
   test("Generate non-JVM cross-platform module") {

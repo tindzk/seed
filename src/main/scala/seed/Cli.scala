@@ -34,6 +34,12 @@ object Cli {
       watch: Boolean,
       modules: List[String]
     ) extends Command
+    case class Run(
+      packageConfig: PackageConfig,
+      webSocket: Option[WebSocketConfig],
+      watch: Boolean,
+      module: String
+    ) extends Command
     case class Link(
       packageConfig: PackageConfig,
       webSocket: Option[WebSocketConfig],
@@ -106,6 +112,13 @@ object Cli {
       .and(repeatedAtLeastOnceFree[String])
       .to[Command.Build]
 
+  val runCommand =
+    packageConfigArg
+      .and(webSocketConnectArg)
+      .and(flag("--watch"))
+      .and(requiredFree[String])
+      .to[Command.Run]
+
   val linkCommand =
     packageConfigArg
       .and(webSocketConnectArg)
@@ -139,6 +152,7 @@ object Cli {
           "all"         -> packageConfigArg.to[Command.All],
           "server"      -> serverCommand,
           "build"       -> buildCommand,
+          "run"         -> runCommand,
           "link"        -> linkCommand,
           "buildEvents" -> buildEventsCommand,
           "update"      -> flag("--pre-releases").to[Command.Update],
@@ -163,12 +177,12 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
     ${italic("all")}           Create Bloop and IDEA projects
     ${italic("server")}        Run Seed in server mode
     ${italic("build")}         Build module(s)
+    ${italic("run")}           Run module
     ${italic("link")}          Link module(s)
     ${italic("buildEvents")}   Subscribe to build events on Seed server
     ${italic("update")}        Check library dependencies for updates
     ${italic("package")}       Create JAR package for given module and its dependencies
                   Also sets the main class from the build file
-                  Specify --libs to copy all library dependencies for distribution
 
   ${bold("Parameters:")}
     ${italic("--build")}       Path to the build file (default: ${Ansi.italic("build.toml")})
@@ -188,10 +202,19 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
     ${italic("--watch")}       Build upon source changes (cannot be combined with ${Ansi.italic("--connect")})
     ${italic("<modules>")}     One or multiple space-separated modules. The syntax of a module is: ${italic("<name>")} or ${italic("<name>:<target>")}
                   ${italic("Examples:")}
-                  - app          Compile all available platforms of module ${Ansi.italic("app")}
-                  - app:js       Only compile JavaScript platform of module ${Ansi.italic("app")}
-                  - app:native   Only compile Native platform of module ${Ansi.italic("app")}
+                  - app          Compile all available platform modules of ${Ansi.italic("app")}
+                  - app:js       Only compile JavaScript platform module of ${Ansi.italic("app")}
+                  - app:native   Only compile Native platform module of ${Ansi.italic("app")}
                   - app:<target> Only build ${Ansi.italic("<target>")} of the module ${Ansi.italic("app")}
+
+  ${bold("Command:")} ${underlined("run")} [--connect[=${webSocketDefaultConnection.format}]] [--watch] <module>
+    ${italic("--connect")}     Build and run module on remote Seed server
+    ${italic("--watch")}       Continuously build module and restart process upon source changes (cannot be combined with ${Ansi.italic("--connect")})
+    ${italic("<module>")}      Module to run. The syntax of a module is: ${italic("<name>")} or ${italic("<name>:<target>")}
+                  ${italic("Examples:")}
+                  - app          Run executable platform module of ${Ansi.italic("app")}
+                  - app:js       Run JavaScript module of ${Ansi.italic("app")}
+                  - app:native   Run Native module of ${Ansi.italic("app")}
 
   ${bold("Command:")} ${underlined("link")} [--connect[=${webSocketDefaultConnection.format}]] [--optimise] [--watch] <modules>
     ${italic("--connect")}     Run link command on remote Seed server
@@ -200,8 +223,8 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
     ${italic("<modules>")}     One or multiple space-separated modules. The syntax of a module is: ${italic("<name>")} or ${italic("<name>:<platform>")}
                   ${italic("Examples:")}
                   - app         Link all available platforms of module ${Ansi.italic("app")}
-                  - app:js      Only link JavaScript platform of module ${Ansi.italic("app")}
-                  - app:native  Only link Native platform of module ${Ansi.italic("app")}
+                  - app:js      Only link JavaScript platform module of ${Ansi.italic("app")}
+                  - app:native  Only link Native platform module of ${Ansi.italic("app")}
 
     ${italic("Examples:")}
       1) seed link app:js app:native  Link JavaScript and native module ${Ansi.italic("app")}, then exit
@@ -216,9 +239,9 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
 
   ${bold("Command:")} ${underlined("package")} [--tmpfs] [--libs] [--output=<path>] <module>
     ${italic("--tmpfs")}       Read build directory in tmpfs
-    ${italic("--libs")}        Copy libraries and reference them in the JAR's class path
+    ${italic("--libs")}        Copy all library dependencies, reference them in the generated JAR file's class path
     ${italic("--output")}      Output path (default: ${Ansi.italic("build/dist/")})
-    ${italic("<module>")}      Module to package""")
+    ${italic("<module>")}      Module to build and package""")
   }
   // format: on
 
@@ -272,6 +295,7 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
           val log    = Log(config)
           val result =
             BuildConfig.load(buildPath, log).getOrElse(sys.exit(1))
+          val progress = config.cli.progress
           cli.Package.ui(
             config,
             result.projectPath,
@@ -280,6 +304,7 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
             module,
             output,
             libs,
+            progress,
             packageConfig,
             log
           )
@@ -307,6 +332,10 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
           val config = SeedConfig.load(configPath)
           val log    = Log(config)
           cli.Build.ui(buildPath, config, command, log)
+        case Success(Config(configPath, buildPath, command: Command.Run)) =>
+          val config = SeedConfig.load(configPath)
+          val log    = Log(config)
+          cli.Run.ui(buildPath, config, command, log)
         case Success(Config(configPath, buildPath, command: Command.Link)) =>
           val config = SeedConfig.load(configPath)
           val log    = Log(config)

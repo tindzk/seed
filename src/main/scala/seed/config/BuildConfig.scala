@@ -2,7 +2,8 @@ package seed.config
 
 import java.nio.file.{Files, Path}
 
-import seed.cli.util.{Ansi, ColourScheme}
+import org.apache.commons.io.FileUtils
+import seed.cli.util.{Ansi, ColourScheme, Watcher}
 import seed.model.Build.{JavaDep, Module, ScalaDep}
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.model.{Build, Organisation, Platform, TomlBuild}
@@ -426,17 +427,21 @@ object BuildConfig {
   def targetName(build: Build, name: String, platform: Platform): String =
     if (!isCrossBuild(build(name).module)) name else name + "-" + platform.id
 
-  def buildTargets(build: Build, module: String): List[String] = {
-    val m = build(module).module
-    val p = m.targets
-    p.map(p => targetName(build, module, p))
-  }
-
-  def linkTargets(build: Build, module: String): List[String] = {
+  def linkTargets(build: Build, module: String): List[(String, Platform)] = {
     val m = build(module).module
     val p = m.targets.diff(List(JVM))
-    p.map(p => targetName(build, module, p))
+    p.map((module, _))
   }
+
+  /** @return Unique paths including invalid ones */
+  def sourcePaths(build: Build, modules: List[(String, Platform)]): List[Path] =
+    modules.flatMap {
+      case (module, platform) =>
+        val m = build(module).module
+        val pmSources =
+          platformModule(m, platform).map(_.sources).getOrElse(List())
+        m.sources ++ pmSources
+    }.distinct
 
   def targetsFromPlatformModules(module: Build.Module): List[Platform] =
     (if (module.jvm.nonEmpty) List(JVM) else List()) ++
@@ -500,28 +505,33 @@ object BuildConfig {
   def collectJsModuleDeps(modules: Build, module: Module): List[String] =
     module.moduleDeps.flatMap(
       m =>
-        m +: modules(m).module.js.toList
-          .flatMap(collectJsModuleDeps(modules, _))
+        modules(m).module.js.toList
+          .flatMap(collectJsModuleDeps(modules, _)) :+ m
     )
 
   def collectNativeModuleDeps(build: Build, module: Module): List[String] =
     module.moduleDeps.flatMap(
       m =>
-        m +: build(m).module.native.toList
-          .flatMap(collectNativeModuleDeps(build, _))
+        build(m).module.native.toList
+          .flatMap(collectNativeModuleDeps(build, _)) :+ m
     )
 
   def collectJvmModuleDeps(build: Build, module: Module): List[String] =
     module.moduleDeps.flatMap(
       m =>
-        m +: build(m).module.jvm.toList.flatMap(collectJvmModuleDeps(build, _))
+        build(m).module.jvm.toList.flatMap(collectJvmModuleDeps(build, _)) :+ m
     )
 
   def collectSharedModuleDeps(build: Build, module: Module): List[String] =
     module.moduleDeps.flatMap(
-      m => m +: collectSharedModuleDeps(build, build(m).module)
+      m => collectSharedModuleDeps(build, build(m).module) :+ m
     )
 
+  /**
+    * Returns complete list of transitive module dependencies using DFS ordering
+    *
+    * @note Result includes custom build targets
+    */
   def collectModuleDeps(
     build: Build,
     module: Module,
@@ -551,6 +561,43 @@ object BuildConfig {
       .filter(module.targets.contains)
       .flatMap(p => collectModuleDepsBase(build, module, p))
       .distinct
+
+  def modulesWithSources(
+    build: Build,
+    modules: List[(String, Platform)]
+  ): List[(String, Platform)] =
+    modules.filter { m =>
+      val paths = sourcePaths(build, List(m))
+      paths.exists(
+        p =>
+          Files.exists(p) && !FileUtils
+            .listFiles(p.toFile, Watcher.Extensions, true)
+            .isEmpty
+      )
+    }
+
+  /** Transitively resolve modules with Scala source files */
+  def expandModules(
+    build: Build,
+    modules: List[(String, Platform)]
+  ): List[(String, Platform)] =
+    modulesWithSources(
+      build,
+      modules.flatMap {
+        case (m, p) =>
+          (BuildConfig
+            .collectModuleDeps(
+              build,
+              BuildConfig.platformModule(build(m).module, p).get,
+              p
+            )
+            .filter(
+              d =>
+                // Not the case for custom targets
+                build(d).module.targets.contains(p)
+            ) :+ m).map((_, p))
+      }.distinct
+    )
 
   def collectJsClassPath(
     buildPath: Path,

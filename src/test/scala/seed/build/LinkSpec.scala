@@ -5,7 +5,8 @@ import java.nio.file.Files
 import scala.collection.mutable.ListBuffer
 import minitest.TestSuite
 import seed.Log
-import seed.cli.util.{BloopCli, RTS}
+import seed.cli.Link
+import seed.cli.util.{ConsoleOutput, RTS}
 import seed.generation.util.{ProjectGeneration, TestProcessHelper}
 import seed.model.{BuildEvent, Platform}
 import seed.generation.util.TestProcessHelper.ec
@@ -25,28 +26,52 @@ object LinkSpec extends TestSuite[Unit] {
     val build = ProjectGeneration.generateBloopCrossProject(projectPath)
 
     var events = ListBuffer[BuildEvent]()
-    def onStdOut(output: String): Unit =
-      BloopCli.parseStdOut(build)(output).foreach(events += _)
 
-    val process = BloopCli.link(
-      build,
+    val consoleOutput = new ConsoleOutput(Log.urgent, _ => ())
+    val client = new BloopClient(
+      consoleOutput,
+      progress = false,
       projectPath,
-      List("example-js"),
-      optimise = false,
-      watch = false,
-      Log.urgent,
-      onStdOut
+      build,
+      List("example" -> Platform.JavaScript),
+      events += _
     )
 
-    assert(process.isDefined)
+    val program = Bsp
+      .runBspServerAndConnect(client, projectPath, consoleOutput.log)
+      .flatMap {
+        case (bspProcess, socket, server) =>
+          for {
+            _ <- Link.linkPass(
+              consoleOutput,
+              client,
+              server,
+              build,
+              projectPath,
+              List("example" -> Platform.JavaScript),
+              List("example" -> Platform.JavaScript),
+              optimise = false,
+              progress = false,
+              consoleOutput.log,
+              events += _
+            )
+            _ <- Bsp.shutdown(bspProcess, socket, server)
+          } yield ()
+      }
 
     for {
-      _ <- RTS.unsafeRunToFuture(process.get)
+      _ <- RTS.unsafeRunToFuture(program)
     } yield {
-      require(events.length == 3)
-      require(events(0) == BuildEvent.Compiling("example", Platform.JavaScript))
-      require(events(1) == BuildEvent.Compiled("example", Platform.JavaScript))
-      require(events(2).isInstanceOf[BuildEvent.Linked])
+      assertEquals(events.length, 3)
+      assertEquals(
+        events(0),
+        BuildEvent.Compiling("example", Platform.JavaScript)
+      )
+      assertEquals(
+        events(1),
+        BuildEvent.Compiled("example", Platform.JavaScript)
+      )
+      assert(events(2).isInstanceOf[BuildEvent.Linked])
       require(
         events(2)
           .asInstanceOf[BuildEvent.Linked]

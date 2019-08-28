@@ -20,8 +20,9 @@ class WsServer(
 ) extends WebSocketServer(address) {
   setReuseAddr(true)
 
-  def clientIp(conn: WebSocket): String =
-    conn.getRemoteSocketAddress.getAddress.getHostAddress
+  private def clientIp(conn: WebSocket): String =
+    if (conn.getRemoteSocketAddress == null) "<unknown>"
+    else conn.getRemoteSocketAddress.getAddress.getHostAddress
 
   override def onOpen(conn: WebSocket, handshake: ClientHandshake): Unit =
     log.debug(s"Client ${Ansi.italic(clientIp(conn))} connected")

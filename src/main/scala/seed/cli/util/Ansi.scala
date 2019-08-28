@@ -34,8 +34,10 @@ object ColourScheme {
 }
 
 object Ansi {
-  def esc(str: String*)  = "\u001b[" + str.mkString(";")
-  def escM(str: String*) = "\u001b[" + str.mkString(";") + "m"
+  val Escape = "\u001b["
+
+  def esc(str: String*)  = Escape + str.mkString(";")
+  def escM(str: String*) = Escape + str.mkString(";") + "m"
 
   def foreground(colour: Colour)(text: String): String =
     escM("38", "2", colour.r.toString, colour.g.toString, colour.b.toString) + text + escM(

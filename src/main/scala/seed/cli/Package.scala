@@ -1,17 +1,19 @@
 package seed.cli
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 
 import scala.collection.JavaConverters._
 import seed.artefact.{ArtefactResolution, Coursier}
-import seed.cli.util.Ansi
+import seed.build.{BloopClient, Bsp}
+import seed.cli.util.{Ansi, ConsoleOutput, RTS}
 import seed.config.BuildConfig
 import seed.config.BuildConfig.Build
 import seed.generation.util.PathUtil
 import seed.model.Build.{JavaDep, Module, Resolvers}
-import seed.model.Config
+import seed.model.{Config, Platform}
 import seed.model.Platform.JVM
 import seed.{Cli, Log}
+import zio._
 
 object Package {
   def ui(
@@ -22,39 +24,32 @@ object Package {
     module: String,
     output: Option[Path],
     libs: Boolean,
+    progress: Boolean,
     packageConfig: Cli.PackageConfig,
     log: Log
   ): Unit = {
-    val tmpfs          = packageConfig.tmpfs || seedConfig.build.tmpfs
-    val buildPath      = PathUtil.buildPath(projectPath, tmpfs, log)
-    val bloopBuildPath = buildPath.resolve("bloop")
-    val platform       = JVM
-    val outputPath     = output.getOrElse(buildPath.resolve("dist"))
+    val tmpfs = packageConfig.tmpfs || seedConfig.build.tmpfs
 
-    build.get(module) match {
-      case None => log.error(s"Module ${Ansi.italic(module)} does not exist")
-      case Some(resolvedModule) =>
-        val jvmModule =
-          resolvedModule.module.jvm.getOrElse(resolvedModule.module)
+    val buildPath  = PathUtil.buildPath(projectPath, tmpfs, log)
+    val outputPath = output.getOrElse(buildPath.resolve("dist"))
 
-        val paths = (
-          List(module) ++ BuildConfig.collectJvmModuleDeps(build, jvmModule)
-        ).map { name =>
-          if (BuildConfig.isCrossBuild(build(name).module))
-            bloopBuildPath.resolve(name + "-" + platform.id)
-          else
-            bloopBuildPath.resolve(name)
-        }
+    if (!build.contains(module))
+      log.error(s"Module ${Ansi.italic(module)} does not exist")
+    else {
+      val expandedModules =
+        BuildConfig.expandModules(build, List(module -> JVM))
 
-        val notFound = paths.find(p => !Files.exists(p))
-        if (notFound.isDefined)
-          log.error(
-            s"${Ansi.italic(notFound.get.toString)} does not exist. Build the module with `bloop compile <module name>` first"
-          )
-        else if (paths.isEmpty)
-          log.error(s"No build paths were found")
+      def onBuilt(stringPaths: List[String]) = UIO {
+        val paths = stringPaths.map(Paths.get(_))
+        require(paths.forall(Files.exists(_)))
+
+        if (paths.isEmpty) log.error("No build paths were found")
         else {
           val files = collectFiles(paths)
+
+          val resolvedModule = build(module)
+          val jvmModule =
+            resolvedModule.module.jvm.getOrElse(resolvedModule.module)
 
           val classPath =
             if (!libs) List()
@@ -88,7 +83,75 @@ object Package {
             log
           )
         }
+      }
+
+      val program =
+        buildModule(log, projectPath, build, progress, expandedModules, onBuilt)
+      RTS.unsafeRunSync(program)
     }
+  }
+
+  def buildModule(
+    log: Log,
+    projectPath: Path,
+    build: Build,
+    progress: Boolean,
+    expandedModules: List[(String, Platform)],
+    onBuilt: List[String] => UIO[Unit]
+  ): UIO[Unit] = {
+    val consoleOutput = new ConsoleOutput(log, print)
+
+    val client = new BloopClient(
+      consoleOutput,
+      progress,
+      projectPath,
+      build,
+      expandedModules,
+      _ => ()
+    )
+
+    Bsp
+      .runBspServerAndConnect(client, projectPath, consoleOutput.log)
+      .flatMap {
+        case (bspProcess, socket, server) =>
+          val classDirectories = Bsp.classDirectories(
+            server,
+            build,
+            projectPath,
+            expandedModules
+          )
+
+          consoleOutput.log.info(
+            s"Compiling ${Ansi.bold(expandedModules.length.toString)} modules..."
+          )
+
+          val program =
+            for {
+              moduleDirs <- classDirectories.option.map(_.get)
+              _ = {
+                moduleDirs.foreach {
+                  case (module, dir) =>
+                    consoleOutput.log.debug(
+                      s"Module ${Ansi.italic(module._1)}: ${Ansi.italic(dir)}"
+                    )
+                }
+              }
+              _ <- (for {
+                _ <- Bsp.compile(
+                  client,
+                  server,
+                  consoleOutput,
+                  progress,
+                  build,
+                  projectPath,
+                  expandedModules
+                )
+                _ <- onBuilt(moduleDirs.toList.map(_._2))
+              } yield ()).ensuring(Bsp.shutdown(bspProcess, socket, server))
+            } yield ()
+
+          Bsp.interruptIfParentFails(bspProcess.fiber.join, program)
+      }
   }
 
   def collectFiles(paths: List[Path]): List[(Path, String)] =

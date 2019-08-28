@@ -4,11 +4,11 @@ import java.net.URI
 import java.nio.file.Path
 
 import seed.Log
-import seed.cli.util.{Ansi, RTS, WsClient}
+import seed.cli.util.{Ansi, ConsoleOutput, RTS, WsClient}
 import seed.config.BuildConfig
-import seed.model.Config
+import seed.model.{BuildEvent, Config}
 import seed.Cli.Command
-import seed.config.BuildConfig.Build
+import seed.build.{BloopClient, Bsp}
 import zio._
 
 object Build {
@@ -35,15 +35,18 @@ object Build {
         }
 
       case None =>
-        val tmpfs = command.packageConfig.tmpfs || seedConfig.build.tmpfs
+        val tmpfs    = command.packageConfig.tmpfs || seedConfig.build.tmpfs
+        val progress = seedConfig.cli.progress
         build(
           buildPath,
           None,
           command.modules,
           command.watch,
           tmpfs,
+          progress,
           log,
-          _ => log.info
+          print,
+          _ => ()
         ) match {
           case Left(errors) =>
             errors.foreach(log.error)
@@ -60,8 +63,10 @@ object Build {
     modules: List[String],
     watch: Boolean,
     tmpfs: Boolean,
+    progress: Boolean,
     log: Log,
-    onStdOut: Build => String => Unit
+    onStdOut: String => Unit,
+    onBuildEvent: BuildEvent => Unit
   ): Either[List[String], UIO[Unit]] =
     BuildConfig.load(buildPath, log) match {
       case None => Left(List())
@@ -71,10 +76,12 @@ object Build {
 
         val parsedModules = modules.map(util.Target.parseModuleString(build))
         util.Validation.unpack(parsedModules).right.map { allModules =>
+          val path = projectPath.getOrElse(buildProjectPath)
+
           val processes = BuildTarget.buildTargets(
             build,
             allModules,
-            projectPath.getOrElse(buildProjectPath),
+            path,
             watch,
             tmpfs,
             log
@@ -82,32 +89,92 @@ object Build {
 
           val buildModules = allModules.flatMap {
             case util.Target.Parsed(module, None) =>
-              BuildConfig.buildTargets(build, module.name)
+              build(module.name).module.targets.map((module.name, _))
             case util.Target.Parsed(module, Some(Left(platform))) =>
-              List(BuildConfig.targetName(build, module.name, platform))
+              List((module.name, platform))
             case util.Target.Parsed(_, Some(Right(_))) => List()
           }
 
-          val bloop = util.BloopCli
-            .compile(
-              build,
-              projectPath.getOrElse(buildProjectPath),
-              buildModules,
-              watch,
-              log,
-              onStdOut(build)
-            )
-            .getOrElse(ZIO.unit)
+          val expandedModules =
+            BuildConfig.expandModules(build, buildModules)
+
+          val consoleOutput = new ConsoleOutput(log, onStdOut)
+
+          val program =
+            if (expandedModules.isEmpty) UIO(())
+            else {
+              val client = new BloopClient(
+                consoleOutput,
+                progress,
+                path,
+                build,
+                expandedModules,
+                onBuildEvent
+              )
+
+              Bsp
+                .runBspServerAndConnect(client, path, consoleOutput.log)
+                .flatMap {
+                  case (bspProcess, socket, server) =>
+                    val classDirectories = Bsp.classDirectories(
+                      server,
+                      build,
+                      path,
+                      expandedModules
+                    )
+
+                    val compile =
+                      Bsp.compile(
+                        client,
+                        server,
+                        consoleOutput,
+                        progress,
+                        build,
+                        path,
+                        expandedModules
+                      )
+
+                    val program =
+                      for {
+                        moduleDirs <- classDirectories.either
+                        _ = {
+                          moduleDirs.right.get.foreach {
+                            case (module, dir) =>
+                              consoleOutput.log.debug(
+                                s"Module ${Ansi.italic(module._1)}: ${Ansi.italic(dir)}"
+                              )
+                          }
+                        }
+                        _ <- if (!watch)
+                          compile
+                            .ensuring(Bsp.shutdown(bspProcess, socket, server))
+                        else
+                          Bsp.watchAction(
+                            build,
+                            client,
+                            consoleOutput,
+                            expandedModules,
+                            compile,
+                            wait = true,
+                            runInitially = true
+                          )
+                      } yield ()
+
+                    Bsp.interruptIfParentFails(bspProcess.fiber.join, program)
+                }
+            }
 
           val await = processes.collect { case Left(p)  => p }
           val async = processes.collect { case Right(p) => p }
 
           if (await.nonEmpty)
-            log.info(s"Awaiting termination of ${await.length} processes...")
+            consoleOutput.log.info(
+              s"Awaiting termination of ${await.length} processes..."
+            )
 
           for {
             _ <- ZIO.collectAllPar(await)
-            _ <- ZIO.collectAllPar(async :+ bloop)
+            _ <- ZIO.collectAllPar(async :+ program)
           } yield ()
         }
     }

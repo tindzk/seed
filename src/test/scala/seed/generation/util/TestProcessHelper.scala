@@ -28,7 +28,7 @@ object TestProcessHelper {
 
   def runCommand(cwd: Path, cmd: List[String]): Future[String] = {
     val sb = new StringBuilder
-    val process = ProcessHelper.runCommmand(
+    val process = ProcessHelper.runCommand(
       cwd,
       cmd,
       None,

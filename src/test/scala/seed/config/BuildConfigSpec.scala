@@ -868,4 +868,84 @@ object BuildConfigSpec extends SimpleTestSuite {
       )
     )
   }
+
+  test("Resolve source paths") {
+    val buildToml = """
+      |[project]
+      |scalaVersion = "2.11.11"
+      |scalaJsVersion     = "0.6.26"
+      |
+      |[module.bar2.js]
+      |sources = ["src/main/scala/"]
+      |
+      |[module.bar.js]
+      |sources = ["src/main/scala/"]
+      |
+      |[module.foo.js]
+      |sources = ["invalid-path/", "test.scala"]
+    """.stripMargin
+
+    val build = parseBuild(buildToml, Log.urgent)(_ => "")
+
+    assertEquals(
+      BuildConfig
+        .sourcePaths(
+          build,
+          List(("bar2", JavaScript), ("bar", JavaScript), ("foo", JavaScript))
+        ),
+      List("src/main/scala/", "invalid-path/", "test.scala").map(Paths.get(_))
+    )
+  }
+
+  test("Expand modules") {
+    val buildToml = """
+      |[project]
+      |scalaJsVersion     = "0.6.26"
+      |scalaNativeVersion = "0.3.7"
+      |
+      |[module.base2]
+      |scalaVersion = "2.11.11"
+      |sources      = ["src/main/scala/"]
+      |targets      = ["js", "native"]
+      |
+      |[module.base]
+      |scalaVersion = "2.11.11"
+      |moduleDeps   = ["base2"]
+      |sources      = ["src/main/scala/"]
+      |targets      = ["js", "native"]
+      |
+      |[module.foo]
+      |scalaVersion = "2.11.11"
+      |moduleDeps   = ["base"]
+      |sources      = ["invalid-path/"]
+      |targets      = ["js", "native"]
+      |
+      |[module.template.target.scss]
+      |root    = "."
+      |command = "yarn install && yarn run gulp"
+      |
+      |[module.bar]
+      |scalaVersion = "2.11.11"
+      |moduleDeps   = ["foo", "template"]
+      |sources      = ["invalid-path2/"]
+      |targets      = ["js", "native"]
+    """.stripMargin
+
+    val build = parseBuild(buildToml, Log.urgent)(_ => "")
+
+    assertEquals(
+      BuildConfig
+        .collectModuleDeps(
+          build,
+          BuildConfig.platformModule(build("bar").module, JavaScript).get,
+          JavaScript
+        ),
+      List("base2", "base", "foo", "template")
+    )
+
+    assertEquals(
+      BuildConfig.expandModules(build, List("bar" -> JavaScript)),
+      List(("base2", JavaScript), ("base", JavaScript))
+    )
+  }
 }
