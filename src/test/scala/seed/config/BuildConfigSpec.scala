@@ -697,4 +697,95 @@ object BuildConfigSpec extends SimpleTestSuite {
       )
     )
   }
+
+  test("Detect cyclic module dependency") {
+    val buildToml = """
+      |[module.foo]
+      |moduleDeps = ["foo"]
+      |scalaVersion = "2.11.11"
+      |sources = ["src"]
+      |targets = ["jvm"]
+    """.stripMargin
+
+    val messages = ListBuffer[String]()
+    val log      = new Log(messages += _, identity, LogLevel.Error, false)
+    parseBuild(buildToml, log, fail = true)(_ => "")
+    assert(
+      messages.exists(
+        _.contains(s"Module ${Ansi.italic("foo")} cannot depend on itself")
+      )
+    )
+  }
+
+  test("Detect cyclic module dependency (2)") {
+    val buildToml = """
+      |[module.foo.jvm]
+      |moduleDeps = ["foo"]
+      |scalaVersion = "2.11.11"
+      |sources = ["src"]
+    """.stripMargin
+
+    val messages = ListBuffer[String]()
+    val log      = new Log(messages += _, identity, LogLevel.Error, false)
+    parseBuild(buildToml, log, fail = true)(_ => "")
+    assert(
+      messages.exists(
+        _.contains(s"Module ${Ansi.italic("foo")} cannot depend on itself")
+      )
+    )
+  }
+
+  test("Detect cyclic module dependency (3)") {
+    val buildToml = """
+      |[project]
+      |scalaVersion = "2.11.11"
+      |
+      |[module.a]
+      |moduleDeps = ["b"]
+      |sources = ["a/src/"]
+      |targets = ["jvm"]
+      |
+      |[module.b]
+      |moduleDeps = ["a"]
+      |sources = ["b/src/"]
+      |targets = ["jvm"]
+      """.stripMargin
+
+    val messages = ListBuffer[String]()
+    val log      = new Log(messages += _, identity, LogLevel.Error, false)
+    parseBuild(buildToml, log, fail = true)(_ => "")
+    assert(
+      messages.exists(
+        _.contains(
+          s"Cycle detected in dependencies of module ${Ansi.italic("a")}"
+        )
+      )
+    )
+  }
+
+  test("Detect cyclic module dependency (4)") {
+    val buildToml = """
+      |[project]
+      |scalaVersion = "2.11.11"
+      |
+      |[module.a.jvm]
+      |moduleDeps = ["b"]
+      |sources = ["a/src/"]
+      |
+      |[module.b.jvm]
+      |moduleDeps = ["a"]
+      |sources = ["b/src/"]
+    """.stripMargin
+
+    val messages = ListBuffer[String]()
+    val log      = new Log(messages += _, identity, LogLevel.Error, false)
+    parseBuild(buildToml, log, fail = true)(_ => "")
+    assert(
+      messages.exists(
+        _.contains(
+          s"Cycle detected in dependencies of module ${Ansi.italic("a")}"
+        )
+      )
+    )
+  }
 }

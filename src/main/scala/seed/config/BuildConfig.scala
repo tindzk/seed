@@ -259,6 +259,34 @@ object BuildConfig {
       )
       .headOption
 
+    val cyclicModuleDep =
+      module.moduleDeps.contains(name) ||
+        Platform.All.exists(
+          p =>
+            platformModule(module, p._1).toList
+              .flatMap(_.moduleDeps)
+              .contains(name)
+        )
+
+    val cyclicModuleDep2 = {
+      def hasCycle(module: String, visited: Set[String]): Boolean =
+        visited.contains(module) || children(module).exists(
+          hasCycle(_, visited + module)
+        )
+      def children(module: String): List[String] =
+        build
+          .get(module)
+          .toList
+          .map(_.module)
+          .flatMap(
+            m =>
+              m +: Platform.All.toList
+                .flatMap(p => platformModule(m, p._1).toList)
+          )
+          .flatMap(_.moduleDeps)
+      hasCycle(name, Set())
+    }
+
     val moduleName = Ansi.italic(name)
 
     if (module.targets.isEmpty && module.target.isEmpty)
@@ -349,6 +377,10 @@ object BuildConfig {
           .italic(s"$name:${invalidPlatformTestModule.get.id}")}. Did you mean ${Ansi
           .italic(s"[module.$name.test.${invalidPlatformTestModule.get.id}]")}?"
       )
+    else if (cyclicModuleDep)
+      error(s"Module ${Ansi.italic(name)} cannot depend on itself")
+    else if (cyclicModuleDep2)
+      error(s"Cycle detected in dependencies of module ${Ansi.italic(name)}")
     else true
   }
 
