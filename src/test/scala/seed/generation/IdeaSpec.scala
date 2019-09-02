@@ -15,6 +15,13 @@ import seed.model.{Build, Config}
 import seed.generation.util.BuildUtil.tempPath
 
 object IdeaSpec extends SimpleTestSuite {
+  private val packageConfig = PackageConfig(
+    tmpfs = false,
+    silent = false,
+    ivyPath = None,
+    cachePath = None
+  )
+
   test("Normalise paths") {
     assertEquals(
       PathUtil.normalisePath(Idea.ModuleDir, Paths.get("/tmp"))(
@@ -93,7 +100,6 @@ object IdeaSpec extends SimpleTestSuite {
 
     val projectPath   = Paths.get(".")
     val outputPath    = Paths.get("/tmp")
-    val packageConfig = PackageConfig(false, false, None, None)
     val compilerDeps0 = ArtefactResolution.allCompilerDeps(build)
     val (_, platformResolution, compilerResolution) =
       ArtefactResolution.resolution(
@@ -126,15 +132,43 @@ object IdeaSpec extends SimpleTestSuite {
     assert(Files.exists(modulesPath.resolve("c.iml")))
   }
 
+  test("Generate project with correct module dependencies") {
+    val result = BuildConfig
+      .load(Paths.get("test").resolve("platform-module-deps"), Log.urgent)
+      .get
+    val outputPath = tempPath.resolve("platform-module-deps")
+    Files.createDirectory(outputPath)
+    cli.Generate.ui(
+      Config(),
+      result.projectPath,
+      outputPath,
+      result.resolvers,
+      result.build,
+      Command.Idea(packageConfig),
+      Log.urgent
+    )
+
+    val ideaPath    = outputPath.resolve(".idea")
+    val modulesPath = ideaPath.resolve("modules")
+
+    val exampleModule =
+      pine.XmlParser.fromString(
+        FileUtils.readFileToString(
+          modulesPath.resolve("example.iml").toFile,
+          "UTF-8"
+        )
+      )
+
+    val moduleNames = exampleModule
+      .byTagAll["orderEntry"]
+      .filter(_.attr("type").contains("module"))
+      .flatMap(_.attr("module-name"))
+    assertEquals(moduleNames, List("core"))
+  }
+
   test("Generate project with custom compiler options") {
     val result =
       BuildConfig.load(Paths.get("test/compiler-options"), Log.urgent).get
-    val packageConfig = PackageConfig(
-      tmpfs = false,
-      silent = false,
-      ivyPath = None,
-      cachePath = None
-    )
     val outputPath = tempPath.resolve("compiler-options")
     Files.createDirectory(outputPath)
     cli.Generate.ui(
@@ -190,12 +224,6 @@ object IdeaSpec extends SimpleTestSuite {
     val result = BuildConfig
       .load(Paths.get("test/multiple-scala-versions"), Log.urgent)
       .get
-    val packageConfig = PackageConfig(
-      tmpfs = false,
-      silent = false,
-      ivyPath = None,
-      cachePath = None
-    )
     val outputPath = tempPath.resolve("multiple-scala-versions-idea")
     Files.createDirectory(outputPath)
     cli.Generate.ui(
@@ -287,12 +315,6 @@ object IdeaSpec extends SimpleTestSuite {
   test("Generate project with test project") {
     val result =
       BuildConfig.load(Paths.get("test/test-module"), Log.urgent).get
-    val packageConfig = PackageConfig(
-      tmpfs = false,
-      silent = false,
-      ivyPath = None,
-      cachePath = None
-    )
     val outputPath = tempPath.resolve("test-module")
     Files.createDirectory(outputPath)
     cli.Generate.ui(
@@ -326,12 +348,6 @@ object IdeaSpec extends SimpleTestSuite {
   test("Generate Scala Native project") {
     val result =
       BuildConfig.load(Paths.get("test/scala-native-module"), Log.urgent).get
-    val packageConfig = PackageConfig(
-      tmpfs = false,
-      silent = false,
-      ivyPath = None,
-      cachePath = None
-    )
     val outputPath = tempPath.resolve("scala-native-module")
     Files.createDirectory(outputPath)
     cli.Generate.ui(

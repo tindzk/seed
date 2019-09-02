@@ -1,0 +1,11 @@
+[project]
+scalaVersion = "2.12.8"
+
+[module.core.jvm]
+root    = "jvm"
+sources = ["jvm/src/"]
+
+[module.example.jvm]
+moduleDeps = ["core"]
+root       = "example"
+sources    = ["example/src/"]
