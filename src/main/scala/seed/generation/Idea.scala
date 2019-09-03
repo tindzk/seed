@@ -183,7 +183,7 @@ object Idea {
       val target         = if (module.jvm.isDefined) JVM else module.targets.head
       val platformModule = BuildConfig.platformModule(module, target).get
 
-      m -> (module.scalaOptions ++ util.ScalaCompiler.compilerPlugIns(
+      m -> (platformModule.scalaOptions ++ util.ScalaCompiler.compilerPlugIns(
         build,
         platformModule,
         compilerResolution,

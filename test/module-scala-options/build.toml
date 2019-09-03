@@ -1,0 +1,11 @@
+[module.core.jvm]
+scalaVersion      = "2.12.4-bin-typelevel-4"
+scalaOrganisation = "org.typelevel"
+scalaOptions      = ["-Yliteral-types"]
+root              = "core"
+sources           = ["core/src/"]
+
+[module.example.jvm]
+scalaVersion = "2.12.8"
+root         = "example"
+sources      = ["example/src/"]

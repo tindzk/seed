@@ -134,7 +134,7 @@ object IdeaFile {
   def createScalaCompiler(
     compilerSettings: List[(Options, Modules)]
   ): String = {
-    def component(
+    def profile(
       options: List[String],
       modules: List[String]
     ): pine.Tag[Singleton] = {
@@ -142,21 +142,21 @@ object IdeaFile {
       val modulesAttr = modules.mkString(",")
       val parameters  = options.map(option => xml"<parameter value=$option />")
       xml"""
-        <component name="ScalaCompilerConfiguration">
-          <option name="incrementalityType" value="IDEA" />
-          <profile name=$profileName modules=$modulesAttr>
-            <parameters>$parameters</parameters>
-          </profile>
-        </component>
+        <profile name=$profileName modules=$modulesAttr>
+          <parameters>$parameters</parameters>
+        </profile>
       """
     }
 
-    val components = compilerSettings.map { case (a, b) => component(a, b) }
+    val profiles = compilerSettings.map { case (a, b) => profile(a, b) }
 
     xml"""
       <?xml version="1.0" encoding="UTF-8"?>
       <project version="4">
-        $components
+        <component name="ScalaCompilerConfiguration">
+          <option name="incrementalityType" value="IDEA" />
+          $profiles
+        </component>
       </project>
     """.toXml
   }
