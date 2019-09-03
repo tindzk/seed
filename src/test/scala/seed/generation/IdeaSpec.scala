@@ -246,10 +246,14 @@ object IdeaSpec extends SimpleTestSuite {
       scalaLibrary2_11_11.byTagAll["language-level"].map(_.toText),
       List("Scala_2_11")
     )
+    assert(scalaLibrary2_11_11.byTag["JAVADOC"].byTagOpt["root"].isDefined)
+    assert(scalaLibrary2_11_11.byTag["SOURCES"].byTagOpt["root"].isDefined)
     assertEquals(
       scalaLibrary2_12_8.byTagAll["language-level"].map(_.toText),
       List("Scala_2_12")
     )
+    assert(scalaLibrary2_12_8.byTag["JAVADOC"].byTagOpt["root"].isDefined)
+    assert(scalaLibrary2_12_8.byTag["SOURCES"].byTagOpt["root"].isDefined)
 
     val module211 =
       pine.XmlParser.fromString(
