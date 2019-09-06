@@ -288,7 +288,7 @@ object Idea {
               ),
             moduleDeps =
               (if (!isCrossBuild) List() else List(name)) ++
-                collectJsModuleDeps(build, module).flatMap(
+                collectJsModuleDeps(build, jsModule).flatMap(
                   name => BuildConfig.targetNames(build, name, JavaScript)
                 ),
             projectPath = projectPath,
@@ -363,7 +363,7 @@ object Idea {
               ),
             moduleDeps =
               (if (!isCrossBuild) List() else List(name)) ++
-                collectJvmModuleDeps(build, module)
+                collectJvmModuleDeps(build, jvmModule)
                   .flatMap(name => BuildConfig.targetNames(build, name, JVM)),
             projectPath = projectPath,
             buildPath = buildPath,
@@ -436,7 +436,7 @@ object Idea {
               ),
             moduleDeps =
               (if (!isCrossBuild) List() else List(name)) ++
-                collectNativeModuleDeps(build, module).flatMap(
+                collectNativeModuleDeps(build, nativeModule).flatMap(
                   name => BuildConfig.targetNames(build, name, Native)
                 ),
             projectPath = projectPath,
