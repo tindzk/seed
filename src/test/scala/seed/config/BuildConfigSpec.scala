@@ -651,6 +651,37 @@ object BuildConfigSpec extends SimpleTestSuite {
     )
   }
 
+  test("Platform compatibility when inheriting") {
+    val buildToml = """
+      |[project]
+      |scalaJsVersion     = "0.6.26"
+      |scalaNativeVersion = "0.3.7"
+      |
+      |[module.foo]
+      |scalaVersion = "2.11.11"
+      |sources      = ["foo/"]
+      |targets      = ["js"]
+      |
+      |[module.bar]
+      |scalaVersion = "2.11.11"
+      |moduleDeps   = ["foo"]
+      |sources      = ["bar/"]
+      |targets      = ["js", "native"]
+    """.stripMargin
+
+    val messages = ListBuffer[String]()
+    val log      = new Log(messages += _, identity, LogLevel.Error, false)
+    parseBuild(buildToml, log, fail = true)(_ => "")
+    assert(
+      messages.exists(
+        _.contains(
+          s"Module ${Ansi.italic("foo")} has missing target platform(s) (${Ansi
+            .italic("native")}) required by ${Ansi.italic("bar")}"
+        )
+      )
+    )
+  }
+
   test("Scala version compatibility") {
     val buildToml = """
       |[module.foo.jvm]

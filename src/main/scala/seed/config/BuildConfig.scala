@@ -287,6 +287,14 @@ object BuildConfig {
       hasCycle(name, Set())
     }
 
+    val incompatibleModuleDepPlatform =
+      module.moduleDeps
+        .flatMap { name =>
+          build.get(name).map(m => name -> m.module)
+        }
+        .map { case (n, m) => (n, module.targets.diff(m.targets)) }
+        .find(_._2.nonEmpty)
+
     val moduleName = Ansi.italic(name)
 
     if (module.targets.isEmpty && module.target.isEmpty)
@@ -378,9 +386,16 @@ object BuildConfig {
           .italic(s"[module.$name.test.${invalidPlatformTestModule.get.id}]")}?"
       )
     else if (cyclicModuleDep)
-      error(s"Module ${Ansi.italic(name)} cannot depend on itself")
+      error(s"Module $moduleName cannot depend on itself")
     else if (cyclicModuleDep2)
-      error(s"Cycle detected in dependencies of module ${Ansi.italic(name)}")
+      error(s"Cycle detected in dependencies of module $moduleName")
+    else if (incompatibleModuleDepPlatform.isDefined)
+      error(
+        s"Module ${Ansi.italic(incompatibleModuleDepPlatform.get._1)} has missing target platform(s) (${incompatibleModuleDepPlatform.get._2
+          .map(_.id)
+          .map(Ansi.italic)
+          .mkString(", ")}) required by $moduleName"
+      )
     else true
   }
 
