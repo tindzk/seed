@@ -145,7 +145,7 @@ object Idea {
           scalaVersion,
           List(),
           List(),
-          optionalArtefacts = false
+          optionalArtefacts = true
         )
 
         val xml = IdeaFile.createLibrary(
@@ -158,8 +158,10 @@ object Idea {
               )
             ),
             classes = scalaCompiler.libraries.map(_.libraryJar.toString),
-            javaDoc = List(),
-            sources = List()
+            javaDoc =
+              scalaCompiler.libraries.flatMap(_.javaDocJar).map(_.toString),
+            sources =
+              scalaCompiler.libraries.flatMap(_.sourcesJar).map(_.toString)
           )
         )
 
