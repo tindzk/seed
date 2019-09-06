@@ -343,4 +343,30 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   testAsync("Build project with failing custom command target") { _ =>
     buildCustomTarget("custom-command-target-fail", expectFailure = true)
   }
+
+  testAsync("Generate non-JVM project") { _ =>
+    val config = BuildConfig
+      .load(Paths.get("test/shared-module"), Log.urgent)
+      .get
+    import config._
+    val buildPath = tempPath.resolve("shared-module-bloop")
+    Files.createDirectory(buildPath)
+    cli.Generate.ui(
+      Config(),
+      projectPath,
+      buildPath,
+      resolvers,
+      build,
+      Command.Bloop(packageConfig),
+      Log.urgent
+    )
+
+    TestProcessHelper
+      .runBloop(buildPath)("run", "example-js", "example-native")
+      .map { output =>
+        val lines = output.split("\n")
+        assert(lines.contains("js"))
+        assert(lines.contains("native"))
+      }
+  }
 }

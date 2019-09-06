@@ -13,7 +13,7 @@ steps:
   - name: test
     image: alpine:3.10
     commands:
-      - apk add --no-cache openjdk8 python curl nodejs
+      - apk add --no-cache openjdk8 python curl nodejs clang libc-dev libunwind-dev g++
       - curl -L https://github.com/scalacenter/bloop/releases/download/v$(cat BLOOP)/install.py | python - -d bloop
       - export PATH=$(pwd)/bloop:$PATH
       - blp-server &

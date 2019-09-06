@@ -22,6 +22,12 @@ object IdeaSpec extends SimpleTestSuite {
     cachePath = None
   )
 
+  private def dropPath(path: String): String =
+    path.lastIndexOf('/') match {
+      case -1 => path
+      case n  => path.drop(n + 1)
+    }
+
   test("Normalise paths") {
     assertEquals(
       PathUtil.normalisePath(Idea.ModuleDir, Paths.get("/tmp"))(
@@ -166,6 +172,106 @@ object IdeaSpec extends SimpleTestSuite {
     assertEquals(moduleNames, List("core"))
   }
 
+  test("Generate non-JVM cross-platform module") {
+    val result = BuildConfig
+      .load(Paths.get("test").resolve("shared-module"), Log.urgent)
+      .get
+    val outputPath = tempPath.resolve("shared-module")
+    Files.createDirectory(outputPath)
+    cli.Generate.ui(
+      Config(),
+      result.projectPath,
+      outputPath,
+      result.resolvers,
+      result.build,
+      Command.Idea(packageConfig),
+      Log.urgent
+    )
+
+    val ideaPath    = outputPath.resolve(".idea")
+    val modulesPath = ideaPath.resolve("modules")
+
+    val exampleModule =
+      pine.XmlParser.fromString(
+        FileUtils.readFileToString(
+          modulesPath.resolve("example.iml").toFile,
+          "UTF-8"
+        )
+      )
+
+    val orderEntries = exampleModule.byTagAll["orderEntry"]
+
+    // The IDEA module will take the Scala version of the JavaScript module and
+    // assume that the libraries are also targeting the JavaScript platform.
+    val libraryDeps = orderEntries
+      .filter(_.attr("type").contains("library"))
+      .flatMap(_.attr("name"))
+    assertEquals(
+      libraryDeps,
+      List(
+        "org.scala-lang-2.12.8",
+        "sourcecode_sjs0.6_2.12-0.1.5.jar",
+        "scalajs-library_2.12-0.6.28.jar"
+      )
+    )
+
+    // A dependency to `example-native` is not needed since `example-js` will
+    // have to expose the same public interface for cross-compilation to work.
+    val moduleNames =
+      orderEntries
+        .filter(_.attr("type").contains("module"))
+        .flatMap(_.attr("module-name"))
+    assertEquals(moduleNames, List("example-js", "base", "base-js"))
+
+    val modulesXml =
+      pine.XmlParser.fromString(
+        FileUtils.readFileToString(
+          ideaPath.resolve("modules.xml").toFile,
+          "UTF-8"
+        )
+      )
+    val modulePaths =
+      modulesXml.byTagAll["module"].flatMap(_.attr("fileurl")).map(dropPath)
+    assertEquals(
+      modulePaths,
+      List(
+        "base.iml",
+        "base-js.iml",
+        "base-native.iml",
+        "example.iml",
+        "example-js.iml"
+      )
+    )
+
+    val scalaCompiler =
+      pine.XmlParser.fromString(
+        FileUtils.readFileToString(
+          ideaPath.resolve("scala_compiler.xml").toFile,
+          "UTF-8"
+        )
+      )
+
+    val profileNodes = scalaCompiler
+      .byTagAll["profile"]
+      .map(
+        profile =>
+          profile.attr("modules").get -> profile
+            .byTagAll["parameter"]
+            .flatMap(_.attr("value"))
+            .map(dropPath)
+      )
+      .toSet
+    assertEquals(
+      profileNodes,
+      Set(
+        "base,base-js,example,example-js" -> List(
+          "scalajs-compiler_2.12.8-0.6.28.jar"
+        ),
+        "base-native" -> List("nscplugin_2.11.11-0.3.7.jar")
+      )
+    )
+  }
+
   test("Generate project with custom compiler options") {
     val result =
       BuildConfig.load(Paths.get("test/compiler-options"), Log.urgent).get
@@ -191,15 +297,26 @@ object IdeaSpec extends SimpleTestSuite {
         )
       )
 
-    val profileNodes = scalaCompiler.byTagAll["profile"]
-    assertEquals(profileNodes.length, 1)
+    val profileNodes = scalaCompiler
+      .byTagAll["profile"]
+      .map(
+        profile =>
+          profile.attr("modules").get -> profile
+            .byTagAll["parameter"]
+            .flatMap(_.attr("value"))
+            .map(dropPath)
+      )
+      .toSet
+
     assertEquals(
-      profileNodes.head.attr("modules"),
-      Some("demo,demo-jvm,demo-js")
-    )
-    assertEquals(
-      profileNodes.head.byTag["parameter"].attr("value"),
-      Some("-Yliteral-types")
+      profileNodes,
+      Set(
+        "demo,demo-jvm" -> List("-Yliteral-types"),
+        "demo-js" -> List(
+          "-Yliteral-types",
+          "scalajs-compiler_2.12.4-0.6.26.jar"
+        )
+      )
     )
 
     val modulesPath = ideaPath.resolve("modules")

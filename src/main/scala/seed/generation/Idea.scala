@@ -12,12 +12,13 @@ import seed.config.BuildConfig.{
   collectJvmModuleDeps,
   collectJvmScalaDeps,
   collectNativeDeps,
-  collectNativeModuleDeps
+  collectNativeModuleDeps,
+  collectSharedModuleDeps
 }
 import seed.artefact.{ArtefactResolution, Coursier}
 import seed.cli.util.Ansi
 import seed.generation.util.{IdeaFile, PathUtil}
-import seed.model.Resolution
+import seed.model.{Platform, Resolution}
 import seed.model.Build.Module
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.Log
@@ -172,37 +173,44 @@ object Idea {
     }
   }
 
+  /**
+    * Group all modules by compiler settings. Then, create a compiler
+    * configuration for each unique set of parameters.
+    */
   def createCompilerSettings(
     build: Build,
     compilerResolution: List[Coursier.ResolutionResult],
     ideaPath: Path,
     modules: List[String]
   ): Unit = {
-    // Group all modules by additional settings; create compiler configuration
-    // for each unique set of parameters
-    val modulePlugIns = modules.filter(build.contains).map { m =>
-      val module         = build(m).module
-      val target         = if (module.jvm.isDefined) JVM else module.targets.head
-      val platformModule = BuildConfig.platformModule(module, target).get
+    val modulePlugIns = modules
+      .filter(build.contains)
+      .flatMap { m =>
+        val module  = build(m).module
+        val targets = module.targets.sorted(Platform.Ordering)
+        targets.map { target =>
+          val ideaModules =
+            if (targets.indexOf(target) == 0)
+              BuildConfig.ideaTargetNames(build, m, target)
+            else BuildConfig.ideaPlatformTargetName(build, m, target).toList
+          val platformModule = BuildConfig.platformModule(module, target).get
 
-      m -> (platformModule.scalaOptions ++ util.ScalaCompiler.compilerPlugIns(
-        build,
-        platformModule,
-        compilerResolution,
-        target,
-        platformModule.scalaVersion.get
-      ))
-    }
+          ideaModules -> (platformModule.scalaOptions ++ util.ScalaCompiler
+            .compilerPlugIns(
+              build,
+              platformModule,
+              compilerResolution,
+              target,
+              platformModule.scalaVersion.get
+            ))
+        }
+      }
+      .filter(_._1.nonEmpty)
+
     val compilerSettings =
       modulePlugIns.groupBy(_._2).mapValues(_.map(_._1)).toList.map {
         case (settings, modules) =>
-          val allModules = modules.flatMap { module =>
-            val targets = build(module).module.targets
-            val all = module +: targets
-              .map(target => BuildConfig.targetName(build, module, target))
-            all.distinct
-          }
-
+          val allModules = modules.flatten.distinct
           (settings, allModules)
       }
 
@@ -214,8 +222,11 @@ object Idea {
     * For each target with at least one source path, a separate IDEA module will
     * be created.
     *
-    *  @note Since the tests cannot run with JavaScript in IntelliJ, the shared
-    *       project will use JVM.
+    * @note Since libraries need to be resolved for a specific platform in
+    *       IntelliJ, the shared module will choose a valid platform from the
+    *       `targets` setting.
+    *       IntelliJ will not be able to run or test non-JVM modules, but code
+    *       completion works.
     */
   def buildModule(
     build: Build,
@@ -230,23 +241,25 @@ object Idea {
     module: Module,
     log: Log
   ): List[String] = {
-    val isCrossBuild = module.targets.toSet.size > 1
+    val isCrossBuild = BuildConfig.isCrossBuild(module)
 
     val jsModule  = module.js.getOrElse(Module())
     val jsSources = jsModule.sources
     val jsTests   = module.test.toList.flatMap(_.js.toList.flatMap(_.sources))
     val js =
-      if (jsSources.isEmpty && jsTests.isEmpty) List()
+      if (!module.targets.contains(JavaScript)) List()
       else {
         val moduleName = if (!isCrossBuild) name else name + "-js"
-        log.info(s"Creating JavaScript project ${Ansi.italic(moduleName)}...")
 
         if (jsModule.root.isEmpty) {
-          log.error(
-            s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping..."
-          )
+          if (jsSources.nonEmpty || jsTests.nonEmpty)
+            log.error(
+              s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping..."
+            )
           List()
         } else {
+          log.info(s"Creating JavaScript project ${Ansi.italic(moduleName)}...")
+
           createModule(
             root = jsModule.root.get,
             name = moduleName,
@@ -291,7 +304,7 @@ object Idea {
             moduleDeps =
               (if (!isCrossBuild) List() else List(name)) ++
                 collectJsModuleDeps(build, jsModule).flatMap(
-                  name => BuildConfig.targetNames(build, name, JavaScript)
+                  name => BuildConfig.ideaTargetNames(build, name, JavaScript)
                 ),
             projectPath = projectPath,
             buildPath = buildPath,
@@ -309,17 +322,19 @@ object Idea {
     val jvmSources = jvmModule.sources
     val jvmTests   = module.test.toList.flatMap(_.jvm.toList.flatMap(_.sources))
     val jvm =
-      if (jvmSources.isEmpty && jvmTests.isEmpty) List()
+      if (!module.targets.contains(JVM)) List()
       else {
         val moduleName = if (!isCrossBuild) name else name + "-jvm"
-        log.info(s"Creating JVM project ${Ansi.italic(moduleName)}...")
 
         if (jvmModule.root.isEmpty) {
-          log.error(
-            s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping..."
-          )
+          if (jvmSources.nonEmpty || jvmTests.nonEmpty)
+            log.error(
+              s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping..."
+            )
           List()
         } else {
+          log.info(s"Creating JVM project ${Ansi.italic(moduleName)}...")
+
           createModule(
             root = jvmModule.root.get,
             name = moduleName,
@@ -366,7 +381,9 @@ object Idea {
             moduleDeps =
               (if (!isCrossBuild) List() else List(name)) ++
                 collectJvmModuleDeps(build, jvmModule)
-                  .flatMap(name => BuildConfig.targetNames(build, name, JVM)),
+                  .flatMap(
+                    name => BuildConfig.ideaTargetNames(build, name, JVM)
+                  ),
             projectPath = projectPath,
             buildPath = buildPath,
             modulesPath = modulesPath,
@@ -384,17 +401,19 @@ object Idea {
     val nativeTests =
       module.test.toList.flatMap(_.native.toList.flatMap(_.sources))
     val native =
-      if (nativeSources.isEmpty && nativeTests.isEmpty) List()
+      if (!module.targets.contains(Native)) List()
       else {
         val moduleName = if (!isCrossBuild) name else name + "-native"
-        log.info(s"Creating native project ${Ansi.italic(moduleName)}...")
 
         if (nativeModule.root.isEmpty) {
-          log.error(
-            s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping..."
-          )
+          if (nativeSources.nonEmpty || nativeTests.nonEmpty)
+            log.error(
+              s"Module ${Ansi.italic(moduleName)} does not specify root path, skipping..."
+            )
           List()
         } else {
+          log.info(s"Creating native project ${Ansi.italic(moduleName)}...")
+
           createModule(
             root = nativeModule.root.get,
             name = moduleName,
@@ -439,7 +458,7 @@ object Idea {
             moduleDeps =
               (if (!isCrossBuild) List() else List(name)) ++
                 collectNativeModuleDeps(build, nativeModule).flatMap(
-                  name => BuildConfig.targetNames(build, name, Native)
+                  name => BuildConfig.ideaTargetNames(build, name, Native)
                 ),
             projectPath = projectPath,
             buildPath = buildPath,
@@ -456,69 +475,78 @@ object Idea {
     val sharedSources = module.sources
     val sharedTests   = module.test.toList.flatMap(_.sources)
     val shared =
-      if (sharedSources.isEmpty && sharedTests.isEmpty) List()
-      else {
-        log.info(s"Create shared project ${Ansi.italic(name)}...")
-
-        if (module.root.isEmpty) {
+      if (module.root.isEmpty) {
+        if (sharedSources.nonEmpty || sharedTests.nonEmpty)
           log.error(
             s"Module ${Ansi.italic(name)} does not specify root path, skipping..."
           )
-          List()
-        } else {
-          createModule(
-            root = module.root.get,
-            name = name,
-            sources = sharedSources,
-            tests = sharedTests,
-            resolvedDeps = Coursier.localArtefacts(
-              resolution,
-              collectJvmJavaDeps(build, false, module).toSet ++
-                collectJvmScalaDeps(build, false, module)
-                  .map(
-                    dep =>
-                      ArtefactResolution.javaDepFromScalaDep(
-                        dep,
-                        JVM,
-                        module.scalaVersion.get,
-                        module.scalaVersion.get
-                      )
-                  )
-                  .toSet,
-              optionalArtefacts = true
-            ),
-            resolvedTestDeps = module.test.toList
-              .flatMap(
-                test =>
-                  Coursier.localArtefacts(
-                    resolution,
+        List()
+      } else {
+        log.info(s"Create shared project ${Ansi.italic(name)}...")
+
+        val platform       = module.targets.sorted(Platform.Ordering).head
+        val platformModule = BuildConfig.platformModule(module, platform).get
+        val (ideaPlatformModule, platformVersion) =
+          if (platform == JVM) (jvm, platformModule.scalaVersion.get)
+          else if (platform == JavaScript)
+            (js, platformModule.scalaJsVersion.get)
+          else (native, platformModule.scalaNativeVersion.get)
+
+        createModule(
+          root = module.root.get,
+          name = name,
+          sources = sharedSources,
+          tests = sharedTests,
+          resolvedDeps = Coursier.localArtefacts(
+            resolution,
+            collectJvmJavaDeps(build, false, module).toSet ++
+              collectJvmScalaDeps(build, false, module)
+                .map(
+                  dep =>
+                    ArtefactResolution.javaDepFromScalaDep(
+                      dep,
+                      platform,
+                      platformVersion,
+                      platformModule.scalaVersion.get
+                    )
+                )
+                .toSet,
+            optionalArtefacts = true
+          ),
+          resolvedTestDeps = module.test.toList
+            .flatMap(
+              test =>
+                Coursier.localArtefacts(
+                  resolution,
+                  collectJvmJavaDeps(build, true, test).toSet ++
                     collectJvmScalaDeps(build, true, test)
                       .map(
                         dep =>
                           ArtefactResolution.javaDepFromScalaDep(
                             dep,
-                            JVM,
-                            module.scalaVersion.get,
-                            module.scalaVersion.get
+                            platform,
+                            platformVersion,
+                            platformModule.scalaVersion.get
                           )
                       )
                       .toSet,
-                    optionalArtefacts = true
-                  )
+                  optionalArtefacts = true
+                )
+            ),
+          moduleDeps =
+            ideaPlatformModule ++ collectSharedModuleDeps(build, module)
+              .flatMap(
+                name => BuildConfig.ideaTargetNames(build, name, platform)
               ),
-            moduleDeps =
-              jvm ++ collectJvmModuleDeps(build, module)
-                .flatMap(name => BuildConfig.targetNames(build, name, JVM)),
-            projectPath = projectPath,
-            buildPath = buildPath,
-            modulesPath = modulesPath,
-            librariesPath = librariesPath,
-            scalaOrganisation = module.scalaOrganisation.get,
-            scalaVersion = module.scalaVersion.get
-          )
+          projectPath = projectPath,
+          buildPath = buildPath,
+          modulesPath = modulesPath,
+          librariesPath = librariesPath,
+          scalaOrganisation = platformModule.scalaOrganisation.get,
+          scalaVersion = platformModule.scalaVersion.get
+        )
 
-          List(name)
-        }
+        List(name)
       }
 
     val customTargets = module.target.toList.flatMap {

@@ -1,0 +1,29 @@
+[project]
+scalaVersion       = "2.11.11"
+scalaJsVersion     = "0.6.28"
+scalaNativeVersion = "0.3.7"
+
+[module.base]
+root    = "base/"
+targets = ["js", "native"]
+
+[module.base.js]
+scalaVersion = "2.12.8"
+root         = "base/js/"
+sources      = ["base/js/src/"]
+
+[module.base.native]
+root    = "base/native/"
+sources = ["base/native/src/"]
+
+[module.example]
+moduleDeps = ["base"]
+root       = "example/"
+sources    = ["example/shared/src/"]
+targets    = ["js", "native"]
+scalaDeps  = [["com.lihaoyi", "sourcecode", "0.1.5"]]
+
+[module.example.js]
+scalaVersion = "2.12.8"
+root         = "example/js/"
+sources      = ["example/js/src/"]
