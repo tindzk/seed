@@ -220,6 +220,50 @@ object IdeaSpec extends SimpleTestSuite {
     )
   }
 
+  test("Generate project with modules that have different Scala options") {
+    val result = BuildConfig
+      .load(Paths.get("test/module-scala-options"), Log.urgent)
+      .get
+    val outputPath = tempPath.resolve("module-scala-options-idea")
+    Files.createDirectory(outputPath)
+    cli.Generate.ui(
+      Config(),
+      result.projectPath,
+      outputPath,
+      result.resolvers,
+      result.build,
+      Command.Idea(packageConfig),
+      Log.urgent
+    )
+
+    val ideaPath = outputPath.resolve(".idea")
+
+    val scalaCompiler =
+      pine.XmlParser.fromString(
+        FileUtils.readFileToString(
+          ideaPath.resolve("scala_compiler.xml").toFile,
+          "UTF-8"
+        )
+      )
+
+    val componentNodes = scalaCompiler.byTagAll["component"]
+    assertEquals(componentNodes.length, 1)
+
+    val profileNodes = componentNodes.head.byTagAll["profile"]
+    assertEquals(profileNodes.length, 2)
+
+    val coreProfile    = profileNodes(0)
+    val exampleProfile = profileNodes(1)
+
+    assertEquals(coreProfile.attr("modules"), Some("core"))
+    assertEquals(
+      coreProfile.byTag["parameter"].attr("value"),
+      Some("-Yliteral-types")
+    )
+
+    assertEquals(exampleProfile.byTag["parameters"].children, List())
+  }
+
   test("Generate project with different Scala versions") {
     val result = BuildConfig
       .load(Paths.get("test/multiple-scala-versions"), Log.urgent)
