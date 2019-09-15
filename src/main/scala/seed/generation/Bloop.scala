@@ -280,7 +280,11 @@ object Bloop {
 
       val nativeLibDep = ArtefactResolution.nativeLibraryDep(native)
       val scalaNativelib = resolvedDeps
-        .find(_.javaDep == nativeLibDep)
+        .find(
+          d =>
+            d.javaDep.organisation == nativeLibDep.organisation &&
+              d.javaDep.artefact == nativeLibDep.artefact
+        )
         .map(_.libraryJar)
         .get
 
@@ -443,7 +447,7 @@ object Bloop {
     optionalArtefacts: Boolean,
     log: Log
   ): Unit = {
-    val isCrossBuild = module.targets.toSet.size > 1
+    val isCrossBuild = BuildConfig.isCrossBuild(module)
 
     val jsOutputPath =
       module.js.map(js => moduleOutputPath(buildPath, js, name + ".js"))

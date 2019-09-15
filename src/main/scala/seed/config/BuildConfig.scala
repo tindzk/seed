@@ -391,7 +391,7 @@ object BuildConfig {
       case Native     => module.scalaNativeVersion.get
     }
 
-  def isCrossBuild(module: Module): Boolean = module.targets.toSet.size > 1
+  def isCrossBuild(module: Module): Boolean = module.targets.length > 1
 
   def hasTarget(modules: Build, name: String, platform: Platform): Boolean =
     modules(name).module.targets.contains(platform)
@@ -440,34 +440,59 @@ object BuildConfig {
       case Native     => module.copy(native = platformModule)
     }
 
-  def targetNames(
+  def ideaPlatformTargetName(
     modules: Build,
     name: String,
     platform: Platform
-  ): List[String] =
-    if (!isCrossBuild(modules(name).module)) List(name)
-    else if (platformModule(modules(name).module, platform).isEmpty) List(name)
-    else List(name, name + "-" + platform.id)
+  ): Option[String] = {
+    val module = modules(name).module
+    require(isCrossBuild(module))
+    platformModule(module, platform).flatMap(
+      m => if (m.root.isEmpty) None else Some(name + "-" + platform.id)
+    )
+  }
+
+  def ideaTargetNames(
+    modules: Build,
+    name: String,
+    platform: Platform
+  ): List[String] = {
+    def f(module: Module, name: String): List[String] =
+      if (module.root.isEmpty) List() else List(name)
+
+    val module = modules(name).module
+
+    platformModule(module, platform) match {
+      case None => f(module, name)
+      case Some(m) =>
+        if (!isCrossBuild(module)) f(m, name)
+        else f(module, name) ++ f(m, name + "-" + platform.id)
+    }
+  }
 
   def collectJsModuleDeps(modules: Build, module: Module): List[String] =
     module.moduleDeps.flatMap(
       m =>
-        List(m) ++ modules(m).module.js.toList
+        m +: modules(m).module.js.toList
           .flatMap(collectJsModuleDeps(modules, _))
     )
 
   def collectNativeModuleDeps(build: Build, module: Module): List[String] =
     module.moduleDeps.flatMap(
       m =>
-        List(m) ++ build(m).module.native.toList
+        m +: build(m).module.native.toList
           .flatMap(collectNativeModuleDeps(build, _))
     )
 
   def collectJvmModuleDeps(build: Build, module: Module): List[String] =
     module.moduleDeps.flatMap(
       m =>
-        List(m) ++ build(m).module.jvm.toList
-          .flatMap(collectJvmModuleDeps(build, _))
+        m +: build(m).module.jvm.toList.flatMap(collectJvmModuleDeps(build, _))
+    )
+
+  def collectSharedModuleDeps(build: Build, module: Module): List[String] =
+    module.moduleDeps.flatMap(
+      m => m +: collectSharedModuleDeps(build, build(m).module)
     )
 
   def collectModuleDeps(
