@@ -369,4 +369,36 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
         assert(lines.contains("native"))
       }
   }
+
+  test("Inherit classpaths of platform-specific base modules") { _ =>
+    val result = BuildConfig
+      .load(Paths.get("test").resolve("platform-module-deps"), Log.urgent)
+      .get
+    val buildPath = tempPath.resolve("platform-module-deps-bloop")
+    Files.createDirectory(buildPath)
+    cli.Generate.ui(
+      Config(),
+      result.projectPath,
+      buildPath,
+      result.resolvers,
+      result.build,
+      Command.Bloop(packageConfig),
+      Log.urgent
+    )
+
+    val bloopBuildPath = buildPath.resolve("build").resolve("bloop")
+
+    val bloopPath = buildPath.resolve(".bloop")
+
+    val root  = readBloopJson(bloopPath.resolve("example.json"))
+    val paths = root.project.classpath.filter(_.startsWith(buildPath))
+
+    assertEquals(
+      paths,
+      List(
+        bloopBuildPath.resolve("base"),
+        bloopBuildPath.resolve("core")
+      )
+    )
+  }
 }

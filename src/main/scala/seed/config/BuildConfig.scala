@@ -546,14 +546,12 @@ object BuildConfig {
     module: Module
   ): List[Path] =
     module.moduleDeps
-      .filter(name => hasTarget(build, name, Platform.JavaScript))
       .flatMap(
         name =>
-          buildPath
-            .resolve(targetName(build, name, JavaScript)) +: collectJsClassPath(
-            buildPath,
-            build,
-            build(name).module
+          build(name).module.js.toList.flatMap(
+            js =>
+              buildPath.resolve(targetName(build, name, JavaScript)) +:
+                collectJsClassPath(buildPath, build, js)
           )
       )
       .distinct
@@ -564,14 +562,12 @@ object BuildConfig {
     module: Module
   ): List[Path] =
     module.moduleDeps
-      .filter(name => hasTarget(build, name, Platform.Native))
       .flatMap(
         name =>
-          buildPath
-            .resolve(targetName(build, name, Native)) +: collectNativeClassPath(
-            buildPath,
-            build,
-            build(name).module
+          build(name).module.native.toList.flatMap(
+            native =>
+              buildPath.resolve(targetName(build, name, Native)) +:
+                collectNativeClassPath(buildPath, build, native)
           )
       )
       .distinct
@@ -582,15 +578,13 @@ object BuildConfig {
     module: Module
   ): List[Path] =
     module.moduleDeps
-      .filter(name => hasTarget(build, name, Platform.JVM))
       .flatMap(
         name =>
-          buildPath.resolve(targetName(build, name, JVM)) +:
-            collectJvmClassPath(
-              buildPath,
-              build,
-              build(name).module
-            )
+          build(name).module.jvm.toList.flatMap(
+            jvm =>
+              buildPath.resolve(targetName(build, name, JVM)) +:
+                collectJvmClassPath(buildPath, build, jvm)
+          )
       )
       .distinct
 
