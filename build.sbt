@@ -51,8 +51,8 @@ libraryDependencies ++= Seq(
   "com.lihaoyi"                  %% "fansi"            % "0.2.7",
   "io.get-coursier"              %% "coursier"         % bloopCoursierVersion,
   "io.get-coursier"              %% "coursier-cache"   % bloopCoursierVersion,
-  "tech.sparse"                  %% "toml-scala"       % "0.2.0",
-  "tech.sparse"                  %% "pine"             % "0.1.4",
+  "tech.sparse"                  %% "toml-scala"       % "0.2.2",
+  "tech.sparse"                  %% "pine"             % "0.1.6",
   "ch.epfl.scala"                %% "bloop-config"     % bloopVersion,
   "ch.epfl.scala"                % "bsp4j"             % "2.0.0-M4",
   "ch.epfl.scala"                % "directory-watcher" % "0.8.0+6-f651bd93",
@@ -69,7 +69,7 @@ libraryDependencies ++= Seq(
   "org.java-websocket"           % "Java-WebSocket"    % "1.4.0",
   "org.slf4j"                    % "slf4j-simple"      % "1.7.25",
   "com.kohlschutter.junixsocket" % "junixsocket-core"  % "2.2.0",
-  "io.monix"                     %% "minitest"         % "2.5.0" % "test",
+  "io.monix"                     %% "minitest"         % "2.7.0" % "test",
   scalaOrganization.value        % "scala-reflect"     % scalaVersion.value
 )
 

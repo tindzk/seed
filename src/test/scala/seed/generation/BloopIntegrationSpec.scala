@@ -3,9 +3,7 @@ package seed.generation
 import java.nio.file.{Files, Path, Paths}
 
 import bloop.config.Config.JsConfig
-import bloop.config.ConfigEncoderDecoders
 import minitest.TestSuite
-import org.apache.commons.io.FileUtils
 import seed.{Log, cli}
 import seed.Cli.{Command, PackageConfig}
 import seed.cli.util.RTS

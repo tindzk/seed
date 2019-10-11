@@ -2,17 +2,13 @@ package seed.generation
 
 import java.nio.file.{Files, Path}
 
-import bloop.config.ConfigEncoderDecoders
+import bloop.config.ConfigCodecs
 import minitest.SimpleTestSuite
 import org.apache.commons.io.FileUtils
+import seed.generation.util.BloopUtil
 import seed.generation.util.BuildUtil.tempPath
 
 object BloopSpec extends SimpleTestSuite {
-  def parseBloopFile(path: Path): bloop.config.Config.File = {
-    val json = FileUtils.readFileToString(path.toFile, "UTF-8")
-    io.circe.parser.decode(json)(ConfigEncoderDecoders.allDecoder).right.get
-  }
-
   test("Inherit javaDeps in child modules") {
     val projectPath = tempPath.resolve("inherit-javadeps")
     Files.createDirectory(projectPath)
@@ -22,19 +18,19 @@ object BloopSpec extends SimpleTestSuite {
 
     assertEquals(build("example").module.jvm.get.moduleDeps, List("base"))
 
-    val base = parseBloopFile(bloopPath.resolve("base.json"))
+    val base = BloopUtil.readJson(bloopPath.resolve("base.json"))
     assert(
       base.project.classpath
         .exists(_.toString.contains("/org/postgresql/postgresql/"))
     )
 
-    val example = parseBloopFile(bloopPath.resolve("example.json"))
+    val example = BloopUtil.readJson(bloopPath.resolve("example.json"))
     assert(
       example.project.classpath
         .exists(_.toString.contains("/org/postgresql/postgresql/"))
     )
 
-    val exampleTest = parseBloopFile(bloopPath.resolve("example-test.json"))
+    val exampleTest = BloopUtil.readJson(bloopPath.resolve("example-test.json"))
     assert(
       exampleTest.project.classpath
         .exists(_.toString.contains("/org/postgresql/postgresql/"))
