@@ -1,9 +1,14 @@
 [project]
 scalaVersion = "2.12.8"
 
+[module.base.jvm]
+root    = "base"
+sources = ["base/src/"]
+
 [module.core.jvm]
-root    = "jvm"
-sources = ["jvm/src/"]
+moduleDeps = ["base"]
+root       = "jvm"
+sources    = ["jvm/src/"]
 
 [module.example.jvm]
 moduleDeps = ["core"]
