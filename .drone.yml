@@ -26,6 +26,8 @@ steps:
         from_secret: bintray_username
       BINTRAY_API:
         from_secret: bintray_api
+      # See https://github.com/docker/for-linux/issues/711
+      PLUGIN_STORAGE_DRIVER: overlay
     settings:
       repo: tindzk/seed
       username:
@@ -47,6 +49,7 @@ steps:
         from_secret: bintray_username
       BINTRAY_API:
         from_secret: bintray_api
+      PLUGIN_STORAGE_DRIVER: overlay
     settings:
       repo: tindzk/seed
       username:
