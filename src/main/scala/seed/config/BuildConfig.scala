@@ -287,13 +287,27 @@ object BuildConfig {
       hasCycle(name, Set())
     }
 
-    val incompatibleModuleDepPlatform =
-      module.moduleDeps
-        .flatMap { name =>
-          build.get(name).map(m => name -> m.module)
-        }
-        .map { case (n, m) => (n, module.targets.diff(m.targets)) }
-        .find(_._2.nonEmpty)
+    // Check whether platforms are missing on the given module's dependencies
+    val missingModuleDepPlatform: Option[(String, Platform)] = {
+
+      /** @return None if module has custom build targets */
+      def resolveModule(name: String) =
+        build.get(name).map(m => name -> m.module).filter(_._2.target.isEmpty)
+
+      def platform(p: Platform) =
+        platformModule(module, p).flatMap(
+          _.moduleDeps.flatMap(resolveModule).collectFirst {
+            case (name, module) if !module.targets.contains(p) => (name, p)
+          }
+        )
+
+      // Compatibility must be checked for all platform-specific modules
+      // separately since these may depend on additional modules which are not
+      // included on the base module
+      platform(JVM)
+        .orElse(platform(JavaScript))
+        .orElse(platform(Native))
+    }
 
     val moduleName = Ansi.italic(name)
 
@@ -389,12 +403,10 @@ object BuildConfig {
       error(s"Module $moduleName cannot depend on itself")
     else if (cyclicModuleDep2)
       error(s"Cycle detected in dependencies of module $moduleName")
-    else if (incompatibleModuleDepPlatform.isDefined)
+    else if (missingModuleDepPlatform.isDefined)
       error(
-        s"Module ${Ansi.italic(incompatibleModuleDepPlatform.get._1)} has missing target platform(s) (${incompatibleModuleDepPlatform.get._2
-          .map(_.id)
-          .map(Ansi.italic)
-          .mkString(", ")}) required by $moduleName"
+        s"Module ${Ansi.italic(missingModuleDepPlatform.get._1)} has missing target platform ${Ansi
+          .italic(missingModuleDepPlatform.get._2.id)} required by $moduleName"
       )
     else true
   }

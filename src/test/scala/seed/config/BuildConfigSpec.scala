@@ -675,11 +675,60 @@ object BuildConfigSpec extends SimpleTestSuite {
     assert(
       messages.exists(
         _.contains(
-          s"Module ${Ansi.italic("foo")} has missing target platform(s) (${Ansi
-            .italic("native")}) required by ${Ansi.italic("bar")}"
+          s"Module ${Ansi.italic("foo")} has missing target platform ${Ansi
+            .italic("native")} required by ${Ansi.italic("bar")}"
         )
       )
     )
+  }
+
+  test("Platform compatibility when inheriting (2)") {
+    val buildToml = """
+      |[project]
+      |scalaJsVersion     = "0.6.26"
+      |scalaNativeVersion = "0.3.7"
+      |
+      |[module.foo.js]
+      |scalaVersion = "2.11.11"
+      |sources      = ["foo/"]
+      |
+      |[module.bar.native]
+      |scalaVersion = "2.11.11"
+      |moduleDeps   = ["foo"]
+      |sources      = ["bar/"]
+    """.stripMargin
+
+    val messages = ListBuffer[String]()
+    val log      = new Log(messages += _, identity, LogLevel.Error, false)
+    parseBuild(buildToml, log, fail = true)(_ => "")
+    assert(
+      messages.exists(
+        _.contains(
+          s"Module ${Ansi.italic("foo")} has missing target platform ${Ansi
+            .italic("native")} required by ${Ansi.italic("bar")}"
+        )
+      )
+    )
+  }
+
+  test("Custom build targets do not need to set any platforms") {
+    val buildToml = """
+      |[project]
+      |scalaVersion = "2.11.11"
+      |
+      |[module.template.target.scss]
+      |root    = "scss"
+      |command = "yarn install && yarn run gulp"
+      |
+      |[module.app.jvm]
+      |moduleDeps = ["template"]
+      |sources    = ["src/"]
+    """.stripMargin
+
+    val messages = ListBuffer[String]()
+    val log      = new Log(messages += _, identity, LogLevel.Error, false)
+    val build    = parseBuild(buildToml, log)(_ => "")
+    assertEquals(build("app").module.targets, List(JVM))
   }
 
   test("Scala version compatibility") {
