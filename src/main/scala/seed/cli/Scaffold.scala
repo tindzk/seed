@@ -594,7 +594,7 @@ class Scaffold(log: Log, silent: Boolean = false) {
     (if (scalaJsVersion.isEmpty) List() else List(
       NamedTable(
         List("module", moduleName, "js"),
-        Map("root" -> Str("js")) ++
+        Map("root" -> (if (platforms.size == 1) Str(".") else Str("js"))) ++
         (if (
           jsScalaVersion.isDefined && !jsScalaVersion.contains(jvmScalaVersion)
          ) Map("scalaVersion" -> Str(jsScalaVersion.get)) else Map()
@@ -622,7 +622,7 @@ class Scaffold(log: Log, silent: Boolean = false) {
       NamedTable(
         List("module", moduleName, "jvm"),
         Map(
-          "root" -> Str("jvm"),
+          "root" -> (if (platforms.size == 1) Str(".") else Str("jvm")),
           "sources" -> Arr(List(
             if (platforms.size == 1) Str("src") else Str("jvm/src")
           ))
@@ -644,7 +644,7 @@ class Scaffold(log: Log, silent: Boolean = false) {
     (if (scalaNativeVersion.isEmpty) List() else List(
       NamedTable(
         List("module", moduleName, "native"),
-        Map("root" -> Str("native")) ++
+        Map("root" -> (if (platforms.size == 1) Str(".") else Str("native"))) ++
         (if (
           nativeScalaVersion.isDefined &&
           !nativeScalaVersion.contains(jvmScalaVersion)

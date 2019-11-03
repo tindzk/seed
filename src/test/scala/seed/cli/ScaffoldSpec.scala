@@ -4,12 +4,12 @@ import minitest.SimpleTestSuite
 import seed.Log
 import seed.model.{Organisation, Platform}
 import toml.Node.NamedTable
-import toml.Value.Str
+import toml.Value.{Arr, Str}
 
 object ScaffoldSpec extends SimpleTestSuite {
   private val scaffold = new Scaffold(Log.urgent, silent = true)
 
-  test("Create build file one non-JVM platform") {
+  test("Create build file for one non-JVM platform") {
     val result = scaffold.generateBuildFile(
       "example",
       stable = true,
@@ -27,6 +27,10 @@ object ScaffoldSpec extends SimpleTestSuite {
 
     val module = result.nodes(1).asInstanceOf[NamedTable]
     assertEquals(module.ref, List("module", "example", "native"))
+    assertEquals(
+      module.values,
+      Map("root" -> Str("."), "sources" -> Arr(List(Str("src"))))
+    )
 
     assertEquals(result.nodes.length, 2)
   }
