@@ -1,2 +1,9 @@
+#
+# These settings are used by the Docker image
+#
+
+[cli]
+progress = false
+
 [resolution]
 silent = true

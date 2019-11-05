@@ -12,7 +12,11 @@ case class Config(
 )
 
 object Config {
-  case class Cli(level: LogLevel = LogLevel.Debug, unicode: Boolean = true)
+  case class Cli(
+    level: LogLevel = LogLevel.Debug,
+    unicode: Boolean = true,
+    progress: Boolean = true
+  )
   case class Build(tmpfs: Boolean = false)
   case class Resolution(
     silent: Boolean = false,

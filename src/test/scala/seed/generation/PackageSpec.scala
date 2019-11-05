@@ -43,18 +43,7 @@ object PackageSpec extends TestSuite[Unit] {
       Log.urgent
     )
 
-    val result = seed.cli.Build.build(
-      path,
-      Some(outputPath),
-      List("app"),
-      watch = false,
-      tmpfs = false,
-      Log.urgent,
-      _ => _ => ()
-    )
-
     for {
-      _ <- RTS.unsafeRunToFuture(result.right.get)
       result <- {
         cli.Package.ui(
           Config(),
@@ -64,6 +53,7 @@ object PackageSpec extends TestSuite[Unit] {
           "app",
           Some(buildPath),
           libs = true,
+          progress = false,
           packageConfig,
           Log.urgent
         )

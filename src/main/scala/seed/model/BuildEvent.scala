@@ -8,8 +8,9 @@ object BuildEvent {
       extends BuildEvent("compiled")
   case class Compiling(module: String, platform: Platform)
       extends BuildEvent("compiling")
-  case class Failed(module: String) extends BuildEvent("failed")
-  case class Linked(path: String)   extends BuildEvent("linked")
+  case class Failed(module: String, platform: Platform)
+      extends BuildEvent("failed")
+  case class Linked(path: String) extends BuildEvent("linked")
 
   implicit val encodeBuildEvent: Encoder[BuildEvent] = be =>
     Json.fromFields(
@@ -25,7 +26,11 @@ object BuildEvent {
               "module"   -> Json.fromString(module),
               "platform" -> Json.fromString(platform.id)
             )
-          case Failed(module) => List("module" -> Json.fromString(module))
+          case Failed(module, platform) =>
+            List(
+              "module"   -> Json.fromString(module),
+              "platform" -> Json.fromString(platform.id)
+            )
           case Linked(path) =>
             List("path" -> Json.fromString(path))
         })

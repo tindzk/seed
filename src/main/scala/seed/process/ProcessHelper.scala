@@ -11,7 +11,7 @@ import com.zaxxer.nuprocess.{
 import seed.Log
 
 import scala.collection.JavaConverters._
-import seed.cli.util.{Ansi, BloopCli, RTS}
+import seed.cli.util.Ansi
 import zio._
 
 sealed trait ProcessOutput
@@ -61,15 +61,16 @@ object ProcessHelper {
     */
   type Process = UIO[Unit]
 
-  def runCommmand(
+  def runCommand(
     cwd: Path,
     cmd: List[String],
     modulePath: Option[String] = None,
     buildPath: Option[String] = None,
     log: Log,
-    onStdOut: String => Unit
+    onStdOut: String => Unit,
+    verbose: Boolean = true
   ): Process =
-    Promise.make[Nothing, Unit].flatMap { termination =>
+    UIO.effectAsyncInterrupt { termination =>
       log.info(s"Running command '${Ansi.italic(cmd.mkString(" "))}'...")
       log.detail(
         s"Working directory: ${Ansi.italic(cwd.toAbsolutePath.toString)}"
@@ -87,21 +88,35 @@ object ProcessHelper {
         log.detail(s"Build path: ${Ansi.italic(bp)}")
       }
 
-      pb.setProcessListener(new ProcessHandler({
-        case ProcessOutput.StdOut(output) => onStdOut(output)
-        case ProcessOutput.StdErr(output) => log.error(output)
-      }, pid => log.debug("PID: " + pid), code => {
-        if (code == 0) RTS.unsafeRun(termination.succeed(()))
-        else {
-          log.error(s"Process exited with non-zero exit code")
-          RTS.unsafeRun(termination.interrupt)
-        }
-      }))
+      var destroyed = false
+
+      pb.setProcessListener(
+        new ProcessHandler(
+          {
+            case ProcessOutput.StdOut(output) => onStdOut(output)
+            case ProcessOutput.StdErr(output) => log.error(output)
+          },
+          pid => if (verbose) log.debug("PID: " + pid),
+          code =>
+            if (!destroyed) {
+              if (code == 0) {
+                if (verbose) log.debug(s"Process terminated successfully")
+                termination(Task.succeed(()))
+              } else {
+                log.error(s"Process exited with non-zero exit code $code")
+                termination(Task.interrupt)
+              }
+            }
+        )
+      )
 
       if (cwd.toString != "") pb.setCwd(cwd)
 
-      pb.start()
-      termination.await
+      val process = pb.start()
+      Left(UIO(if (process != null) {
+        destroyed = true
+        process.destroy(false)
+      }))
     }
 
   def runBloop(
@@ -109,15 +124,17 @@ object ProcessHelper {
     log: Log,
     onStdOut: String => Unit,
     modulePath: Option[String] = None,
-    buildPath: Option[String] = None
+    buildPath: Option[String] = None,
+    verbose: Boolean = true
   )(args: String*): Process =
-    runCommmand(
+    runCommand(
       cwd,
       List("bloop") ++ args,
       modulePath,
       buildPath,
       log,
-      output => if (!BloopCli.skipOutput(output)) onStdOut(output)
+      output => onStdOut(output),
+      verbose
     )
 
   def runShell(
@@ -127,7 +144,7 @@ object ProcessHelper {
     log: Log,
     onStdOut: String => Unit
   ): Process =
-    runCommmand(
+    runCommand(
       cwd,
       List("/bin/sh", "-c", command),
       None,

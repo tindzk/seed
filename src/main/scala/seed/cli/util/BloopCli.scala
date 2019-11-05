@@ -11,13 +11,6 @@ import seed.model.Platform
 
 object BloopCli {
 
-  /**
-    * Check needed because Bloop clears screen
-    *
-    * See https://github.com/scalacenter/bloop/pull/639/files
-    */
-  def skipOutput(output: String): Boolean = output.contains("\u001b[H\u001b[2J")
-
   def parseBloopModule(
     build: Build,
     bloopName: String
@@ -36,55 +29,28 @@ object BloopCli {
       (bloopName, build(bloopName).module.targets.head)
     }
 
-  def parseStdOut(build: Build)(message: String): Option[BuildEvent] = {
-    val parts = message.split(" ")
-    if (parts(0) == "Compiling") {
-      val (module, platform) = parseBloopModule(build, parts(1))
-      Some(BuildEvent.Compiling(module, platform))
-    } else if (parts(0) == "Compiled") {
-      val (module, platform) = parseBloopModule(build, parts(1))
-      Some(BuildEvent.Compiled(module, platform))
-    } else if (parts(0) == "Generated") {
-      val offset = message.indexOf('\'')
-      val path   = message.substring(offset + 1).init
-      Some(BuildEvent.Linked(path))
-    } else if (message.endsWith("failed to compile.")) {
-      val offset    = message.indexOf('\'')
-      val offsetEnd = message.indexOf('\'', offset + 1)
-      val module    = message.substring(offset + 1, offsetEnd)
-      Some(BuildEvent.Failed(module))
-    } else None
-  }
-
-  def compile(
-    build: Build,
-    projectPath: Path,
-    bloopModules: List[String],
-    watch: Boolean,
-    log: Log,
-    onStdOut: String => Unit
-  ): Option[ProcessHelper.Process] =
-    if (bloopModules.isEmpty) None
-    else {
-      val args = "compile" +: ((if (!watch) List() else List("--watch")) ++ bloopModules)
-      Some(ProcessHelper.runBloop(projectPath, log, onStdOut)(args: _*))
-    }
-
   def link(
-    build: Build,
     projectPath: Path,
     bloopModules: List[String],
     optimise: Boolean,
-    watch: Boolean,
     log: Log,
-    onStdOut: String => Unit
-  ): Option[ProcessHelper.Process] =
-    if (bloopModules.isEmpty) None
-    else {
-      val watchParam = if (!watch) List() else List("--watch")
-      val optimiseParam =
-        if (!optimise) List() else List("--optimize", "release")
-      val args = List("link") ++ bloopModules ++ watchParam ++ optimiseParam
-      Some(ProcessHelper.runBloop(projectPath, log, onStdOut)(args: _*))
+    onStdOut: String => Unit,
+    onBuildEvent: BuildEvent => Unit
+  ): ProcessHelper.Process = {
+    val optimiseParam = if (!optimise) List() else List("--optimize", "release")
+    val args          = List("link") ++ bloopModules ++ optimiseParam
+
+    def f(message: String): Unit = {
+      onStdOut(message)
+
+      val parts = message.split(" ")
+      if (parts.headOption.contains("Generated")) {
+        val offset = message.indexOf('\'')
+        val path   = message.substring(offset + 1).init
+        onBuildEvent(BuildEvent.Linked(path))
+      }
     }
+
+    ProcessHelper.runBloop(projectPath, log, f, verbose = false)(args: _*)
+  }
 }

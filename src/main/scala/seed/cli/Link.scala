@@ -4,11 +4,11 @@ import java.net.URI
 import java.nio.file.Path
 
 import seed.Log
-import seed.cli.util.{Ansi, RTS, WsClient}
+import seed.cli.util.{Ansi, ConsoleOutput, RTS, WsClient}
 import seed.config.BuildConfig
-import seed.model
-import seed.model.Config
+import seed.model.{BuildEvent, Config, Platform}
 import seed.Cli.Command
+import seed.build.{BloopClient, BloopServer, Bsp}
 import seed.config.BuildConfig.Build
 import zio._
 
@@ -37,15 +37,18 @@ object Link {
         }
 
       case None =>
-        val tmpfs = command.packageConfig.tmpfs || seedConfig.build.tmpfs
+        val tmpfs    = command.packageConfig.tmpfs || seedConfig.build.tmpfs
+        val progress = seedConfig.cli.progress
         link(
           buildPath,
           command.modules,
           command.optimise,
           command.watch,
           tmpfs,
+          progress,
           log,
-          _ => println
+          print,
+          _ => ()
         ) match {
           case Left(errors) =>
             errors.foreach(log.error)
@@ -62,17 +65,20 @@ object Link {
     optimise: Boolean,
     watch: Boolean,
     tmpfs: Boolean,
+    progress: Boolean,
     log: Log,
-    onStdOut: Build => String => Unit
+    onStdOut: String => Unit,
+    onBuildEvent: BuildEvent => Unit
   ): Either[List[String], UIO[Unit]] =
     BuildConfig.load(buildPath, log) match {
       case None => Left(List())
       case Some(result) =>
         import result.{build, projectPath}
+
         val parsedModules =
           modules.map(util.Target.parseModuleString(result.build))
         util.Validation.unpack(parsedModules).right.map { allModules =>
-          val processes = BuildTarget.buildTargets(
+          val processes = seed.cli.BuildTarget.buildTargets(
             build,
             allModules,
             projectPath,
@@ -85,32 +91,107 @@ object Link {
             case util.Target.Parsed(module, None) =>
               BuildConfig.linkTargets(build, module.name)
             case util.Target.Parsed(module, Some(Left(platform))) =>
-              List(BuildConfig.targetName(build, module.name, platform))
+              List((module.name, platform))
             case util.Target.Parsed(_, Some(Right(_))) => List()
           }
 
-          val bloop = util.BloopCli
-            .link(
-              build,
-              projectPath,
-              linkModules,
-              optimise,
-              watch,
-              log,
-              onStdOut(build)
-            )
-            .getOrElse(ZIO.unit)
+          val expandedModules = BuildConfig.expandModules(build, linkModules)
+
+          val consoleOutput = new ConsoleOutput(log, onStdOut)
+          val client = new BloopClient(
+            consoleOutput,
+            progress,
+            projectPath,
+            build,
+            expandedModules,
+            onBuildEvent
+          )
+
+          val program = Bsp
+            .runBspServerAndConnect(client, projectPath, consoleOutput.log)
+            .flatMap {
+              case (bspProcess, socket, server) =>
+                val l = linkPass(
+                  consoleOutput,
+                  client,
+                  server,
+                  build,
+                  projectPath,
+                  expandedModules,
+                  linkModules,
+                  optimise,
+                  progress,
+                  consoleOutput.log,
+                  onBuildEvent
+                )
+
+                val program =
+                  if (!watch)
+                    l.ensuring(Bsp.shutdown(bspProcess, socket, server))
+                  else
+                    Bsp.watchAction(
+                      build,
+                      client,
+                      consoleOutput,
+                      expandedModules,
+                      l,
+                      wait = true,
+                      runInitially = true
+                    )
+
+                Bsp.interruptIfParentFails(bspProcess.fiber.join, program)
+            }
 
           val await = processes.collect { case Left(p)  => p }
           val async = processes.collect { case Right(p) => p }
 
           if (await.nonEmpty)
-            log.info(s"Awaiting termination of ${await.length} processes...")
+            consoleOutput.log.info(
+              s"Awaiting termination of ${await.length} processes..."
+            )
 
           for {
             _ <- ZIO.collectAllPar(await)
-            _ <- ZIO.collectAllPar(async :+ bloop)
+            _ <- ZIO.collectAllPar(async :+ program)
           } yield ()
         }
     }
+
+  def linkPass(
+    consoleOutput: ConsoleOutput,
+    client: BloopClient,
+    server: BloopServer,
+    build: Build,
+    projectPath: Path,
+    expandModules: List[(String, Platform)],
+    linkModules: List[(String, Platform)],
+    optimise: Boolean,
+    progress: Boolean,
+    log: Log,
+    onBuildEvent: BuildEvent => Unit
+  ): UIO[Unit] =
+    if (linkModules.isEmpty) ZIO.unit
+    else
+      for {
+        _ <- Bsp.compile(
+          client,
+          server,
+          consoleOutput,
+          progress,
+          build,
+          projectPath,
+          expandModules
+        )
+        _ <- util.BloopCli
+          .link(
+            projectPath,
+            linkModules.map {
+              case (m, p) => BuildConfig.targetName(build, m, p)
+            },
+            optimise,
+            log,
+            line => consoleOutput.write(line + "\n", sticky = false),
+            onBuildEvent
+          )
+      } yield ()
 }
