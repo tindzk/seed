@@ -48,7 +48,7 @@ object Run {
           _ => ()
         ) match {
           case Left(errors) =>
-            errors.foreach(log.error)
+            errors.foreach(log.error(_))
             sys.exit(1)
           case Right(uio) =>
             val result = RTS.unsafeRunSync(uio)

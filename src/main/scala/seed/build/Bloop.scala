@@ -128,24 +128,26 @@ class BloopClient(
     params.getDiagnostics.asScala.foreach { diag =>
       val lines = diag.getMessage.linesIterator.toList
       val lineInfo =
-        s"[${diag.getRange.getStart.getLine}:${diag.getRange.getStart.getCharacter}]: "
+        s"[${diag.getRange.getStart.getLine + 1}:${diag.getRange.getStart.getCharacter + 1}]: "
       val message = lineInfo + lines.head
 
       if (diag.getSeverity == DiagnosticSeverity.ERROR) {
         if (filePath != lastDiagnosticFilePath) log.error(filePath + s" ($id)")
-        log.detail(message, ColourScheme.red2)
+        log.error(message, detail = true)
         lines.tail.foreach(
-          l => log.detail((" " * lineInfo.length) + l, ColourScheme.red2)
+          l => log.error((" " * lineInfo.length) + l, detail = true)
         )
       } else if (diag.getSeverity == DiagnosticSeverity.INFORMATION || diag.getSeverity == DiagnosticSeverity.HINT) {
         if (filePath != lastDiagnosticFilePath) log.info(filePath + s" ($id)")
-        log.detail(message, ColourScheme.blue2)
-        lines.tail.foreach(l => log.detail((" " * lineInfo.length) + l))
+        log.info(message, detail = true)
+        lines.tail.foreach(
+          l => log.info((" " * lineInfo.length) + l, detail = true)
+        )
       } else if (diag.getSeverity == DiagnosticSeverity.WARNING) {
         if (filePath != lastDiagnosticFilePath) log.warn(filePath + s" ($id)")
-        log.detail(message, ColourScheme.yellow2)
+        log.warn(message, detail = true)
         lines.tail.foreach(
-          l => log.detail((" " * lineInfo.length) + l, ColourScheme.yellow2)
+          l => log.warn((" " * lineInfo.length) + l, detail = true)
         )
       }
     }
@@ -470,14 +472,14 @@ object Bsp {
     val (bspSocketPath, bspProcess) = runBspServer(
       projectPath,
       new Log(log.f, log.map, log.level, log.unicode) {
-        override def error(message: String): Unit =
+        override def error(message: String, detail: Boolean = false): Unit =
           // This message is printed to stderr, but it is not an error, therefore
           // change log level to 'debug'
           if (message.contains("BSP server cancelled, closing socket..."))
             // Remove "[E] " from message
             debug(message.dropWhile(_ != ' ').tail)
           else
-            super.error(message)
+            super.error(message, detail)
       },
       message => log.debug(Ansi.bold("[BSP] ") + message)
     )
@@ -616,7 +618,7 @@ object Bsp {
         .foreach { _ =>
           for {
             _ <- current match {
-              case None => UIO(())
+              case None    => UIO(())
               case Some(c) => if (wait) c.join else c.interrupt.map(_ => ())
             }
 

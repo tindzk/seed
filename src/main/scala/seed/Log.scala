@@ -13,54 +13,64 @@ class Log(
   import Log._
   import LogLevel._
 
+  val DetailPrefix = " " * (if (unicode) UnicodeLength else NonUnicodeLength)
+
   def filter(f: String => Boolean): Log =
     new Log(m => if (f(m)) this.f(m), map, level, unicode)
 
   def prefix(text: String): Log = new Log(f, text + _, level, unicode)
 
-  def debug(message: String): Unit =
+  def debug(message: String, detail: Boolean = false): Unit =
     if (level <= Debug)
       f(
         foreground(green2)(
-          bold(if (unicode) "↪ " else "[debug] ") + map(message)
+          (if (detail) DetailPrefix
+           else bold(if (unicode) "↪ " else "[debug] ")) +
+            map(message)
         )
       )
 
-  def detail(message: String, colour: Colour = blue3): Unit =
-    if (level <= Detail)
-      f(
-        (" " * (if (unicode) UnicodeLength else NonUnicodeLength)) +
-          foreground(colour)(map(message))
-      )
-
-  def info(message: String): Unit =
+  def info(
+    message: String,
+    detail: Boolean = false,
+    colour: Colour = blue2
+  ): Unit =
     if (level <= Info)
       f(
-        foreground(blue2)(
-          bold(if (unicode) "ⓘ " else " [info] ") + map(message)
+        foreground(colour)(
+          (if (detail) DetailPrefix
+           else bold(if (unicode) "ⓘ " else " [info] ")) +
+            map(message)
         )
       )
+
+  def infoHighlight(message: String): Unit = info(message, detail = true, blue3)
 
   def infoRetainColour(message: String): Unit =
     if (level <= Info)
       f(
-        foreground(blue2)(bold(if (unicode) "ⓘ " else " [info] ")) + map(
-          message
-        )
+        foreground(blue2)(bold(if (unicode) "ⓘ " else " [info] ")) +
+          map(message)
       )
 
-  def warn(message: String): Unit =
+  def warn(message: String, detail: Boolean = false): Unit =
     if (level <= Warn)
       f(
         foreground(yellow2)(
-          bold(if (unicode) "⚠ " else " [warn] ") + map(message)
+          (if (detail) DetailPrefix
+           else bold(if (unicode) "⚠ " else " [warn] ")) +
+            map(message)
         )
       )
 
-  def error(message: String): Unit =
+  def error(message: String, detail: Boolean = false): Unit =
     if (level <= Error)
       f(
-        foreground(red2)(bold(if (unicode) "✗ " else "[error] ") + map(message))
+        foreground(red2)(
+          (if (detail) DetailPrefix
+           else bold(if (unicode) "✗ " else "[error] ")) +
+            map(message)
+        )
       )
 
   def newLine(): Unit = f(" ")
@@ -73,14 +83,12 @@ sealed abstract class LogLevel(val index: Int) extends Ordered[LogLevel] {
 object LogLevel {
   case object Debug  extends LogLevel(0)
   case object Info   extends LogLevel(1)
-  case object Detail extends LogLevel(2)
-  case object Warn   extends LogLevel(3)
-  case object Error  extends LogLevel(4)
-  case object Silent extends LogLevel(5)
+  case object Warn   extends LogLevel(2)
+  case object Error  extends LogLevel(3)
+  case object Silent extends LogLevel(4)
 
   val All = Map(
     "debug"  -> Debug,
-    "detail" -> Detail,
     "info"   -> Info,
     "warn"   -> Warn,
     "error"  -> Error,

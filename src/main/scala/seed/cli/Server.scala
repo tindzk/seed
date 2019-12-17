@@ -171,7 +171,7 @@ object Server {
           onBroadcastBuildEvent(wsServer, serverLog)
         ) match {
           case Left(errors) =>
-            errors.foreach(clientLog.error)
+            errors.foreach(clientLog.error(_))
             wsClient.close()
           case Right(uio) => runCommandUio(uio, wsClient)
         }
@@ -187,7 +187,7 @@ object Server {
           onBroadcastBuildEvent(wsServer, serverLog)
         ) match {
           case Left(errors) =>
-            errors.foreach(clientLog.error)
+            errors.foreach(clientLog.error(_))
             wsClient.close()
           case Right(uio) => runCommandUio(uio, wsClient)
         }
@@ -204,7 +204,7 @@ object Server {
           onBroadcastBuildEvent(wsServer, serverLog)
         ) match {
           case Left(errors) =>
-            errors.foreach(clientLog.error)
+            errors.foreach(clientLog.error(_))
             wsClient.close()
           case Right(uio) => runCommandUio(uio, wsClient)
         }

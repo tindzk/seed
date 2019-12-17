@@ -72,20 +72,21 @@ object ProcessHelper {
   ): Process =
     UIO.effectAsyncInterrupt { termination =>
       log.info(s"Running command '${Ansi.italic(cmd.mkString(" "))}'...")
-      log.detail(
-        s"Working directory: ${Ansi.italic(cwd.toAbsolutePath.toString)}"
+      log.debug(
+        s"Working directory: ${Ansi.italic(cwd.toAbsolutePath.toString)}",
+        detail = true
       )
 
       val pb = new NuProcessBuilder(cmd.asJava)
 
       modulePath.foreach { mp =>
         pb.environment().put("MODULE_PATH", mp)
-        log.detail(s"Module path: ${Ansi.italic(mp)}")
+        log.debug(s"Module path: ${Ansi.italic(mp)}", detail = true)
       }
 
       buildPath.foreach { bp =>
         pb.environment().put("BUILD_PATH", bp)
-        log.detail(s"Build path: ${Ansi.italic(bp)}")
+        log.debug(s"Build path: ${Ansi.italic(bp)}", detail = true)
       }
 
       var destroyed = false
@@ -96,7 +97,7 @@ object ProcessHelper {
             case ProcessOutput.StdOut(output) => onStdOut(output)
             case ProcessOutput.StdErr(output) => log.error(output)
           },
-          pid => if (verbose) log.debug("PID: " + pid),
+          pid => if (verbose) log.debug("PID: " + pid, detail = true),
           code =>
             if (!destroyed) {
               if (code == 0) {

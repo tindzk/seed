@@ -671,7 +671,7 @@ In the `cli` section, you can find output-related configuration settings:
 ```toml
 [cli]
 # Log level
-# Possible values: debug, detail, warn, info, error, silent
+# Possible values: debug, warn, info, error, silent
 level = "debug"
 
 # Use Unicode characters to indicate log levels

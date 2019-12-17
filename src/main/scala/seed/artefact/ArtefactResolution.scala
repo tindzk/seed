@@ -299,12 +299,22 @@ object ArtefactResolution {
     val resolvedCachePath = cachePath.getOrElse(seedConfig.resolution.cachePath)
 
     log.info("Configured resolvers:")
-    log.detail("- " + Ansi.italic(resolvedIvyPath.toString) + " (Ivy)")
-    log.detail("- " + Ansi.italic(resolvedCachePath.toString) + " (Coursier)")
+    log.info(
+      "- " + Ansi.italic(resolvedIvyPath.toString) + " (Ivy)",
+      detail = true
+    )
+    log.info(
+      "- " + Ansi.italic(resolvedCachePath.toString) + " (Coursier)",
+      detail = true
+    )
     resolvers.ivy
-      .foreach(ivy => log.detail("- " + Ansi.italic(ivy.url) + " (Ivy)"))
+      .foreach(
+        ivy => log.info("- " + Ansi.italic(ivy.url) + " (Ivy)", detail = true)
+      )
     resolvers.maven
-      .foreach(maven => log.detail("- " + Ansi.italic(maven) + " (Maven)"))
+      .foreach(
+        maven => log.info("- " + Ansi.italic(maven) + " (Maven)", detail = true)
+      )
 
     def resolve(deps: Set[JavaDep]) =
       Coursier.resolveAndDownload(

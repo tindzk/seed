@@ -66,7 +66,7 @@ object BuildTarget {
             val process = ProcessHelper.runBloop(
               projectPath,
               customLog,
-              customLog.info,
+              customLog.info(_),
               Some(modulePath.toAbsolutePath.toString),
               Some(buildPath.toAbsolutePath.toString)
             )(args: _*)
@@ -85,7 +85,7 @@ object BuildTarget {
                         cmd,
                         buildPath.toAbsolutePath.toString,
                         customLog,
-                        customLog.info
+                        customLog.info(_)
                       )
                     )
                   )
@@ -98,7 +98,7 @@ object BuildTarget {
                     cmd,
                     buildPath.toAbsolutePath.toString,
                     customLog,
-                    customLog.info
+                    customLog.info(_)
                   )
 
                   List(if (target.await) Left(process) else Right(process))
