@@ -2,6 +2,7 @@ package seed.generation
 
 import java.nio.file.{Files, Path, Paths}
 
+import bloop.config.Config.JsConfig
 import bloop.config.ConfigEncoderDecoders
 import minitest.TestSuite
 import org.apache.commons.io.FileUtils
@@ -216,6 +217,10 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
         .filter(_.contains("paradise"))
         .map(getFileName),
       List("paradise_2.11.12-2.1.1.jar")
+    )
+    assertEquals(
+      exampleJs.project.platform.get.config.asInstanceOf[JsConfig].version,
+      "0.6.26"
     )
 
     def checkResolutionArtefacts(configFile: bloop.config.Config.File): Unit = {

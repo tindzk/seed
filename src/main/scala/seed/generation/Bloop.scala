@@ -210,8 +210,7 @@ object Bloop {
         platform = Some(
           Config.Platform.Js(
             Config.JsConfig(
-              version =
-                SemanticVersioning.majorMinorVersion(js.scalaJsVersion.get),
+              version = js.scalaJsVersion.get,
               mode = Config.LinkerMode.Debug,
               kind = Config.ModuleKindJS.NoModule,
               emitSourceMaps = emitSourceMaps,
