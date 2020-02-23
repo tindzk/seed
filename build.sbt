@@ -76,9 +76,11 @@ Global / cancelable := true
 
 testFrameworks += new TestFramework("minitest.runner.Framework")
 
-licenses += ("Apache-2.0", url("http://opensource.org/licenses/Apache-2.0"))
-bintrayVcsUrl := Some(s"git@github.com:$seedOrganisation/seed.git")
+val licence = ("Apache-2.0", url("http://opensource.org/licenses/Apache-2.0"))
+val vcsUrl  = Some(s"git@github.com:$seedOrganisation/seed.git")
 
+licenses += licence
+bintrayVcsUrl := vcsUrl
 publishArtifact in (Compile, packageDoc) := false
 publishArtifact in (Compile, packageSrc) := false
 
@@ -93,7 +95,11 @@ lazy val scaladoc211 = project
     // Publish artefact without the standard library. The correct version of
     // scala-library will be resolved during runtime
     pomPostProcess := dropScalaLibraries,
-    Compile / unmanagedSourceDirectories += baseDirectory.value / ".." / "scaladoc" / "src" / "main" / "scala"
+    Compile / unmanagedSourceDirectories += baseDirectory.value / ".." / "scaladoc" / "src" / "main" / "scala",
+    licenses += licence,
+    bintrayVcsUrl := vcsUrl,
+    publishArtifact in (Compile, packageDoc) := false,
+    publishArtifact in (Compile, packageSrc) := false
   )
 
 lazy val scaladoc212 = project
@@ -105,7 +111,11 @@ lazy val scaladoc212 = project
     scalaVersion := "2.12.10",
     libraryDependencies += "org.scala-lang" % "scala-compiler" % "2.12.10" % Provided,
     pomPostProcess := dropScalaLibraries,
-    Compile / unmanagedSourceDirectories += baseDirectory.value / ".." / "scaladoc" / "src" / "main" / "scala"
+    Compile / unmanagedSourceDirectories += baseDirectory.value / ".." / "scaladoc" / "src" / "main" / "scala",
+    licenses += licence,
+    bintrayVcsUrl := vcsUrl,
+    publishArtifact in (Compile, packageDoc) := false,
+    publishArtifact in (Compile, packageSrc) := false
   )
 
 lazy val scaladoc213 = project
@@ -117,7 +127,11 @@ lazy val scaladoc213 = project
     scalaVersion := "2.13.1",
     libraryDependencies += "org.scala-lang" % "scala-compiler" % "2.13.1" % Provided,
     pomPostProcess := dropScalaLibraries,
-    Compile / unmanagedSourceDirectories += baseDirectory.value / ".." / "scaladoc" / "src" / "main" / "scala"
+    Compile / unmanagedSourceDirectories += baseDirectory.value / ".." / "scaladoc" / "src" / "main" / "scala",
+    licenses += licence,
+    bintrayVcsUrl := vcsUrl,
+    publishArtifact in (Compile, packageDoc) := false,
+    publishArtifact in (Compile, packageSrc) := false
   )
 
 // From https://stackoverflow.com/questions/27835740/sbt-exclude-certain-dependency-only-during-publish
