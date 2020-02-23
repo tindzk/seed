@@ -1,0 +1,26 @@
+[project]
+scalaVersion      = "2.11.11-bin-typelevel-4"
+scalaJsVersion    = "0.6.28"
+scalaOrganisation = "org.typelevel"
+
+[module.a.js]
+sources   = ["a"]
+scalaDeps = [
+  # Depends on scalajs-dom 0.9.7
+  ["tech.sparse", "pine", "0.1.6"]
+]
+
+[module.b.js]
+sources   = ["b"]
+scalaDeps = [
+  ["org.scala-js", "scalajs-dom", "0.9.8"]
+]
+
+[module.example1.js]
+sources    = ["src"]
+moduleDeps = ["a"]
+
+# Depends on scalajs-dom 0.9.8
+[module.example2.js]
+sources    = ["src"]
+moduleDeps = ["a", "b"]

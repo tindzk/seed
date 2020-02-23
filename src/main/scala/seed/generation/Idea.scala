@@ -22,6 +22,13 @@ import seed.model.{Platform, Resolution}
 import seed.model.Build.Module
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.Log
+import seed.artefact.ArtefactResolution.{
+  CompilerResolution,
+  ModuleRef,
+  Regular,
+  RuntimeResolution,
+  Test
+}
 import seed.config.BuildConfig
 import seed.generation.util.PathUtil.normalisePath
 
@@ -126,27 +133,35 @@ object Idea {
 
   def createCompilerLibraries(
     modules: Build,
-    resolution: List[Coursier.ResolutionResult],
+    runtimeResolution: RuntimeResolution,
+    compilerResolution: CompilerResolution,
     librariesPath: Path
   ): Unit = {
-    val scalaVersions = modules.values.toList
-      .map(_.module)
-      .flatMap(
-        module =>
-          (module.jvm.toList ++ module.js.toList ++ module.native.toList)
-            .map(s => s.scalaOrganisation.get -> s.scalaVersion.get)
-      )
-      .distinct
+    val scalaVersions = modules.toList
+      .flatMap {
+        case (name, module) =>
+          val targets = BuildConfig.targetsFromPlatformModules(module.module)
+          targets.map { target =>
+            val m = BuildConfig.platformModule(module.module, target).get
+            (m.scalaOrganisation.get, m.scalaVersion.get) -> (name, target, ArtefactResolution.Regular)
+          }
+      }
+      .groupBy(_._1)
+      .mapValues(_.map(_._2))
 
     scalaVersions.foreach {
-      case (scalaOrganisation, scalaVersion) =>
+      case ((scalaOrganisation, scalaVersion), moduleRef) =>
+        val r = runtimeResolution(moduleRef.head)
+        val libraryDeps =
+          ArtefactResolution.scalaLibraryDeps(scalaOrganisation, scalaVersion)
+        val libraryArtefacts = Coursier.localArtefacts(r, libraryDeps, true)
+
         val scalaCompiler = ArtefactResolution.resolveScalaCompiler(
-          resolution,
+          compilerResolution,
           scalaOrganisation,
           scalaVersion,
-          List(),
-          List(),
-          optionalArtefacts = true
+          libraryArtefacts,
+          List()
         )
 
         val xml = IdeaFile.createLibrary(
@@ -195,8 +210,8 @@ object Idea {
             else BuildConfig.ideaPlatformTargetName(build, m, target).toList
           val platformModule = BuildConfig.platformModule(module, target).get
 
-          ideaModules -> (platformModule.scalaOptions ++ util.ScalaCompiler
-            .compilerPlugIns(
+          ideaModules -> (platformModule.scalaOptions ++
+            util.ScalaCompiler.compilerPlugIns(
               build,
               platformModule,
               compilerResolution,
@@ -235,8 +250,7 @@ object Idea {
     ideaPath: Path,
     modulesPath: Path,
     librariesPath: Path,
-    compilerResolution: List[Coursier.ResolutionResult],
-    resolution: Coursier.ResolutionResult,
+    resolution: RuntimeResolution,
     name: String,
     module: Module,
     log: Log
@@ -266,7 +280,7 @@ object Idea {
             sources = jsSources,
             tests = jsTests,
             resolvedDeps = Coursier.localArtefacts(
-              resolution,
+              resolution((name, JavaScript, Regular)),
               collectJsDeps(build, false, jsModule)
                 .map(
                   dep =>
@@ -286,7 +300,7 @@ object Idea {
               .flatMap(
                 test =>
                   Coursier.localArtefacts(
-                    resolution,
+                    resolution((name, JavaScript, Test)),
                     collectJsDeps(build, true, test)
                       .map(
                         dep =>
@@ -341,7 +355,7 @@ object Idea {
             sources = jvmSources,
             tests = jvmTests,
             resolvedDeps = Coursier.localArtefacts(
-              resolution,
+              resolution((name, JVM, Regular)),
               collectJvmJavaDeps(build, false, jvmModule).toSet ++
                 collectJvmScalaDeps(build, false, jvmModule)
                   .map(
@@ -362,7 +376,7 @@ object Idea {
               .flatMap(
                 test =>
                   Coursier.localArtefacts(
-                    resolution,
+                    resolution((name, JVM, Test)),
                     collectJvmJavaDeps(build, true, test).toSet ++
                       collectJvmScalaDeps(build, true, test)
                         .map(
@@ -420,7 +434,7 @@ object Idea {
             sources = nativeSources,
             tests = nativeTests,
             resolvedDeps = Coursier.localArtefacts(
-              resolution,
+              resolution((name, Native, Regular)),
               collectNativeDeps(build, false, nativeModule)
                 .map(
                   dep =>
@@ -440,7 +454,7 @@ object Idea {
               .flatMap(
                 test =>
                   Coursier.localArtefacts(
-                    resolution,
+                    resolution((name, Native, Test)),
                     collectNativeDeps(build, true, test)
                       .map(
                         dep =>
@@ -498,7 +512,7 @@ object Idea {
           sources = sharedSources,
           tests = sharedTests,
           resolvedDeps = Coursier.localArtefacts(
-            resolution,
+            resolution((name, platform, Regular)),
             collectJvmJavaDeps(build, false, module).toSet ++
               collectJvmScalaDeps(build, false, module)
                 .map(
@@ -517,7 +531,7 @@ object Idea {
             .flatMap(
               test =>
                 Coursier.localArtefacts(
-                  resolution,
+                  resolution((name, platform, Test)),
                   collectJvmJavaDeps(build, true, test).toSet ++
                     collectJvmScalaDeps(build, true, test)
                       .map(
@@ -609,8 +623,8 @@ object Idea {
     projectPath: Path,
     outputPath: Path,
     modules: Build,
-    resolution: Coursier.ResolutionResult,
-    compilerResolution: List[Coursier.ResolutionResult],
+    runtimeResolution: RuntimeResolution,
+    compilerResolution: CompilerResolution,
     tmpfs: Boolean,
     log: Log
   ): Unit = {
@@ -641,7 +655,12 @@ object Idea {
       .asScala
       .foreach(Files.delete)
 
-    createCompilerLibraries(modules, compilerResolution, librariesPath)
+    createCompilerLibraries(
+      modules,
+      runtimeResolution,
+      compilerResolution,
+      librariesPath
+    )
     FileUtils.write(
       ideaPath.resolve("misc.xml").toFile,
       IdeaFile.createJdk(jdkVersion = "1.8"),
@@ -657,8 +676,7 @@ object Idea {
           ideaPath,
           modulesPath,
           librariesPath,
-          compilerResolution,
-          resolution,
+          runtimeResolution,
           name,
           module.module,
           log

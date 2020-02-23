@@ -3,8 +3,9 @@ package seed.generation.util
 import java.nio.file.{Files, Path, Paths}
 
 import org.apache.commons.io.FileUtils
+import seed.Cli.PackageConfig
 import seed.Log
-import seed.artefact.{ArtefactResolution, Coursier}
+import seed.artefact.ArtefactResolution
 import seed.config.BuildConfig
 import seed.config.BuildConfig.{Build, ModuleConfig}
 import seed.generation.Bloop
@@ -12,6 +13,13 @@ import seed.model.Build.{JavaDep, Resolvers}
 import seed.model.{Build, Platform}
 
 object ProjectGeneration {
+  private val packageConfig = PackageConfig(
+    tmpfs = false,
+    silent = false,
+    ivyPath = None,
+    cachePath = None
+  )
+
   def generate(projectPath: Path, build: Build): Unit = {
     val bloopPath      = projectPath.resolve(".bloop")
     val buildPath      = projectPath.resolve("build")
@@ -20,36 +28,23 @@ object ProjectGeneration {
     Set(bloopPath, buildPath, bloopBuildPath)
       .foreach(Files.createDirectories(_))
 
-    val resolvedIvyPath   = Coursier.DefaultIvyPath
-    val resolvedCachePath = Coursier.DefaultCachePath
+    val runtimeResolution = ArtefactResolution.runtimeResolution(
+      build,
+      seed.model.Config(),
+      Resolvers(),
+      packageConfig,
+      optionalArtefacts = false,
+      Log.urgent
+    )
 
-    val compilerDeps = ArtefactResolution.allCompilerDeps(build)
-    val platformDeps = ArtefactResolution.allPlatformDeps(build)
-    val libraryDeps  = ArtefactResolution.allLibraryDeps(build)
-
-    val resolution =
-      Coursier.resolveAndDownload(
-        platformDeps ++ libraryDeps,
-        Resolvers(),
-        resolvedIvyPath,
-        resolvedCachePath,
-        optionalArtefacts = false,
-        silent = true,
-        Log.urgent
-      )
-    val compilerResolution =
-      compilerDeps.map(
-        d =>
-          Coursier.resolveAndDownload(
-            d,
-            Resolvers(),
-            resolvedIvyPath,
-            resolvedCachePath,
-            optionalArtefacts = false,
-            silent = true,
-            Log.urgent
-          )
-      )
+    val compilerResolution = ArtefactResolution.compilerResolution(
+      build,
+      seed.model.Config(),
+      Resolvers(),
+      packageConfig,
+      optionalArtefacts = false,
+      Log.urgent
+    )
 
     build.foreach {
       case (id, module) =>
@@ -59,7 +54,7 @@ object ProjectGeneration {
           buildPath,
           bloopBuildPath,
           build,
-          resolution,
+          runtimeResolution,
           compilerResolution,
           id,
           module.module,

@@ -1,13 +1,7 @@
 package seed.build
 
 import java.net.Socket
-import java.util.concurrent.{
-  CompletableFuture,
-  Executor,
-  Executors,
-  RejectedExecutionException,
-  TimeUnit
-}
+import java.util.concurrent.{Executors, TimeUnit}
 
 import com.google.gson.JsonObject
 import org.eclipse.lsp4j.jsonrpc.Launcher
@@ -16,13 +10,16 @@ import seed.cli.util.{
   BloopCli,
   ColourScheme,
   ConsoleOutput,
+  Module,
   ProgressBar,
+  ProgressBarItem,
+  ProgressBars,
   Watcher
 }
 import ch.epfl.scala.bsp4j._
 import com.google.gson.{Gson, JsonElement}
 
-import scala.collection.{JavaConverters, mutable}
+import scala.collection.JavaConverters
 import java.nio.file.{Files, Path}
 
 import org.newsclub.net.unix.{AFUNIXSocket, AFUNIXSocketAddress}
@@ -38,6 +35,7 @@ import zio.stream._
 import zio.duration._
 
 import scala.concurrent.CancellationException
+import seed.util.ZioHelpers._
 
 class BloopClient(
   consoleOutput: ConsoleOutput,
@@ -47,45 +45,24 @@ class BloopClient(
   allModules: List[(String, Platform)],
   onBuildEvent: BuildEvent => Unit
 ) extends BuildClient {
+  val pb = new ProgressBars(
+    if (progress) consoleOutput else new ConsoleOutput(Log.silent, _ => ()),
+    allModules.map {
+      case (m, p) =>
+        ProgressBarItem(
+          BuildConfig.targetName(build, m, p),
+          Module.format(m, p)
+        )
+    }
+  )
+
   import consoleOutput.log
 
   private val gson: Gson = new Gson()
 
-  // Cannot use ListMap here since updating it changes the order of the elements
-  private val modules = mutable.ListBuffer[(String, ProgressBar.Line)]()
-  reset()
-
   def reset(): Unit = {
-    modules.clear()
-    modules ++= allModules.map {
-      case (m, p) =>
-        BuildConfig.targetName(build, m, p) -> ProgressBar
-          .Line(
-            0,
-            ProgressBar.Result.Waiting,
-            m + " (" + p.caption + ")",
-            0,
-            0
-          )
-    }
-
+    pb.reset()
     lastDiagnosticFilePath = ""
-  }
-
-  /** Modules compiled, the upcoming notifications are related to running */
-  def compiled: Boolean = consoleOutput.isFlushed
-
-  def printPb(): Unit =
-    if (!compiled && progress)
-      consoleOutput.write(ProgressBar.printAll(modules), sticky = true)
-
-  def updatePb(): Unit = {
-    modules.zipWithIndex.foreach {
-      case ((id, line), i) =>
-        modules.update(i, id -> line.copy(tick = line.tick + 1))
-    }
-
-    printPb()
   }
 
   override def onBuildShowMessage(params: ShowMessageParams): Unit = {
@@ -94,12 +71,12 @@ class BloopClient(
   }
 
   override def onBuildLogMessage(params: LogMessageParams): Unit =
-    // Compilation failures of modules is already indicated in the progress bar
+    // Compilation failures of modules are already indicated in the progress bar
     if (!params.getMessage.startsWith("Failed to compile ") &&
         !params.getMessage.startsWith("Deduplicating compilation of ")) {
       require(!params.getMessage.endsWith("\n"))
       log.infoRetainColour(params.getMessage)
-      printPb()
+      pb.printPb()
     }
 
   import scala.collection.JavaConverters._
@@ -153,13 +130,13 @@ class BloopClient(
     }
 
     lastDiagnosticFilePath = filePath
-    printPb()
+    pb.printPb()
   }
 
   override def onBuildTargetDidChange(params: DidChangeBuildTarget): Unit = ()
 
   override def onBuildTaskStart(params: TaskStartParams): Unit =
-    if (!compiled) {
+    if (!pb.compiled) {
       val uri = params.getData
         .asInstanceOf[JsonObject]
         .get("target")
@@ -180,19 +157,14 @@ class BloopClient(
       .getAsString
     val bloopId = uri.split('\u003d').last
 
-    val index = modules.indexWhere(_._1 == bloopId)
-    if (index != -1) {
-      modules.update(
-        index,
-        bloopId -> modules(index)._2.copy(
-          result = ProgressBar.Result.InProgress,
-          step = params.getProgress.toInt,
-          total = params.getTotal.toInt
-        )
+    pb.update(
+      bloopId,
+      _.copy(
+        result = ProgressBar.Result.InProgress,
+        step = params.getProgress.toInt,
+        total = params.getTotal.toInt
       )
-
-      printPb()
-    }
+    )
   }
 
   override def onBuildTaskFinish(params: TaskFinishParams): Unit =
@@ -213,30 +185,25 @@ class BloopClient(
               ProgressBar.Result.Success
           } else ProgressBar.Result.Failure
 
-        val index = modules.indexWhere(_._1 == bloopId)
-        if (index != -1) {
-          if (report.getErrors == 0) {
-            if (!compiled)
-              onBuildEvent(BuildEvent.Compiled(parsed._1, parsed._2))
-            modules.update(
-              index,
-              bloopId -> modules(index)._2
-                .copy(result = r, step = 100, total = 100)
-            )
-
-            if (progress) printPb()
-            else log.info("Module " + Ansi.italic(parsed._1) + " compiled")
-          } else {
-            if (!compiled) onBuildEvent(BuildEvent.Failed(parsed._1, parsed._2))
-            modules.update(index, bloopId -> modules(index)._2.copy(result = r))
-
-            if (progress) printPb()
-            else
-              log.error(
-                "Module " + Ansi.italic(parsed._1) + " could not be compiled"
-              )
-          }
-        }
+        pb.update(
+          bloopId,
+          current =>
+            if (report.getErrors == 0) {
+              if (!pb.compiled)
+                onBuildEvent(BuildEvent.Compiled(parsed._1, parsed._2))
+              if (!progress)
+                log.info("Module " + Ansi.italic(parsed._1) + " compiled")
+              current.copy(result = r, step = 100, total = 100)
+            } else {
+              if (!pb.compiled)
+                onBuildEvent(BuildEvent.Failed(parsed._1, parsed._2))
+              if (!progress)
+                log.error(
+                  "Module " + Ansi.italic(parsed._1) + " could not be compiled"
+                )
+              current.copy(result = r)
+            }
+        )
 
       case TaskDataKind.TEST_REPORT =>
         val json   = params.getData.asInstanceOf[JsonElement]
@@ -402,40 +369,6 @@ object Bsp {
       }
     } yield ()
 
-  def fromCompletableFuture[T](future: => CompletableFuture[T]): Task[T] =
-    Task.descriptorWith(
-      d =>
-        ZIO
-          .effect(future)
-          .flatMap(
-            f =>
-              Task
-                .effectAsync { (cb: Task[T] => Unit) =>
-                  f.whenCompleteAsync(
-                    (v: T, e: Throwable) =>
-                      if (e == null) cb(Task.succeed(v))
-                      else {
-                        if (!e.isInstanceOf[CancellationException]) {
-                          e.printStackTrace()
-                          cb(Task.fail(e))
-                        }
-                      },
-                    new Executor {
-                      override def execute(r: Runnable): Unit =
-                        if (!d.executor.submit(r))
-                          throw new RejectedExecutionException(
-                            "Rejected: " + r.toString
-                          )
-                    }
-                  )
-                }
-                .onTermination { _ =>
-                  if (!f.isDone) f.cancel(true)
-                  UIO(())
-                }
-          )
-    )
-
   def runBspServer(
     projectPath: Path,
     log: Log,
@@ -519,43 +452,6 @@ object Bsp {
       r <- f.join
     } yield r
 
-  private def progressBarUpdater(
-    client: BloopClient,
-    consoleOutput: ConsoleOutput
-  ) = {
-    val effect    = RIO.effect(client.updatePb())
-    val scheduler = Schedule.spaced(150.millis)
-    val runtime   = new DefaultRuntime {}
-
-    Stream
-      .fromEffect(effect)
-      .repeat(scheduler)
-      .provide(runtime.Environment)
-      .runDrain
-      .fork
-  }
-
-  def withProgressBar(
-    client: BloopClient,
-    consoleOutput: ConsoleOutput,
-    zio: ZIO[Any, Nothing, Option[StatusCode]]
-  ): ZIO[Any, Nothing, Unit] =
-    UIO(client.printPb()).flatMap(
-      _ =>
-        progressBarUpdater(client, consoleOutput).flatMap(
-          pb =>
-            zio.flatMap(
-              result =>
-                for {
-                  _ <- pb.interrupt.map(_ => ())
-                  _ <- UIO(consoleOutput.flushSticky())
-                  _ <- if (result.exists(_ != StatusCode.OK)) IO.interrupt
-                  else IO.unit
-                } yield ()
-            )
-        )
-    )
-
   def compile(
     client: BloopClient,
     server: BloopServer,
@@ -572,14 +468,10 @@ object Bsp {
     val b = Bsp
       .buildModules(server, build, projectPath, bloopModules)
       .option
-      .map(_.map(_.getStatusCode))
+      .map(_.map(_.getStatusCode).contains(StatusCode.OK))
 
-    if (progress) withProgressBar(client, consoleOutput, b)
-    else
-      b.flatMap(
-        result =>
-          if (result.exists(_ != StatusCode.OK)) IO.interrupt else IO.unit
-      )
+    if (progress) ProgressBars.withProgressBar(client.pb, consoleOutput, b)
+    else b.flatMap(if (_) IO.unit else IO.interrupt)
   }
 
   def watchAction(

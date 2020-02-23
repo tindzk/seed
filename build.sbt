@@ -12,13 +12,17 @@ def parseVersion(file: Path): Option[String] =
       .find(_.nonEmpty)
       .map(_.trim)
 
-def seedVersion =
+val seedOrganisation = "tindzk"
+
+// Should be `val` instead of `def`, otherwise it is necessary to run
+// scaladoc*/publishLocal after every commit
+val seedVersion =
   parseVersion(Paths.get("SEED"))                        // CI
     .getOrElse(Seq("git", "describe", "--tags").!!.trim) // Local development
-def bloopVersion         = parseVersion(Paths.get("BLOOP")).get
-def bloopCoursierVersion = parseVersion(Paths.get("COURSIER")).get
+val bloopVersion         = parseVersion(Paths.get("BLOOP")).get
+val bloopCoursierVersion = parseVersion(Paths.get("COURSIER")).get
 
-organization := "tindzk"
+organization := seedOrganisation
 version := seedVersion
 scalaVersion := "2.12.4-bin-typelevel-4"
 scalaOrganization := "org.typelevel"
@@ -31,9 +35,10 @@ Compile / sourceGenerators += Def.task {
     s"""package seed
        |
        |object BuildInfo {
-       |  val Version  = "$seedVersion"
-       |  val Bloop    = "$bloopVersion"
-       |  val Coursier = "$bloopCoursierVersion"
+       |  val Organisation = "$seedOrganisation"
+       |  val Version      = "$seedVersion"
+       |  val Bloop        = "$bloopVersion"
+       |  val Coursier     = "$bloopCoursierVersion"
        |}""".stripMargin
   )
 
@@ -51,6 +56,7 @@ libraryDependencies ++= Seq(
   "ch.epfl.scala"                % "directory-watcher" % "0.8.0+6-f651bd93",
   "com.joefkelley"               %% "argyle"           % "1.0.0",
   "org.scalaj"                   %% "scalaj-http"      % "2.4.2",
+  "org.apache.httpcomponents"    % "httpasyncclient"   % "4.1.4",
   "dev.zio"                      %% "zio"              % "1.0.0-RC14",
   "dev.zio"                      %% "zio-streams"      % "1.0.0-RC14",
   "io.circe"                     %% "circe-core"       % "0.11.1",
@@ -71,7 +77,60 @@ Global / cancelable := true
 testFrameworks += new TestFramework("minitest.runner.Framework")
 
 licenses += ("Apache-2.0", url("http://opensource.org/licenses/Apache-2.0"))
-bintrayVcsUrl := Some("git@github.com:tindzk/seed.git")
+bintrayVcsUrl := Some(s"git@github.com:$seedOrganisation/seed.git")
 
 publishArtifact in (Compile, packageDoc) := false
 publishArtifact in (Compile, packageSrc) := false
+
+lazy val scaladoc211 = project
+  .in(file("scaladoc211"))
+  .settings(
+    organization := seedOrganisation,
+    version := seedVersion,
+    name := "seed-scaladoc",
+    scalaVersion := "2.11.12",
+    libraryDependencies += "org.scala-lang" % "scala-compiler" % "2.11.12" % Provided,
+    // Publish artefact without the standard library. The correct version of
+    // scala-library will be resolved during runtime
+    pomPostProcess := dropScalaLibraries,
+    Compile / unmanagedSourceDirectories += baseDirectory.value / ".." / "scaladoc" / "src" / "main" / "scala"
+  )
+
+lazy val scaladoc212 = project
+  .in(file("scaladoc212"))
+  .settings(
+    organization := seedOrganisation,
+    version := seedVersion,
+    name := "seed-scaladoc",
+    scalaVersion := "2.12.10",
+    libraryDependencies += "org.scala-lang" % "scala-compiler" % "2.12.10" % Provided,
+    pomPostProcess := dropScalaLibraries,
+    Compile / unmanagedSourceDirectories += baseDirectory.value / ".." / "scaladoc" / "src" / "main" / "scala"
+  )
+
+lazy val scaladoc213 = project
+  .in(file("scaladoc213"))
+  .settings(
+    organization := seedOrganisation,
+    version := seedVersion,
+    name := "seed-scaladoc",
+    scalaVersion := "2.13.1",
+    libraryDependencies += "org.scala-lang" % "scala-compiler" % "2.13.1" % Provided,
+    pomPostProcess := dropScalaLibraries,
+    Compile / unmanagedSourceDirectories += baseDirectory.value / ".." / "scaladoc" / "src" / "main" / "scala"
+  )
+
+// From https://stackoverflow.com/questions/27835740/sbt-exclude-certain-dependency-only-during-publish
+import scala.xml.{Node => XmlNode, NodeSeq => XmlNodeSeq, _}
+import scala.xml.transform.{RewriteRule, RuleTransformer}
+def dropScalaLibraries(node: XmlNode): XmlNode =
+  new RuleTransformer(new RewriteRule {
+    override def transform(node: XmlNode): XmlNodeSeq = node match {
+      case e: Elem
+          if e.label == "dependency" && e.child.exists(
+            child => child.label == "groupId" && child.text == "org.scala-lang"
+          ) =>
+        XmlNodeSeq.Empty
+      case _ => node
+    }
+  }).transform(node).head

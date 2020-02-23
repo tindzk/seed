@@ -18,7 +18,7 @@ steps:
       - export PATH=$(pwd)/bloop:$PATH
       - blp-server &
       - ./build.sh
-      - COURSIER_SBT_LAUNCHER_ADD_PLUGIN=true ./csbt test
+      - COURSIER_SBT_LAUNCHER_ADD_PLUGIN=true ./csbt "; scaladoc211/publishLocal; scaladoc212/publishLocal; scaladoc213/publishLocal; test"
   - name: publish_prerelease
     image: plugins/docker
     environment:

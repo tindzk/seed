@@ -1,7 +1,7 @@
 package seed.generation
 
 import minitest.SimpleTestSuite
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import org.apache.commons.io.FileUtils
 import seed.Cli.{Command, PackageConfig}
@@ -15,6 +15,10 @@ import seed.model.{Build, Config}
 import seed.generation.util.BuildUtil.tempPath
 
 object IdeaSpec extends SimpleTestSuite {
+  private val seedConfig = seed.model.Config()
+
+  private val resolvers = Resolvers()
+
   private val packageConfig = PackageConfig(
     tmpfs = false,
     silent = false,
@@ -22,11 +26,20 @@ object IdeaSpec extends SimpleTestSuite {
     cachePath = None
   )
 
+  private val log = Log.urgent
+
   private def dropPath(path: String): String =
     path.lastIndexOf('/') match {
       case -1 => path
       case n  => path.drop(n + 1)
     }
+
+  private def createProject(name: String): (BuildConfig.Result, Path) = {
+    val result     = BuildConfig.load(Paths.get("test", name), Log.urgent).get
+    val outputPath = tempPath.resolve(name + "-idea")
+    Files.createDirectory(outputPath)
+    (result, outputPath)
+  }
 
   test("Normalise paths") {
     assertEquals(
@@ -104,26 +117,31 @@ object IdeaSpec extends SimpleTestSuite {
       List(Paths.get("c/test"))
     )
 
-    val projectPath   = Paths.get(".")
-    val outputPath    = Paths.get("/tmp")
-    val compilerDeps0 = ArtefactResolution.allCompilerDeps(build)
-    val (_, platformResolution, compilerResolution) =
-      ArtefactResolution.resolution(
-        seed.model.Config(),
-        Resolvers(),
-        build,
-        packageConfig,
-        optionalArtefacts = false,
-        Set(),
-        compilerDeps0,
-        Log.urgent
-      )
+    val projectPath = Paths.get(".")
+    val outputPath  = Paths.get("/tmp")
+
+    val runtimeResolution = ArtefactResolution.runtimeResolution(
+      build,
+      seedConfig,
+      resolvers,
+      packageConfig,
+      false,
+      log
+    )
+    val compilerResolution = ArtefactResolution.compilerResolution(
+      build,
+      seedConfig,
+      resolvers,
+      packageConfig,
+      false,
+      log
+    )
 
     Idea.build(
       projectPath,
       outputPath,
       build,
-      platformResolution,
+      runtimeResolution,
       compilerResolution,
       false,
       Log.silent
@@ -139,11 +157,8 @@ object IdeaSpec extends SimpleTestSuite {
   }
 
   test("Generate project with correct module dependencies") {
-    val result = BuildConfig
-      .load(Paths.get("test").resolve("platform-module-deps"), Log.urgent)
-      .get
-    val outputPath = tempPath.resolve("platform-module-deps")
-    Files.createDirectory(outputPath)
+    val (result, outputPath) = createProject("platform-module-deps")
+
     cli.Generate.ui(
       Config(),
       result.projectPath,
@@ -173,11 +188,8 @@ object IdeaSpec extends SimpleTestSuite {
   }
 
   test("Generate non-JVM cross-platform module") {
-    val result = BuildConfig
-      .load(Paths.get("test").resolve("shared-module"), Log.urgent)
-      .get
-    val outputPath = tempPath.resolve("shared-module")
-    Files.createDirectory(outputPath)
+    val (result, outputPath) = createProject("shared-module")
+
     cli.Generate.ui(
       Config(),
       result.projectPath,
@@ -273,10 +285,8 @@ object IdeaSpec extends SimpleTestSuite {
   }
 
   test("Generate project with custom compiler options") {
-    val result =
-      BuildConfig.load(Paths.get("test/compiler-options"), Log.urgent).get
-    val outputPath = tempPath.resolve("compiler-options")
-    Files.createDirectory(outputPath)
+    val (result, outputPath) = createProject("compiler-options")
+
     cli.Generate.ui(
       Config(),
       result.projectPath,
@@ -338,11 +348,8 @@ object IdeaSpec extends SimpleTestSuite {
   }
 
   test("Generate project with modules that have different Scala options") {
-    val result = BuildConfig
-      .load(Paths.get("test/module-scala-options"), Log.urgent)
-      .get
-    val outputPath = tempPath.resolve("module-scala-options-idea")
-    Files.createDirectory(outputPath)
+    val (result, outputPath) = createProject("module-scala-options")
+
     cli.Generate.ui(
       Config(),
       result.projectPath,
@@ -382,11 +389,8 @@ object IdeaSpec extends SimpleTestSuite {
   }
 
   test("Generate project with different Scala versions") {
-    val result = BuildConfig
-      .load(Paths.get("test/multiple-scala-versions"), Log.urgent)
-      .get
-    val outputPath = tempPath.resolve("multiple-scala-versions-idea")
-    Files.createDirectory(outputPath)
+    val (result, outputPath) = createProject("multiple-scala-versions")
+
     cli.Generate.ui(
       Config(),
       result.projectPath,
@@ -478,10 +482,8 @@ object IdeaSpec extends SimpleTestSuite {
   }
 
   test("Generate project with test project") {
-    val result =
-      BuildConfig.load(Paths.get("test/test-module"), Log.urgent).get
-    val outputPath = tempPath.resolve("test-module")
-    Files.createDirectory(outputPath)
+    val (result, outputPath) = createProject("test-module")
+
     cli.Generate.ui(
       Config(),
       result.projectPath,
@@ -511,10 +513,8 @@ object IdeaSpec extends SimpleTestSuite {
   }
 
   test("Generate Scala Native project") {
-    val result =
-      BuildConfig.load(Paths.get("test/scala-native-module"), Log.urgent).get
-    val outputPath = tempPath.resolve("scala-native-module")
-    Files.createDirectory(outputPath)
+    val (result, outputPath) = createProject("scala-native-module")
+
     cli.Generate.ui(
       Config(),
       result.projectPath,

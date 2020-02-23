@@ -6,7 +6,7 @@ import org.apache.commons.io.FileUtils
 import seed.{Log, LogLevel}
 import seed.cli.util.Ansi
 import seed.model.Build.{PlatformModule, VersionTag}
-import seed.model.{Platform, TomlBuild}
+import seed.model.{Licence, Platform, TomlBuild}
 import toml.{Codec, Value}
 
 import scala.util.Try
@@ -68,6 +68,23 @@ object TomlUtils {
 
       case (value, _, _) =>
         Left((List(), s"Version tag expected, $value provided"))
+    }
+
+    implicit val licenceCodec: Codec[Licence] = Codec {
+      case (Value.Str(id), _, _) =>
+        Licence.All.find(_.id == id) match {
+          case Some(licence) => Right(licence)
+          case _ =>
+            Left(
+              (
+                List(),
+                s"Invalid licence ID provided. Choose one of: ${Licence.All.map(_.id).mkString(", ")}"
+              )
+            )
+        }
+
+      case (value, _, _) =>
+        Left((List(), s"Licence ID expected, $value provided"))
     }
 
     def pathCodec(f: Path => Path): Codec[Path] = Codec {

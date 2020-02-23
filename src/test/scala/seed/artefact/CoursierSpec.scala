@@ -1,5 +1,7 @@
 package seed.artefact
 
+import java.nio.file.Path
+
 import minitest.SimpleTestSuite
 import seed.Log
 import seed.model.{Artefact, Build, Platform}
@@ -8,10 +10,14 @@ import seed.model.Build.JavaDep
 object CoursierSpec extends SimpleTestSuite {
   var resolution: Coursier.ResolutionResult = _
 
+  val scalaOrganisation = "org.scala-lang"
+  val scalaVersion      = "2.12.8"
+
   test("Resolve dependency") {
     val dep = JavaDep("org.scala-js", "scalajs-dom_sjs0.6_2.12", "0.9.6")
     resolution = Coursier.resolveAndDownload(
       Set(dep),
+      (scalaOrganisation, scalaVersion),
       Build.Resolvers(),
       Coursier.DefaultIvyPath,
       Coursier.DefaultCachePath,
@@ -54,5 +60,32 @@ object CoursierSpec extends SimpleTestSuite {
       unresolvedVersion
     )
     assert(path2.isEmpty)
+  }
+
+  test("Resolve dependency for Typelevel Scala") {
+    val dep = JavaDep("org.scala-js", "scalajs-dom_sjs0.6_2.12", "0.9.6")
+    val resolution = Coursier.resolveAndDownload(
+      Set(dep),
+      ("org.typelevel", "2.12.4-bin-typelevel-4"),
+      Build.Resolvers(),
+      Coursier.DefaultIvyPath,
+      Coursier.DefaultCachePath,
+      optionalArtefacts = true,
+      silent = true,
+      Log.urgent
+    )
+
+    def artefact(path: Path): String = path.getFileName.toString
+
+    val result =
+      Coursier.localArtefacts(resolution, Set(dep), optionalArtefacts = true)
+    assertEquals(
+      result.map(_.libraryJar).map(artefact),
+      List(
+        "scalajs-library_2.12-0.6.23.jar",
+        "scala-library-2.12.4-bin-typelevel-4.jar",
+        "scalajs-dom_sjs0.6_2.12-0.9.6.jar"
+      )
+    )
   }
 }

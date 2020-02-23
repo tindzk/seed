@@ -1,4 +1,7 @@
 #!/bin/sh
+set -e
+set -x
+
 version=$1
 
 /usr/bin/git tag -f $version

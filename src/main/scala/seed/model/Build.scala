@@ -6,6 +6,7 @@ import seed.artefact.MavenCentral
 
 case class TomlBuild(
   `import`: List[Path] = List(),
+  `package`: Build.Package = Build.Package(),
   project: Build.Project = Build.Project(),
   resolvers: Build.Resolvers = Build.Resolvers(),
   module: Map[String, Build.Module]
@@ -55,6 +56,25 @@ object Build {
     watchCommand: Option[String] = None,
     `class`: Option[ModuleClass] = None,
     await: Boolean = false
+  )
+
+  case class Developer(id: String, name: String, email: String)
+
+  case class SourceManagement(
+    url: String,
+    connection: String,
+    developerConnection: Option[String]
+  )
+
+  case class Package(
+    name: Option[String] = None,
+    organisation: Option[String] = None,
+    developers: List[Developer] = List(),
+    url: Option[String] = None,
+    licences: List[Licence] = List(),
+    scm: Option[SourceManagement] = None,
+    sources: Boolean = true,
+    docs: Boolean = true
   )
 
   case class Project(

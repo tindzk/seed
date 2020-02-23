@@ -1,6 +1,6 @@
 package seed.generation
 
-import java.io.{File, FileInputStream, FileOutputStream}
+import java.io.{File, FileInputStream, OutputStream}
 import java.util.jar.{Attributes, JarEntry, JarOutputStream, Manifest}
 
 import org.apache.commons.io.IOUtils
@@ -15,7 +15,7 @@ import scala.collection.mutable
 object Package {
   def create(
     source: List[(Path, String)],
-    target: Path,
+    target: OutputStream,
     mainClass: Option[String],
     classPath: List[String],
     log: Log
@@ -23,20 +23,20 @@ object Package {
     val manifest       = new Manifest()
     val mainAttributes = manifest.getMainAttributes
     mainAttributes.put(Attributes.Name.MANIFEST_VERSION, "1.0")
+    // TODO Set additional package fields: https://docs.oracle.com/javase/tutorial/deployment/jar/packageman.html
     mainClass.foreach(
       cls => mainAttributes.put(Attributes.Name.MAIN_CLASS, cls)
     )
     if (classPath.nonEmpty)
       mainAttributes.put(Attributes.Name.CLASS_PATH, classPath.mkString(" "))
-    val targetFile =
-      new JarOutputStream(new FileOutputStream(target.toFile), manifest)
+
+    val targetFile = new JarOutputStream(target, manifest)
     val entryCache = mutable.Set[String]()
     source.foreach {
       case (path, jarPath) =>
         log.debug(s"Packaging ${Ansi.italic(path.toString)}...")
         add(path.toFile, jarPath, targetFile, entryCache, log)
     }
-    log.info(s"Written $target")
     targetFile.close()
   }
 

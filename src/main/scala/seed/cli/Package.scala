@@ -1,5 +1,6 @@
 package seed.cli
 
+import java.io.FileOutputStream
 import java.nio.file.{Files, Path, Paths}
 
 import scala.collection.JavaConverters._
@@ -9,7 +10,7 @@ import seed.cli.util.{Ansi, ConsoleOutput, RTS}
 import seed.config.BuildConfig
 import seed.config.BuildConfig.Build
 import seed.generation.util.PathUtil
-import seed.model.Build.{JavaDep, Module, Resolvers}
+import seed.model.Build.{JavaDep, Resolvers}
 import seed.model.{Config, Platform}
 import seed.model.Platform.JVM
 import seed.{Cli, Log}
@@ -27,20 +28,22 @@ object Package {
     progress: Boolean,
     packageConfig: Cli.PackageConfig,
     log: Log
-  ): Unit = {
+  ): Boolean = {
+    Cli.showResolvers(seedConfig, resolvers, packageConfig, log)
     val tmpfs = packageConfig.tmpfs || seedConfig.build.tmpfs
 
     val buildPath  = PathUtil.buildPath(projectPath, tmpfs, log)
     val outputPath = output.getOrElse(buildPath.resolve("dist"))
 
-    if (!build.contains(module))
+    if (!build.contains(module)) {
       log.error(s"Module ${Ansi.italic(module)} does not exist")
-    else {
-      val expandedModules =
-        BuildConfig.expandModules(build, List(module -> JVM))
-
-      def onBuilt(stringPaths: List[String]) = UIO {
-        val paths = stringPaths.map(Paths.get(_))
+      false
+    } else {
+      def onBuilt(
+        consoleOutput: ConsoleOutput,
+        modulePaths: Map[(String, Platform), String]
+      ) = UIO {
+        val paths = modulePaths.toList.map(_._2).map(Paths.get(_))
         require(paths.forall(Files.exists(_)))
 
         if (paths.isEmpty) log.error("No build paths were found")
@@ -54,12 +57,12 @@ object Package {
           val classPath =
             if (!libs) List()
             else
-              getLibraryClassPath(
+              libraryClassPath(
                 seedConfig,
                 packageConfig,
                 resolvers,
                 build,
-                jvmModule,
+                module,
                 outputPath,
                 log
               )
@@ -77,17 +80,25 @@ object Package {
           Files.deleteIfExists(outputJar)
           seed.generation.Package.create(
             files,
-            outputJar,
+            new FileOutputStream(outputJar.toFile),
             mainClass,
             classPath,
             log
           )
+          log.info(s"Created JAR file ${Ansi.italic(outputJar.toString)}")
         }
       }
 
-      val program =
-        buildModule(log, projectPath, build, progress, expandedModules, onBuilt)
-      RTS.unsafeRunSync(program)
+      val program = buildModule(
+        log,
+        projectPath,
+        build,
+        progress,
+        List(module -> JVM),
+        onBuilt
+      )
+
+      RTS.unsafeRunSync(program).succeeded
     }
   }
 
@@ -96,9 +107,11 @@ object Package {
     projectPath: Path,
     build: Build,
     progress: Boolean,
-    expandedModules: List[(String, Platform)],
-    onBuilt: List[String] => UIO[Unit]
+    modules: List[(String, Platform)],
+    onBuilt: (ConsoleOutput, Map[(String, Platform), String]) => UIO[Unit]
   ): UIO[Unit] = {
+    val expandedModules = BuildConfig.expandModules(build, modules)
+
     val consoleOutput = new ConsoleOutput(log, print)
 
     val client = new BloopClient(
@@ -121,21 +134,9 @@ object Package {
             expandedModules
           )
 
-          consoleOutput.log.info(
-            s"Compiling ${Ansi.bold(expandedModules.length.toString)} modules..."
-          )
-
           val program =
             for {
               moduleDirs <- classDirectories.option.map(_.get)
-              _ = {
-                moduleDirs.foreach {
-                  case (module, dir) =>
-                    consoleOutput.log.debug(
-                      s"Module ${Ansi.italic(module._1)}: ${Ansi.italic(dir)}"
-                    )
-                }
-              }
               _ <- (for {
                 _ <- Bsp.compile(
                   client,
@@ -146,7 +147,17 @@ object Package {
                   projectPath,
                   expandedModules
                 )
-                _ <- onBuilt(moduleDirs.toList.map(_._2))
+                _ <- {
+                  consoleOutput.log.info("All modules compiled")
+                  moduleDirs.foreach {
+                    case (module, dir) =>
+                      consoleOutput.log.debug(
+                        s"Module path for ${seed.cli.util.Module
+                          .format(module._1, module._2)}: ${Ansi.italic(dir)}"
+                      )
+                  }
+                  onBuilt(consoleOutput, moduleDirs)
+                }
               } yield ()).ensuring(Bsp.shutdown(bspProcess, socket, server))
             } yield ()
 
@@ -166,48 +177,30 @@ object Package {
           .map(p => p -> path.relativize(p).toString)
     )
 
-  def getLibraryClassPath(
+  def libraryClassPath(
     seedConfig: Config,
     packageConfig: Cli.PackageConfig,
     resolvers: Resolvers,
     build: Build,
-    jvmModule: Module,
+    moduleName: String,
     outputPath: Path,
     log: Log
   ): List[String] = {
-    val scalaVersion = jvmModule.scalaVersion.get
-    val scalaLibraryDep =
-      JavaDep(jvmModule.scalaOrganisation.get, "scala-library", scalaVersion)
-    val scalaReflectDep =
-      JavaDep(jvmModule.scalaOrganisation.get, "scala-reflect", scalaVersion)
-    val platformDeps = Set(scalaLibraryDep, scalaReflectDep)
-
-    val libraryDeps = ArtefactResolution.allLibraryDeps(build, Set(JVM))
-    val (resolvedDepPath, libraryResolution, platformResolution) =
-      ArtefactResolution.resolution(
-        seedConfig,
-        resolvers,
-        build,
-        packageConfig,
-        optionalArtefacts = false,
-        libraryDeps,
-        List(platformDeps),
-        log
-      )
-    val resolvedLibraryDeps = Coursier.localArtefacts(
-      libraryResolution,
-      libraryDeps,
-      optionalArtefacts = false
+    val resolved = ArtefactResolution.resolvePackageArtefacts(
+      seedConfig,
+      packageConfig,
+      resolvers,
+      build,
+      moduleName,
+      JVM,
+      log
     )
 
-    val resolvedPlatformDeps = Coursier.localArtefacts(
-      platformResolution.head,
-      platformDeps,
-      optionalArtefacts = false
-    )
+    val cachePath = ArtefactResolution.cachePath(seedConfig, packageConfig)
 
-    val resolvedDeps = (resolvedLibraryDeps ++ resolvedPlatformDeps).distinct
-      .sortBy(_.libraryJar)
+    import resolved._
+    val resolvedDeps =
+      Coursier.localArtefacts(resolution, deps.toList).sortBy(_.libraryJar)
 
     log.info(
       s"Copying ${Ansi.bold(resolvedDeps.length.toString)} libraries to ${Ansi
@@ -215,7 +208,7 @@ object Package {
     )
     resolvedDeps.foreach { dep =>
       val target =
-        outputPath.resolve(resolvedDepPath.relativize(dep.libraryJar))
+        outputPath.resolve(cachePath.relativize(dep.libraryJar))
       if (Files.exists(target))
         log.debug(s"Skipping ${dep.libraryJar.toString} as it exists already")
       else {
@@ -228,6 +221,6 @@ object Package {
     }
 
     log.info(s"Adding libraries to class path...")
-    resolvedDeps.map(p => resolvedDepPath.relativize(p.libraryJar).toString)
+    resolvedDeps.map(p => cachePath.relativize(p.libraryJar).toString)
   }
 }

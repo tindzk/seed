@@ -4,64 +4,68 @@ import seed.Log
 
 class ConsoleOutput(parentLog: Log, print: String => Unit) {
   val log = new Log(
-    l => write(l + "\n", sticky = false),
+    l => writeRegular(l + "\n"),
     identity,
     parentLog.level,
     parentLog.unicode
   )
 
-  private var stickyLines = 0
-  private var clearLines  = 0
+  private var stickyLines = List[String]()
   private var flushed     = false
 
   def isFlushed: Boolean = flushed
 
-  def processLines(output: String): String =
-    output.flatMap {
-      case '\n' if clearLines != 0 =>
-        clearLines -= 1
+  def processLines(output: List[String], clearLines: Int): String = {
+    var clear = clearLines
+    output.map { line =>
+      val clearEsc =
+        if (clear == 0) ""
+        else {
+          clear -= 1
 
-        // Clear until end of line
-        Ansi.Escape + "0K" + "\n"
+          // Clear until end of line
+          Ansi.Escape + "0K"
+        }
 
-      case c => c.toString
-    }
+      line + clearEsc + "\n"
+    }.mkString
+  }
 
-  def write(output: String, sticky: Boolean = false): Unit = {
+  def writeRegular(output: String): Unit = {
     require(output.endsWith("\n"))
 
-    if (sticky) {
-      require(!flushed)
-      val lines = output.count(_ == '\n')
-      require(stickyLines == 0 || stickyLines == lines)
-
-      if (stickyLines == 0) {
-        stickyLines = lines
-        print(output)
-      } else {
-        // Move up
-        print(Ansi.Escape + s"${stickyLines}A" + processLines(output))
-      }
-    } else {
-      if (stickyLines > 0) {
-        clearLines = stickyLines
-        print(Ansi.Escape + s"${stickyLines}A" + processLines(output))
-        stickyLines = 0
-      } else {
-        print(processLines(output))
-      }
+    if (stickyLines.isEmpty) print(output)
+    else {
+      val lines = output.split('\n').toList
+      print(
+        Ansi.Escape + s"${stickyLines.length}A" +
+          processLines(lines ++ stickyLines, stickyLines.length)
+      )
     }
   }
 
+  def writeSticky(output: String): Unit = {
+    require(output.endsWith("\n"))
+    require(!flushed)
+    val lines = output.count(_ == '\n')
+    require(stickyLines.isEmpty || stickyLines.length == lines)
+
+    val initialStickyLines = stickyLines.isEmpty
+    stickyLines = output.split('\n').toList
+
+    if (initialStickyLines) print(output)
+    else
+      // Move up first, then replace lines
+      print(Ansi.Escape + s"${lines}A" + processLines(stickyLines, lines))
+  }
+
   def flushSticky(): Unit = {
-    stickyLines = 0
-    clearLines = 0
+    stickyLines = List()
     flushed = true
   }
 
   def reset(): Unit = {
-    stickyLines = 0
-    clearLines = 0
+    stickyLines = List()
     flushed = false
   }
 }

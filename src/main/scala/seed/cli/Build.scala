@@ -78,13 +78,15 @@ object Build {
         util.Validation.unpack(parsedModules).right.map { allModules =>
           val path = projectPath.getOrElse(buildProjectPath)
 
+          val consoleOutput = new ConsoleOutput(log, onStdOut)
+
           val processes = BuildTarget.buildTargets(
             build,
             allModules,
             path,
             watch,
             tmpfs,
-            log
+            consoleOutput.log
           )
 
           val buildModules = allModules.flatMap {
@@ -97,8 +99,6 @@ object Build {
 
           val expandedModules =
             BuildConfig.expandModules(build, buildModules)
-
-          val consoleOutput = new ConsoleOutput(log, onStdOut)
 
           val program =
             if (expandedModules.isEmpty) UIO(())

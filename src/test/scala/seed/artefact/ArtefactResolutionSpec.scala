@@ -1,18 +1,24 @@
 package seed.artefact
 
 import java.io.File
-import java.nio.charset.Charset
-import java.nio.file.Paths
+import java.nio.file.{Files, Path, Paths}
 
 import minitest.SimpleTestSuite
 import org.apache.commons.io.FileUtils
+import seed.cli
+import seed.Cli.Command
+import seed.Log
+import seed.artefact.ArtefactResolution.{Regular, Test}
+import seed.config.BuildConfig.ModuleConfig
 import seed.config.{BuildConfig, BuildConfigSpec}
 import seed.generation.util.ProjectGeneration
-import seed.model.Build.{JavaDep, Module, ScalaDep, VersionTag}
+import seed.model.Build.{JavaDep, Module, Resolvers, ScalaDep, VersionTag}
 import seed.model.Platform.{JVM, JavaScript, Native}
+import seed.generation.util.BuildUtil.tempPath
+import seed.model.Config
 
 object ArtefactResolutionSpec extends SimpleTestSuite {
-  test("dependencyFromScalaDep() with Scala.js dependency") {
+  test("javaDepFromScalaDep() with Scala.js dependency") {
     val scalaDep = ScalaDep("org.scala-js", "scalajs-dom", "0.9.6")
     val javaDep = ArtefactResolution.javaDepFromScalaDep(
       scalaDep,
@@ -39,7 +45,7 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
     )
   }
 
-  test("Extract platform dependencies of test module in libraryDeps()") {
+  test("Derive runtime libraries from test module") {
     val modules = Map(
       "a" -> Module(
         scalaVersion = Some("2.12.8"),
@@ -47,7 +53,7 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
         targets = List(JVM, JavaScript),
         test = Some(
           Module(
-            sources = List(Paths.get("a/test")),
+            sources = List(Paths.get("a", "test")),
             scalaDeps = List(ScalaDep("io.monix", "minitest", "2.3.2"))
           )
         )
@@ -69,12 +75,57 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
       )
     )
 
-    val libraryDeps = ArtefactResolution.allLibraryDeps(build)
+    val libs = ArtefactResolution.allRuntimeLibs(build)
     assertEquals(
-      libraryDeps,
-      Set(
-        JavaDep("io.monix", "minitest_2.12", "2.3.2"),
-        JavaDep("io.monix", "minitest_sjs0.6_2.12", "2.3.2")
+      libs,
+      Map(
+        ("a", JVM, Regular) -> Set(
+          JavaDep("org.scala-lang", "scala-library", "2.12.8"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.12.8")
+        ),
+        ("a", JVM, Test) -> Set(
+          JavaDep("io.monix", "minitest_2.12", "2.3.2")
+        ),
+        ("a", JavaScript, Regular) -> Set(
+          JavaDep("org.scala-js", "scalajs-library_2.12", "0.6.26"),
+          JavaDep("org.scala-lang", "scala-library", "2.12.8"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.12.8")
+        ),
+        ("a", JavaScript, Test) -> Set(
+          JavaDep("io.monix", "minitest_sjs0.6_2.12", "2.3.2")
+        )
+      )
+    )
+  }
+
+  test("Derive runtime libraries from test module (2)") {
+    // The test module overrides the target platforms. Therefore, no Scala
+    // Native dependencies should be fetched.
+    val path = new File("test", "test-module-dep")
+    val tomlBuild =
+      FileUtils.readFileToString(new File(path, "build.toml"), "UTF-8")
+    val build = BuildConfigSpec.parseBuild(tomlBuild)(_ => "")
+
+    val libs = ArtefactResolution.allRuntimeLibs(build)
+    assertEquals(
+      libs,
+      Map(
+        ("example", JVM, Regular) -> Set(
+          JavaDep("org.scala-lang", "scala-library", "2.11.11"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.11.11")
+        ),
+        ("example", JVM, Test) -> Set(
+          JavaDep("org.scalatest", "scalatest_2.11", "3.0.8")
+        ),
+        ("example", Native, Regular) -> Set(
+          JavaDep("org.scala-lang", "scala-reflect", "2.11.11"),
+          JavaDep("org.scala-lang", "scala-library", "2.11.11"),
+          JavaDep("org.scala-native", "javalib_native0.3_2.11", "0.3.7"),
+          JavaDep("org.scala-native", "scalalib_native0.3_2.11", "0.3.7"),
+          JavaDep("org.scala-native", "nativelib_native0.3_2.11", "0.3.7"),
+          JavaDep("org.scala-native", "auxlib_native0.3_2.11", "0.3.7")
+        ),
+        ("example", Native, Test) -> Set()
       )
     )
   }
@@ -117,27 +168,34 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
       )
     )
 
-    val deps = ArtefactResolution.compilerDeps(
-      BuildConfig.inheritSettings(Module())(module)
+    val jsDeps = ArtefactResolution.compilerDeps(
+      BuildConfig.inheritSettings(Module())(module),
+      JavaScript
+    )
+    val jvmDeps = ArtefactResolution.compilerDeps(
+      BuildConfig.inheritSettings(Module())(module),
+      JVM
     )
 
     assertEquals(
-      deps,
-      List(
-        Set(
-          JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
-          JavaDep("org.scala-lang", "scala-library", "2.12.8"),
-          JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
-          JavaDep("org.scala-js", "scalajs-compiler_2.12.8", "0.6.26"),
-          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1"),
-          JavaDep("com.softwaremill.clippy", "plugin_2.12", "0.6.0")
-        ),
-        Set(
-          JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
-          JavaDep("org.scala-lang", "scala-library", "2.12.8"),
-          JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
-          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1")
-        )
+      jsDeps,
+      Set(
+        JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
+        JavaDep("org.scala-lang", "scala-library", "2.12.8"),
+        JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
+        JavaDep("org.scala-js", "scalajs-compiler_2.12.8", "0.6.26"),
+        JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1"),
+        JavaDep("com.softwaremill.clippy", "plugin_2.12", "0.6.0")
+      )
+    )
+
+    assertEquals(
+      jvmDeps,
+      Set(
+        JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
+        JavaDep("org.scala-lang", "scala-library", "2.12.8"),
+        JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
+        JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1")
       )
     )
   }
@@ -158,26 +216,33 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
       )
     )
 
-    val deps = ArtefactResolution.compilerDeps(
-      BuildConfig.inheritSettings(Module())(module)
+    val jsDeps = ArtefactResolution.compilerDeps(
+      BuildConfig.inheritSettings(Module())(module),
+      JavaScript
+    )
+    val jvmDeps = ArtefactResolution.compilerDeps(
+      BuildConfig.inheritSettings(Module())(module),
+      JVM
     )
 
     assertEquals(
-      deps,
-      List(
-        Set(
-          JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
-          JavaDep("org.scala-lang", "scala-library", "2.12.8"),
-          JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
-          JavaDep("org.scala-js", "scalajs-compiler_2.12.8", "0.6.26"),
-          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1")
-        ),
-        Set(
-          JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
-          JavaDep("org.scala-lang", "scala-library", "2.12.8"),
-          JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
-          JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.0")
-        )
+      jsDeps,
+      Set(
+        JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
+        JavaDep("org.scala-lang", "scala-library", "2.12.8"),
+        JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
+        JavaDep("org.scala-js", "scalajs-compiler_2.12.8", "0.6.26"),
+        JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.1")
+      )
+    )
+
+    assertEquals(
+      jvmDeps,
+      Set(
+        JavaDep("org.scala-lang", "scala-compiler", "2.12.8"),
+        JavaDep("org.scala-lang", "scala-library", "2.12.8"),
+        JavaDep("org.scala-lang", "scala-reflect", "2.12.8"),
+        JavaDep("org.scalamacros", "paradise_2.12.8", "2.1.0")
       )
     )
   }
@@ -236,32 +301,136 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
       )
     )
 
-    val deps = ArtefactResolution.compilerDeps(
-      BuildConfig.inheritSettings(Module())(module)
+    val nativeDeps = ArtefactResolution.compilerDeps(
+      BuildConfig.inheritSettings(Module())(module),
+      Native
     )
 
     assertEquals(
-      deps,
-      List(
-        Set(
-          JavaDep("org.scala-lang", "scala-compiler", "2.11.11"),
-          JavaDep("org.scala-lang", "scala-library", "2.11.11"),
-          JavaDep("org.scala-lang", "scala-reflect", "2.11.11"),
-          JavaDep("org.scala-native", "nscplugin_2.11.11", "0.3.7")
-        )
+      nativeDeps,
+      Set(
+        JavaDep("org.scala-lang", "scala-compiler", "2.11.11"),
+        JavaDep("org.scala-lang", "scala-library", "2.11.11"),
+        JavaDep("org.scala-lang", "scala-reflect", "2.11.11"),
+        JavaDep("org.scala-native", "nscplugin_2.11.11", "0.3.7")
       )
     )
   }
 
-  test("Resolve correct platform libraries on test module") {
-    // The test module overrides the target platforms. Therefore, no Scala
-    // Native dependencies should be fetched.
-    val path = new File("test", "test-module-dep")
-    val tomlBuild =
-      FileUtils.readFileToString(new File(path, "build.toml"), "UTF-8")
-    val build = BuildConfigSpec.parseBuild(tomlBuild)(_ => "")
+  import seed.generation.BloopIntegrationSpec.packageConfig
+  import seed.generation.BloopIntegrationSpec.readBloopJson
 
-    val deps = ArtefactResolution.allLibraryDeps(build)
-    assertEquals(deps, Set(JavaDep("org.scalatest", "scalatest_2.11", "3.0.8")))
+  test("Resolve library versions requested by modules") {
+    val projectPath = Paths.get("test", "resolve-dep-versions")
+    val result      = BuildConfig.load(projectPath, Log.urgent).get
+    import result._
+    val buildPath = tempPath.resolve("resolve-dep-versions")
+    Files.createDirectory(buildPath)
+    cli.Generate.ui(
+      Config(),
+      projectPath,
+      buildPath,
+      resolvers,
+      build,
+      Command.Bloop(packageConfig),
+      Log.urgent
+    )
+
+    val bloopPath = buildPath.resolve(".bloop")
+
+    val a        = readBloopJson(bloopPath.resolve("a.json"))
+    val b        = readBloopJson(bloopPath.resolve("b.json"))
+    val example1 = readBloopJson(bloopPath.resolve("example1.json"))
+    val example2 = readBloopJson(bloopPath.resolve("example2.json"))
+
+    def artefact(path: Path): String = path.getFileName.toString
+
+    assertEquals(
+      a.project.classpath.map(artefact).sorted,
+      List(
+        "pine_sjs0.6_2.11-0.1.6.jar",
+        "scala-library-2.11.11-bin-typelevel-4.jar",
+        "scala-reflect-2.11.11-bin-typelevel-4.jar",
+        "scalajs-dom_sjs0.6_2.11-0.9.7.jar",
+        "scalajs-library_2.11-0.6.28.jar"
+      )
+    )
+    assertEquals(
+      b.project.classpath.map(artefact).sorted,
+      List(
+        "scala-library-2.11.11-bin-typelevel-4.jar",
+        "scala-reflect-2.11.11-bin-typelevel-4.jar",
+        "scalajs-dom_sjs0.6_2.11-0.9.8.jar",
+        "scalajs-library_2.11-0.6.28.jar"
+      )
+    )
+    assertEquals(
+      example1.project.classpath.map(artefact).sorted,
+      List(
+        "a",
+        "pine_sjs0.6_2.11-0.1.6.jar",
+        "scala-library-2.11.11-bin-typelevel-4.jar",
+        "scala-reflect-2.11.11-bin-typelevel-4.jar",
+        "scalajs-dom_sjs0.6_2.11-0.9.7.jar",
+        "scalajs-library_2.11-0.6.28.jar"
+      )
+    )
+    assertEquals(
+      example2.project.classpath.map(artefact).sorted,
+      List(
+        "a",
+        "b",
+        "pine_sjs0.6_2.11-0.1.6.jar",
+        "scala-library-2.11.11-bin-typelevel-4.jar",
+        "scala-reflect-2.11.11-bin-typelevel-4.jar",
+        "scalajs-dom_sjs0.6_2.11-0.9.8.jar",
+        "scalajs-library_2.11-0.6.28.jar"
+      )
+    )
+  }
+
+  test("Resolve Typelevel Scala compiler JARs") {
+    val scalaOrganisation = "org.typelevel"
+    val scalaVersion      = "2.12.4-bin-typelevel-4"
+
+    val build: Map[String, ModuleConfig] = Map(
+      "example" -> ModuleConfig(
+        BuildConfig.inheritSettings(Module())(
+          Module(
+            scalaOrganisation = Some(scalaOrganisation),
+            scalaVersion = Some(scalaVersion),
+            targets = List(JVM)
+          )
+        ),
+        Paths.get(".")
+      )
+    )
+
+    val compilerResolutions = ArtefactResolution.compilerResolution(
+      build,
+      seed.model.Config(),
+      Resolvers(),
+      packageConfig,
+      optionalArtefacts = false,
+      Log.urgent
+    )
+
+    val scalaCompiler = ArtefactResolution.resolveScalaCompiler(
+      compilerResolutions,
+      scalaOrganisation,
+      scalaVersion,
+      List(),
+      List()
+    )
+
+    assertEquals(
+      scalaCompiler.compilerJars.map(_.getFileName.toString),
+      List(
+        "scala-xml_2.12-1.0.6.jar",
+        "scala-compiler-2.12.4-bin-typelevel-4.jar",
+        "scala-library-2.12.4-bin-typelevel-4.jar",
+        "scala-reflect-2.12.4-bin-typelevel-4.jar"
+      )
+    )
   }
 }

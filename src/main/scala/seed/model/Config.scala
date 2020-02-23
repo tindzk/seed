@@ -8,7 +8,8 @@ import seed.artefact.Coursier
 case class Config(
   cli: Config.Cli = Config.Cli(),
   build: Config.Build = Config.Build(),
-  resolution: Config.Resolution = Config.Resolution()
+  resolution: Config.Resolution = Config.Resolution(),
+  repository: Config.Repository = Config.Repository()
 )
 
 object Config {
@@ -24,4 +25,6 @@ object Config {
     cachePath: Path = Coursier.DefaultCachePath,
     optionalArtefacts: Boolean = false
   )
+  case class Repository(bintray: BintrayRepository = BintrayRepository())
+  case class BintrayRepository(user: String = "", apiKey: String = "")
 }

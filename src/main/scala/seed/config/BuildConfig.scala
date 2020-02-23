@@ -2,6 +2,8 @@ package seed.config
 
 import java.nio.file.{Files, Path}
 
+import scala.collection.JavaConverters._
+
 import org.apache.commons.io.FileUtils
 import seed.cli.util.{Ansi, ColourScheme, Watcher}
 import seed.model.Build.{JavaDep, Module, ScalaDep}
@@ -17,7 +19,12 @@ object BuildConfig {
   case class ModuleConfig(module: Module, path: Path)
   type Build = Map[String, ModuleConfig]
 
-  case class Result(projectPath: Path, resolvers: Build.Resolvers, build: Build)
+  case class Result(
+    projectPath: Path,
+    `package`: Build.Package,
+    resolvers: Build.Resolvers,
+    build: Build
+  )
 
   def load(path: Path, log: Log): Option[Result] =
     loadInternal(path, log).filter(
@@ -68,7 +75,12 @@ object BuildConfig {
               path => loadInternal(path, log),
               log
             )
-            Result(projectPath.normalize(), parsed.resolvers, modules)
+            Result(
+              projectPath.normalize(),
+              parsed.`package`,
+              parsed.resolvers,
+              modules
+            )
           }
       }
     }
@@ -427,6 +439,12 @@ object BuildConfig {
   def targetName(build: Build, name: String, platform: Platform): String =
     if (!isCrossBuild(build(name).module)) name else name + "-" + platform.id
 
+  def allTargets(build: Build, module: String): List[(String, Platform)] = {
+    val m = build(module).module
+    val p = m.targets
+    p.map((module, _))
+  }
+
   def linkTargets(build: Build, module: String): List[(String, Platform)] = {
     val m = build(module).module
     val p = m.targets.diff(List(JVM))
@@ -442,6 +460,21 @@ object BuildConfig {
           platformModule(m, platform).map(_.sources).getOrElse(List())
         m.sources ++ pmSources
     }.distinct
+
+  /** Returns list of all Scala and Java files */
+  def allSourceFiles(path: Path): List[Path] =
+    if (!Files.exists(path)) List()
+    else
+      Files
+        .walk(path)
+        .iterator()
+        .asScala
+        .toList
+        .filter(
+          p =>
+            Files.isRegularFile(p) && (p.toString
+              .endsWith(".scala") || p.toString.endsWith(".java"))
+        )
 
   def targetsFromPlatformModules(module: Build.Module): List[Platform] =
     (if (module.jvm.nonEmpty) List(JVM) else List()) ++
@@ -556,8 +589,12 @@ object BuildConfig {
     }
   }
 
-  def collectModuleDeps(build: Build, module: Module): List[String] =
-    Platform.All.keys.toList
+  def collectModuleDeps(
+    build: Build,
+    module: Module,
+    platforms: Set[Platform] = Platform.All.keySet
+  ): List[String] =
+    platforms.toList
       .filter(module.targets.contains)
       .flatMap(p => collectModuleDepsBase(build, module, p))
       .distinct

@@ -41,7 +41,8 @@ object Target {
                   .map(tgt => Right(TargetRef(target, tgt)))
               ) match {
               case None =>
-                Left(s"Invalid build target ${Ansi.italic(target)} provided")
+                Left(s"Invalid build target ${Ansi
+                  .italic(target)} provided on module ${Ansi.italic(name)}")
               case Some(tgt) =>
                 Right(Parsed(ModuleRef(name, build(name).module), Some(tgt)))
             }

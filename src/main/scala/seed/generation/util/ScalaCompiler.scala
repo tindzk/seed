@@ -5,40 +5,35 @@ import java.nio.file.Path
 import seed.artefact.Coursier
 import seed.config.BuildConfig
 import seed.artefact.ArtefactResolution
+import seed.artefact.ArtefactResolution.CompilerResolution
 import seed.config.BuildConfig.Build
 import seed.model.Build.Module
 import seed.model.Platform.{JavaScript, Native}
 import seed.model.{Artefact, Build, Platform}
 
 object ScalaCompiler {
-  def resolveCompiler(
-    compilerResolution: List[Coursier.ResolutionResult],
+  private def resolveCompiler(
+    resolution: Coursier.ResolutionResult,
     artefact: Artefact,
     artefactVersion: String,
     platform: Platform,
     platformVer: String,
     compilerVer: String
-  ): Path =
-    compilerResolution.iterator
-      .flatMap(
-        resolution =>
-          Coursier.artefactPath(
-            resolution,
-            artefact,
-            platform,
-            platformVer,
-            compilerVer,
-            artefactVersion
-          )
+  ): Option[Path] =
+    Coursier
+      .artefactPath(
+        resolution,
+        artefact,
+        platform,
+        platformVer,
+        compilerVer,
+        artefactVersion
       )
-      .toList
-      .headOption
-      .getOrElse(throw new Exception(s"Artefact '$artefact' missing"))
 
   def compilerPlugIns(
     build: Build,
     module: Module,
-    compilerResolution: List[Coursier.ResolutionResult],
+    compilerResolution: CompilerResolution,
     platform: Platform,
     compilerVer: String
   ): List[String] = {
@@ -58,17 +53,24 @@ object ScalaCompiler {
         mergeDeps(dependencies)
       }).map(d => Artefact.fromDep(d) -> d.version)
 
+    // TODO Implement -Xplugin with dependencies: https://github.com/sbt/sbt/issues/2255
     artefacts
       .map {
         case (artefact, version) =>
-          resolveCompiler(
-            compilerResolution,
-            artefact,
-            version,
-            platform,
-            platformVer,
-            compilerVer
-          )
+          compilerResolution
+            .flatMap(
+              r =>
+                resolveCompiler(
+                  r,
+                  artefact,
+                  version,
+                  platform,
+                  platformVer,
+                  compilerVer
+                )
+            )
+            .headOption
+            .getOrElse(throw new Exception(s"Artefact '$artefact' missing"))
       }
       .map(p => "-Xplugin:" + p)
   }

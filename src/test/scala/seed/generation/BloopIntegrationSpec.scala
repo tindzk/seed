@@ -52,7 +52,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     for { _ <- compile; _ <- run } yield ()
   }
 
-  private val packageConfig = PackageConfig(
+  private[seed] val packageConfig = PackageConfig(
     tmpfs = false,
     silent = false,
     ivyPath = None,
@@ -258,6 +258,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       .get
     import config._
     val buildPath = tempPath.resolve("multiple-scala-versions-bloop")
+
     Files.createDirectory(buildPath)
     cli.Generate.ui(
       Config(),

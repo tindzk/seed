@@ -83,13 +83,15 @@ object Run {
             case util.Target.Parsed(_, Some(Right(_))) =>
               Left(List("Invalid platform target specified"))
             case _ =>
+              val consoleOutput = new ConsoleOutput(log, onStdOut)
+
               val processes = seed.cli.BuildTarget.buildTargets(
                 build,
                 List(module),
                 projectPath,
                 watch,
                 tmpfs,
-                log
+                consoleOutput.log
               )
 
               val runModule = module match {
@@ -106,7 +108,6 @@ object Run {
                 case Some((module, platform)) =>
                   val expandedModules =
                     BuildConfig.expandModules(build, List(module -> platform))
-                  val consoleOutput = new ConsoleOutput(log, onStdOut)
 
                   val client = new BloopClient(
                     consoleOutput,

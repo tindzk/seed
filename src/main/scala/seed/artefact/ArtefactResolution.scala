@@ -4,11 +4,11 @@ import java.nio.file.Path
 
 import seed.Cli.PackageConfig
 import MavenCentral.{CompilerVersion, PlatformVersion}
-import seed.cli.util.Ansi
 import seed.model.Build.{Dep, JavaDep, Module, Resolvers, ScalaDep}
 import seed.model.Platform.{JVM, JavaScript, Native}
-import seed.model.{Artefact, Platform, Resolution}
-import seed.Log
+import seed.model.{Artefact, Config, Platform, Resolution}
+import seed.{Cli, Log}
+import seed.artefact.Coursier.ResolutionResult
 import seed.config.BuildConfig
 import seed.config.BuildConfig.Build
 
@@ -53,6 +53,18 @@ object ArtefactResolution {
       version
     )
 
+  def scalaLibraryDeps(
+    scalaOrganisation: String,
+    scalaVersion: String
+  ): Set[JavaDep] =
+    Set(
+      JavaDep(scalaOrganisation, "scala-library", scalaVersion),
+      JavaDep(scalaOrganisation, "scala-reflect", scalaVersion)
+    )
+
+  def jvmPlatformDeps(module: Module): Set[JavaDep] =
+    scalaLibraryDeps(module.scalaOrganisation.get, module.scalaVersion.get)
+
   def jsPlatformDeps(module: Module): Set[JavaDep] = {
     val scalaVersion   = module.scalaVersion.get
     val scalaJsVersion = module.scalaJsVersion.get
@@ -68,7 +80,7 @@ object ArtefactResolution {
           scalaJsVersion,
           scalaVersion
         )
-    )
+    ) ++ scalaLibraryDeps(module.scalaOrganisation.get, module.scalaVersion.get)
   }
 
   def nativePlatformDeps(module: Module): Set[JavaDep] = {
@@ -89,7 +101,7 @@ object ArtefactResolution {
           scalaNativeVersion,
           scalaVersion
         )
-    )
+    ) ++ scalaLibraryDeps(module.scalaOrganisation.get, module.scalaVersion.get)
   }
 
   def nativeLibraryDep(module: Module): JavaDep = {
@@ -139,7 +151,7 @@ object ArtefactResolution {
       .toSet
 
   def nativeArtefacts(module: Module): Set[(Platform, Dep)] =
-    module.scalaDeps.map(dep => Native -> dep).toSet
+    module.scalaDeps.map(Native -> _).toSet
 
   def nativeDeps(module: Module): Set[JavaDep] =
     module.scalaDeps
@@ -154,10 +166,8 @@ object ArtefactResolution {
       )
       .toSet
 
-  def compilerDeps(module: Module): List[Set[JavaDep]] = {
-    def f(module: Module, platform: Platform): Set[JavaDep] = {
-      val platformModule = BuildConfig.platformModule(module, platform).get
-
+  def compilerDeps(module: Module, platform: Platform): Set[JavaDep] = {
+    def f(platformModule: Module, platform: Platform): Set[JavaDep] = {
       val platformVer  = BuildConfig.platformVersion(platformModule, platform)
       val compilerVer  = platformModule.scalaVersion.get
       val organisation = platformModule.scalaOrganisation.get
@@ -188,42 +198,101 @@ object ArtefactResolution {
       )
     }
 
-    module.targets.map(target => f(module, target)).filter(_.nonEmpty)
+    BuildConfig.platformModule(module, platform) match {
+      case None                 => Set()
+      case Some(platformModule) => f(platformModule, platform)
+    }
   }
 
-  def allCompilerDeps(build: Build): List[Set[JavaDep]] =
-    build.values.toList.flatMap(m => compilerDeps(m.module)).distinct
+  sealed trait Type
+  case object Regular extends Type
+  case object Test    extends Type
 
-  def platformDeps(build: Build, module: Module): Set[JavaDep] =
-    module.targets.toSet[Platform].flatMap { target =>
-      if (target == JavaScript) jsPlatformDeps(module.js.get)
-      else if (target == Native) nativePlatformDeps(module.native.get)
-      else Set[JavaDep]()
-    }
+  /** @return runtime libraries from module and its transitive module dependencies */
+  def allRuntimeLibs(
+    build: Build,
+    name: String,
+    platform: Platform,
+    tpe: Type
+  ): Set[JavaDep] = {
+    val m  = build(name).module
+    val pm = BuildConfig.platformModule(m, platform).get
+    val modules = BuildConfig
+      .collectModuleDeps(
+        build,
+        // TODO should be pm, but module deps are not inherited
+        m,
+        Set(platform)
+      )
+      .map(m => build(m).module)
+      .toSet ++ Set(m)
 
-  def libraryDeps(module: Module, platforms: Set[Platform]): Set[JavaDep] =
+    if (tpe == Test)
+      modules.flatMap(
+        _.test.fold(Set[JavaDep]())(t => libraryDeps(t, Set(platform)))
+      )
+    else
+      modules.flatMap(libraryDeps(_, Set(platform))) ++
+        platformDeps(pm, platform)
+  }
+
+  /** Perform resolution for all modules separately */
+  type ModuleRef = (String, Platform, Type)
+  def allRuntimeLibs(build: Build): Map[ModuleRef, Set[JavaDep]] = {
+    val all = build.toList
+      .flatMap { case (n, m) => m.module.targets.map(n -> _) }
+      .flatMap {
+        case (m, p) =>
+          List(
+            (m, p, Regular: Type) -> allRuntimeLibs(build, m, p, Regular),
+            (m, p, Test: Type)    -> allRuntimeLibs(build, m, p, Test)
+          )
+      }
+
+    val r = all.toMap
+    require(all.length == r.size)
+    r
+  }
+
+  type ScalaOrganisation = String
+  type ScalaVersion      = String
+
+  def allCompilerLibs(
+    build: Build
+  ): Set[(ScalaOrganisation, ScalaVersion, JavaDep)] =
+    build.values
+      .map(_.module)
+      .flatMap(
+        m =>
+          m.targets.toSet.flatMap { p =>
+            val pm = BuildConfig.platformModule(m, p).get
+            compilerDeps(m, p)
+              .map(d => (pm.scalaOrganisation.get, pm.scalaVersion.get, d))
+          }
+      )
+      .toSet
+
+  def platformDeps(module: Module, platform: Platform): Set[JavaDep] =
+    if (platform == JavaScript) jsPlatformDeps(module)
+    else if (platform == Native) nativePlatformDeps(module)
+    else jvmPlatformDeps(module)
+
+  def libraryDeps(
+    module: Module,
+    platforms: Set[Platform] = Set(JVM, JavaScript, Native)
+  ): Set[JavaDep] =
     (if (!platforms.contains(JVM)) Set()
      else module.jvm.toSet.flatMap(jvmDeps)) ++
       (if (!platforms.contains(JavaScript)) Set()
        else module.js.toSet.flatMap(jsDeps)) ++
       (if (!platforms.contains(Native)) Set()
-       else module.native.toSet.flatMap(nativeDeps)) ++
-      module.test.toSet.flatMap(libraryDeps(_, platforms))
+       else module.native.toSet.flatMap(nativeDeps))
 
   def libraryArtefacts(module: Module): Set[(Platform, Dep)] =
     module.jvm.toSet.flatMap(jvmArtefacts) ++
       module.js.toSet.flatMap(jsArtefacts) ++
       module.native.toSet.flatMap(nativeArtefacts) ++
       module.test.toSet.flatMap(libraryArtefacts)
-
-  def allPlatformDeps(build: Build): Set[JavaDep] =
-    build.values.toSet.flatMap(m => platformDeps(build, m.module))
-
-  def allLibraryDeps(
-    build: Build,
-    platforms: Set[Platform] = Set(JVM, JavaScript, Native)
-  ): Set[JavaDep] =
-    build.values.toSet.flatMap(m => libraryDeps(m.module, platforms))
 
   def allLibraryArtefacts(build: Build): Map[Platform, Set[Dep]] =
     build.values.toSet
@@ -236,109 +305,126 @@ object ArtefactResolution {
       javaDep.artefact == "scala-reflect"
 
   def resolveScalaCompiler(
-    resolutionResult: List[Coursier.ResolutionResult],
+    resolution: CompilerResolution,
     scalaOrganisation: String,
     scalaVersion: String,
     userLibraries: List[Resolution.Artefact],
-    classPath: List[Path],
-    optionalArtefacts: Boolean
+    classPath: List[Path]
   ): Resolution.ScalaCompiler = {
     require(classPath.length == classPath.distinct.length)
 
     val compilerDep = JavaDep(scalaOrganisation, "scala-compiler", scalaVersion)
-    val libraryDep  = JavaDep(scalaOrganisation, "scala-library", scalaVersion)
-    val reflectDep  = JavaDep(scalaOrganisation, "scala-reflect", scalaVersion)
 
-    val resolution =
-      resolutionResult
-        .find(r => Coursier.hasDep(r, compilerDep))
-        .getOrElse(
-          throw new Exception(s"Could not find dependency $compilerDep")
-        )
+    val r = resolution.find(Coursier.hasDep(_, compilerDep))
+    require(r.isDefined, s"Could not find dependency $compilerDep")
 
-    val compiler =
-      Coursier.localArtefacts(resolution, Set(compilerDep), false)
-    val scalaLibraries =
-      Coursier.localArtefacts(
-        resolution,
-        Set(libraryDep, reflectDep),
-        optionalArtefacts
-      )
-
-    // Replace official scala-library and scala-reflect artefacts by
-    // organisation-specific ones. This is needed for Typelevel Scala.
-    val libraries =
-      scalaLibraries ++ userLibraries.filter(a => !isScalaLibrary(a.javaDep))
-
-    val compilerArtefacts =
-      compiler.filter(a => !isScalaLibrary(a.javaDep)) ++ scalaLibraries
+    val compiler = Coursier.localArtefacts(r.get, Set(compilerDep), false)
 
     Resolution.ScalaCompiler(
       scalaOrganisation,
       scalaVersion,
-      libraries,
+      userLibraries,
       classPath,
-      compilerArtefacts.map(_.libraryJar)
+      compiler.map(_.libraryJar)
     )
   }
+
+  def ivyPath(
+    seedConfig: seed.model.Config,
+    packageConfig: PackageConfig
+  ): Path =
+    packageConfig.ivyPath.getOrElse(seedConfig.resolution.ivyPath)
+
+  def cachePath(
+    seedConfig: seed.model.Config,
+    packageConfig: PackageConfig
+  ): Path =
+    packageConfig.cachePath.getOrElse(seedConfig.resolution.cachePath)
 
   def resolution(
     seedConfig: seed.model.Config,
     resolvers: Resolvers,
+    packageConfig: PackageConfig,
+    dependencies: Set[JavaDep],
+    forceScala: (ScalaOrganisation, ScalaVersion),
+    optionalArtefacts: Boolean,
+    log: Log
+  ): Coursier.ResolutionResult =
+    Coursier.resolveAndDownload(
+      dependencies,
+      forceScala,
+      resolvers,
+      ivyPath(seedConfig, packageConfig),
+      cachePath(seedConfig, packageConfig),
+      optionalArtefacts,
+      packageConfig.silent || seedConfig.resolution.silent,
+      log
+    )
+
+  type RuntimeResolution = Map[ModuleRef, Coursier.ResolutionResult]
+
+  /**
+    * Coursier merges all library artefacts that occur multiple times in the
+    * dependency tree, choosing their latest version. Therefore, resolve
+    * libraries from each module separately.
+    */
+  def runtimeResolution(
     build: Build,
+    seedConfig: seed.model.Config,
+    resolvers: Resolvers,
     packageConfig: PackageConfig,
     optionalArtefacts: Boolean,
-    platformDeps: Set[JavaDep],
-    compilerDeps: List[Set[JavaDep]],
     log: Log
-  ) = {
-    val silent = packageConfig.silent || seedConfig.resolution.silent
+  ): RuntimeResolution = {
+    val all = allRuntimeLibs(build)
+    all.map {
+      case (path, libs) =>
+        val (n, p, t) = path
+        val m         = build(n).module
+        val pm = (if (t == Regular) BuildConfig.platformModule(m, p)
+                  else
+                    m.test match {
+                      case None    => BuildConfig.platformModule(m, p)
+                      case Some(t) => BuildConfig.platformModule(t, p)
+                    }).get
+        val (scalaOrg, scalaVer) =
+          (pm.scalaOrganisation.get, pm.scalaVersion.get)
 
-    import packageConfig._
-    val resolvedIvyPath   = ivyPath.getOrElse(seedConfig.resolution.ivyPath)
-    val resolvedCachePath = cachePath.getOrElse(seedConfig.resolution.cachePath)
-
-    log.info("Configured resolvers:")
-    log.info(
-      "- " + Ansi.italic(resolvedIvyPath.toString) + " (Ivy)",
-      detail = true
-    )
-    log.info(
-      "- " + Ansi.italic(resolvedCachePath.toString) + " (Coursier)",
-      detail = true
-    )
-    resolvers.ivy
-      .foreach(
-        ivy => log.info("- " + Ansi.italic(ivy.url) + " (Ivy)", detail = true)
-      )
-    resolvers.maven
-      .foreach(
-        maven => log.info("- " + Ansi.italic(maven) + " (Maven)", detail = true)
-      )
-
-    def resolve(deps: Set[JavaDep]) =
-      Coursier.resolveAndDownload(
-        deps,
-        resolvers,
-        resolvedIvyPath,
-        resolvedCachePath,
-        optionalArtefacts,
-        silent,
-        log
-      )
-
-    log.info("Resolving platform artefacts...")
-
-    val platformResolution = resolve(platformDeps)
-
-    log.info("Resolving compiler artefacts...")
-
-    // Resolve Scala compilers separately because Coursier merges dependencies
-    // with different versions
-    val compilerResolution = compilerDeps.map(resolve)
-
-    (resolvedCachePath, platformResolution, compilerResolution)
+        path -> resolution(
+          seedConfig,
+          resolvers,
+          packageConfig,
+          libs ++ (if (t == Regular) Set() else all((n, p, Regular))),
+          (scalaOrg, scalaVer),
+          optionalArtefacts,
+          log
+        )
+    }
   }
+
+  type CompilerResolution = List[Coursier.ResolutionResult]
+
+  def compilerResolution(
+    build: Build,
+    seedConfig: seed.model.Config,
+    resolvers: Resolvers,
+    packageConfig: PackageConfig,
+    optionalArtefacts: Boolean,
+    log: Log
+  ): CompilerResolution =
+    allCompilerLibs(build).toList
+      .map {
+        case (scalaOrganisation, scalaVersion, dep) =>
+          resolution(
+            seedConfig,
+            resolvers,
+            packageConfig,
+            Set(dep),
+            (scalaOrganisation, scalaVersion),
+            optionalArtefacts,
+            log
+          )
+      }
 
   /** @return If there are two dependencies with the same organisation and
     *         artefact name, only retain the last one, regardless of its version.
@@ -353,4 +439,41 @@ object ArtefactResolution {
           case Some(previous) => acc.diff(List(previous)) :+ cur
         }
     }
+
+  case class Resolved(
+    resolution: ResolutionResult,
+    deps: Map[JavaDep, List[(coursier.Classifier, Coursier.Artefact)]]
+  )
+
+  def resolvePackageArtefacts(
+    seedConfig: Config,
+    packageConfig: Cli.PackageConfig,
+    resolvers: Resolvers,
+    build: Build,
+    moduleName: String,
+    platform: Platform,
+    log: Log
+  ): Resolved = {
+    val m  = build(moduleName).module
+    val pm = BuildConfig.platformModule(m, platform).get
+
+    val (scalaOrg, scalaVer) = (pm.scalaOrganisation.get, pm.scalaVersion.get)
+
+    val libs = allRuntimeLibs(build, moduleName, platform, Regular)
+
+    val r =
+      resolution(
+        seedConfig,
+        resolvers,
+        packageConfig,
+        libs,
+        (scalaOrg, scalaVer),
+        optionalArtefacts = false,
+        log
+      )
+
+    val resolvedLibs =
+      Coursier.resolveSubset(r.resolution, libs, optionalArtefacts = false)
+    Resolved(r, resolvedLibs)
+  }
 }

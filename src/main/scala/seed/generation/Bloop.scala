@@ -12,12 +12,19 @@ import seed.config.BuildConfig.{
   collectNativeClassPath,
   collectNativeDeps
 }
-import seed.artefact.{ArtefactResolution, Coursier, SemanticVersioning}
+import seed.artefact.{ArtefactResolution, Coursier}
 import seed.cli.util.Ansi
 import seed.model.Build.Module
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.model.Resolution
 import seed.Log
+import seed.artefact.ArtefactResolution.{
+  CompilerResolution,
+  ModuleRef,
+  Regular,
+  RuntimeResolution,
+  Test
+}
 import seed.config.BuildConfig
 import seed.generation.util.PathUtil
 
@@ -133,14 +140,15 @@ object Bloop {
 
   def writeJsModule(
     build: Build,
+    moduleName: String,
     name: String,
     projectPath: Path,
     bloopPath: Path,
     buildPath: Path,
     jsOutputPath: Option[Path],
     module: Module,
-    resolution: Coursier.ResolutionResult,
-    compilerResolution: List[Coursier.ResolutionResult],
+    runtimeResolution: RuntimeResolution,
+    compilerResolution: CompilerResolution,
     test: Boolean,
     optionalArtefacts: Boolean,
     log: Log
@@ -162,7 +170,9 @@ object Bloop {
       )
 
       val resolvedDeps = Coursier.localArtefacts(
-        resolution,
+        runtimeResolution(
+          (moduleName, JavaScript, if (test) Test else Regular)
+        ),
         collectJsDeps(build, test, js)
           .map(
             dep =>
@@ -193,8 +203,7 @@ object Bloop {
         js.scalaOrganisation.get,
         js.scalaVersion.get,
         resolvedDeps,
-        classPath,
-        optionalArtefacts
+        classPath
       )
 
       writeBloop(
@@ -227,14 +236,15 @@ object Bloop {
 
   def writeNativeModule(
     build: Build,
+    moduleName: String,
     name: String,
     projectPath: Path,
     bloopPath: Path,
     buildPath: Path,
     outputPathBinary: Option[Path],
     module: Module,
-    resolution: Coursier.ResolutionResult,
-    compilerResolution: List[Coursier.ResolutionResult],
+    runtimeResolution: RuntimeResolution,
+    compilerResolution: CompilerResolution,
     test: Boolean,
     optionalArtefacts: Boolean,
     log: Log
@@ -262,7 +272,7 @@ object Bloop {
 
       val resolvedDeps =
         Coursier.localArtefacts(
-          resolution,
+          runtimeResolution((moduleName, Native, if (test) Test else Regular)),
           collectNativeDeps(build, test, native)
             .map(
               dep =>
@@ -304,8 +314,7 @@ object Bloop {
         native.scalaOrganisation.get,
         native.scalaVersion.get,
         resolvedDeps,
-        classPath,
-        optionalArtefacts
+        classPath
       )
 
       writeBloop(
@@ -344,13 +353,14 @@ object Bloop {
 
   def writeJvmModule(
     build: Build,
+    moduleName: String,
     name: String,
     projectPath: Path,
     bloopPath: Path,
     buildPath: Path,
     module: Module,
-    resolution: Coursier.ResolutionResult,
-    compilerResolution: List[Coursier.ResolutionResult],
+    runtimeResolution: RuntimeResolution,
+    compilerResolution: CompilerResolution,
     test: Boolean,
     optionalArtefacts: Boolean,
     log: Log
@@ -365,10 +375,10 @@ object Bloop {
         dep =>
           ArtefactResolution
             .javaDepFromScalaDep(dep, JVM, scalaVersion, scalaVersion)
-      )
+      ) ++ ArtefactResolution.jvmPlatformDeps(jvm)
 
       val resolvedDeps = Coursier.localArtefacts(
-        resolution,
+        runtimeResolution((moduleName, JVM, if (test) Test else Regular)),
         (javaDeps ++ scalaDeps).toSet,
         optionalArtefacts
       )
@@ -398,8 +408,7 @@ object Bloop {
         jvm.scalaOrganisation.get,
         scalaVersion,
         resolvedDeps,
-        classPath,
-        optionalArtefacts
+        classPath
       )
 
       writeBloop(
@@ -439,8 +448,8 @@ object Bloop {
     buildPath: Path,
     bloopBuildPath: Path,
     build: Build,
-    resolution: Coursier.ResolutionResult,
-    compilerResolution: List[Coursier.ResolutionResult],
+    runtimeResolution: RuntimeResolution,
+    compilerResolution: CompilerResolution,
     name: String,
     module: Module,
     optionalArtefacts: Boolean,
@@ -464,13 +473,14 @@ object Bloop {
 
     writeJsModule(
       build,
+      name,
       if (!isCrossBuild) name else name + "-js",
       projectPath,
       bloopPath,
       bloopBuildPath,
       jsOutputPath,
       module,
-      resolution,
+      runtimeResolution,
       compilerResolution,
       test = false,
       optionalArtefacts,
@@ -479,12 +489,13 @@ object Bloop {
 
     writeJvmModule(
       build,
+      name,
       if (!isCrossBuild) name else name + "-jvm",
       projectPath,
       bloopPath,
       bloopBuildPath,
       module,
-      resolution,
+      runtimeResolution,
       compilerResolution,
       test = false,
       optionalArtefacts,
@@ -493,13 +504,14 @@ object Bloop {
 
     writeNativeModule(
       build,
+      name,
       if (!isCrossBuild) name else name + "-native",
       projectPath,
       bloopPath,
       bloopBuildPath,
       nativeOutputPath,
       module,
-      resolution,
+      runtimeResolution,
       compilerResolution,
       test = false,
       optionalArtefacts,
@@ -522,13 +534,14 @@ object Bloop {
 
     writeJsModule(
       build,
+      name,
       if (!isCrossBuild) name else name + "-js",
       projectPath,
       bloopPath,
       bloopBuildPath,
       None,
       BuildConfig.mergeTestModule(build, module, JavaScript),
-      resolution,
+      runtimeResolution,
       compilerResolution,
       test = true,
       optionalArtefacts,
@@ -537,13 +550,14 @@ object Bloop {
 
     writeNativeModule(
       build,
+      name,
       if (!isCrossBuild) name else name + "-native",
       projectPath,
       bloopPath,
       bloopBuildPath,
       None,
       BuildConfig.mergeTestModule(build, module, Native),
-      resolution,
+      runtimeResolution,
       compilerResolution,
       test = true,
       optionalArtefacts,
@@ -552,12 +566,13 @@ object Bloop {
 
     writeJvmModule(
       build,
+      name,
       if (!isCrossBuild) name else name + "-jvm",
       projectPath,
       bloopPath,
       bloopBuildPath,
       BuildConfig.mergeTestModule(build, module, JVM),
-      resolution,
+      runtimeResolution,
       compilerResolution,
       test = true,
       optionalArtefacts,
@@ -586,8 +601,8 @@ object Bloop {
     projectPath: Path,
     outputPath: Path,
     build: Build,
-    resolution: Coursier.ResolutionResult,
-    compilerResolution: List[Coursier.ResolutionResult],
+    runtimeResolution: RuntimeResolution,
+    compilerResolution: CompilerResolution,
     tmpfs: Boolean,
     optionalArtefacts: Boolean,
     log: Log
@@ -616,7 +631,7 @@ object Bloop {
           buildPath,
           bloopBuildPath,
           build,
-          resolution,
+          runtimeResolution,
           compilerResolution,
           name,
           module.module,

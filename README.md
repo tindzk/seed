@@ -150,7 +150,10 @@ This compiles the module to `build/` and runs it.
     * Unicode characters
     * Progress bars
 * Project creation wizard
-* Packaging support
+* Generate module documentation
+* Publish artefacts to Bintray
+    * Read version from Git repository
+* Package modules
     * Copy over dependencies
 * Server mode
     * Expose a WebSocket server
@@ -528,7 +531,7 @@ For two equivalent examples of using code generation, please refer to these link
 * [Command target](test/custom-command-target/)
 
 ### Compiler plug-ins
-Project and modules can add Scala plug-ins with `compilerDeps`. The setting behaves like `scalaDeps`, but also adds the `-Xplugin` parameter to the Scala compiler when modules are compiled. For example:
+Scala plug-ins can be included with the `compilerDeps` setting. It behaves similar to `scalaDeps`, but adds the `-Xplugin` parameter to the Scala compiler. `compilerDeps` is available on the project as well as module level:
 
 ```toml
 [project]
@@ -542,8 +545,9 @@ compilerDeps = [
 ]
 ```
 
-Note that project-level plug-ins are inherited by all modules defined under the project, as well as any dependent modules such that `compilerDeps` only needs to be defined on the base project or module.
-In the example above, `module.macros.js` inherits the semanticdb plug-in from the *project* and adds a separate dependency on the macro paradise plug-in.
+Note that project-level plug-ins are inherited by all modules defined in the project file. When module `a` depends on module `b` which defines compiler plug-ins, these are inherited by `a`. Thus, in order to avoid duplication, shared compiler dependencies can be defined on base projects and modules.
+
+In the example above, `module.macros.js` inherits the SemanticDB plug-in from the project and adds a separate dependency for the Macro Paradise plug-in.
 
 For a complete cross-compiled Macro Paradise example, please refer to [this project](test/example-paradise/).
 
@@ -611,6 +615,52 @@ ivy = [
     pattern = "[organisation]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]"
   }
 ]
+```
+
+### Package
+When publishing artefacts, a [Maven POM](http://maven.apache.org/pom.html) file is created. To configure its contents, define a `package` section:
+
+```toml
+[package]
+# Project name (`name` field)
+# name = "example"
+name = ""
+
+# Package organisation (`groupId` field)
+# organisation = "com.smith"
+organisation = ""
+
+# List of developers (ID, name, e-mail)
+# developers = [{ id = "joesmith", name = "Joe Smith", email = "joe@smith.com" }]
+# developers = [["joesmith", "Joe Smith", "joe@smith.com"]]
+developers = []
+
+# Project URL
+url = ""
+
+# List of project licences
+# Available values:
+# gpl:2.0, gpl:3.0, lgpl:2.1, lgpl:3.0, cddl:1.0, cddl+gpl, apache:2.0, bsd:2,
+# bsd:3, mit, epl:1.0, ecl:1.0, mpl:2.0
+# licences = ["apache:2.0"]
+licences = []
+
+# Source code information
+# `developerConnection` is optional and if omitted, has the same value as `connection`
+#scm = {
+#  url = "https://github.com/joesmith/example",
+#  connection = "scm:git:git@github.com:joesmith/joesmith.git",
+#  developerConnection = "scm:git:git@github.com:joesmith/joesmith.git"
+#}
+scm = { url = "", connection = "", developerConnection = "" }
+
+# Publish sources
+# Alternatively, use --skip-sources to override this setting
+sources = true
+
+# Generate and publish documentation
+# Alternatively, use --skip-docs to override this setting
+docs = true
 ```
 
 ### Sample configurations
@@ -682,6 +732,20 @@ progress = true
 ```
 
 The default values are indicated.
+
+### Publishing settings
+```toml
+# Bintray repository credentials
+[repository.bintray]
+user   = ""
+apiKey = ""
+```
+
+If you maintain your configuration files in a public Git repository, it is advisable to move the Bintray section to a separate untracked file (e.g. `seed-credentials.toml`) and import it from the main configuration:
+
+```toml
+import = ["seed-credentials.toml"]
+```
 
 ## Git
 ### .gitignore
@@ -825,6 +889,15 @@ There are two related issues tracking the testing problems: [issue SCL-8972](htt
 
 As a workaround, you can open a terminal within IntelliJ and use Bloop, for example: `bloop test <module>-js`
 
+## Generate documentation
+Seed can generate an HTML documentation for your modules with the `doc` command:
+
+```shell
+seed doc example:jvm example:js
+```
+
+The functionality is based on Scaladoc. For each specified module, it uses the corresponding Scala compiler. Scaladoc bypasses Bloop and performs a separate non-incremental compilation pass.
+
 ## Packaging
 In order to distribute your project, you may want to package the compiled sources. The approach chosen in Seed is to bundle them as a JAR file.
 
@@ -872,6 +945,34 @@ If you would like to use pre-release versions, you can also pass in this paramet
 seed update --pre-releases
 ```
 
+## Publishing
+Seed can publish modules to Maven-style Bintray repositories. First, populate the build file's `package` section. Then run the following command:
+
+```shell
+seed publish --version=1.0 bintray:joesmith/maven/releases demo:js demo:jvm
+```
+
+The credentials must be configured in the global Seed configuration:
+
+```toml
+[repository.bintray]
+user   = "joesmith"
+apiKey = "<API key>"
+```
+
+Alternatively, Seed reads the environment variables `BINTRAY_USER` and `BINTRAY_API_KEY`.
+
+Seed publishes sources and generates the documentation, which slows down the publishing process. If any of these artefacts are unneeded, you can permanently change the behaviour via `package.sources` and `package.docs` in the build file, or temporarily by passing `--skip-sources` and `--skip-docs` to the CLI.
+
+Finally, to depend on the published library in another project, add the Bintray resolver there:
+
+```toml
+[resolvers]
+maven = ["https://repo1.maven.org/maven2", "https://dl.bintray.com/joesmith/maven"]
+```
+
+The `--version` parameter is optional. By default, Seed reads the version number from the Git repository via `git describe --tags`. This allows publishing artefacts for every single commit as part of CI executions.
+
 ## Performance
 On average, Bloop project generation and compilation are roughly 3x faster in Seed compared to sbt in non-interactive mode. Seed's startup is 10x faster than sbt's.
 
@@ -911,7 +1012,7 @@ Seed does not offer any capability for writing plug-ins. If you would like to re
 If some settings of the build are dynamic, you could write a script to generate TOML files from a template. A use case would be to cross-compile your modules for different Scala versions. Cross-compilation between Scala versions may require code changes. It is thinkable to have the `build.toml` point to the latest supported Scala version and have scripts that downgrade the sources, e.g. using a tool like [scalafix](https://scalacenter.github.io/scalafix/).
 
 ### Publishing
-Publishing libraries is not possible yet, but Bintray/Sonatype support is planned for future versions.
+At the moment, artefacts can only be published to Bintray. Sonatype support is planned for future versions.
 
 ## Design Goals
 The three overarching design goals were usability, simplicity and speed. The objective for Seed is to offer a narrow, but well-designed feature set that covers most common use cases for library and application development. This means leaving out features such as plug-ins, shell, tasks and code execution that would have a high footprint on the design.
@@ -930,6 +1031,17 @@ The output could use colours and bold/italic/underlined text. Also, components s
 [error] The TOML file could not be parsed
 [error] Message: String expected, Num(42) provided
 [error] Trace: module → targets
+```
+
+## Development
+To run all test cases, the Scaladoc bridges must be published locally after each commit:
+
+```shell
+$ sbt
+scaladoc211/publishLocal
+scaladoc212/publishLocal
+scaladoc213/publishLocal
+test
 ```
 
 ## Credits

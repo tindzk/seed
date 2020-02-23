@@ -8,7 +8,10 @@ import coursier.ivy.IvyRepository
 import coursier.paths.CachePath
 import coursier.cache._
 import coursier.cache.loggers._
+import coursier.error.ResolutionError.CantDownloadModule
+import coursier.params.ResolutionParams
 import coursier.util.{Gather, Task}
+import seed.artefact.ArtefactResolution.{ScalaOrganisation, ScalaVersion}
 import seed.cli.util.Ansi
 import seed.model.Build.{JavaDep, Resolvers}
 import seed.model.Platform
@@ -33,6 +36,8 @@ object Coursier {
   def withLogger[T](silent: Boolean)(f: CacheLogger => T): T =
     if (silent) f(CacheLogger.nop)
     else {
+
+      /** TODO Use [[seed.cli.util.ProgressBars]] **/
       val logger =
         RefreshLogger.create(System.err, ProgressBarRefreshDisplay.create())
       logger.init()
@@ -65,6 +70,7 @@ object Coursier {
 
   def resolve(
     all: Set[JavaDep],
+    forceScala: (ScalaOrganisation, ScalaVersion),
     resolvers: Resolvers,
     ivyPath: Path,
     cachePath: Path,
@@ -108,18 +114,51 @@ object Coursier {
       val repositories = ivyRepository +:
         (resolvers.maven.map(MavenRepository(_)) ++ ivy)
 
-      val resolution =
-        Resolve()
+      val (scalaOrganisation, scalaVersion) = forceScala
+      val scalaOrg                          = Organization(scalaOrganisation)
+      val forceVersions =
+        Seq(
+          Module(scalaOrg, ModuleName("scala-library"))  -> scalaVersion,
+          Module(scalaOrg, ModuleName("scala-reflect"))  -> scalaVersion,
+          Module(scalaOrg, ModuleName("scala-compiler")) -> scalaVersion,
+          Module(scalaOrg, ModuleName("scalap"))         -> scalaVersion
+        )
+
+      val resolutionParams =
+        ResolutionParams()
+          .withForceVersion(forceVersions.toMap)
+          .withTypelevel {
+            // TODO Support other organisations too
+            val org = model.Organisation.resolve(scalaOrganisation)
+            if (org.isEmpty)
+              log.error(
+                s"Non-standard organisation $scalaOrganisation is not supported by Coursier"
+              )
+            org.contains(model.Organisation.Typelevel)
+          }
+
+      val resolution: Resolution =
+        try Resolve()
           .withDependencies(mapped)
           .withRepositories(repositories)
+          .withResolutionParams(resolutionParams)
           .run()
+        catch {
+          case e: CantDownloadModule =>
+            log.error(
+              s"Could not resolve dependency ${e.module.name.value} in ${e.module.organization.value}"
+            )
+            sys.exit(1)
+        }
 
       val errors = resolution.errors
       if (errors.nonEmpty) {
         log.error("Some dependencies could not be resolved:")
         errors.foreach {
           case ((module, _), _) =>
-            log.error(s"  - ${module.name} in ${module.organization}")
+            log.error(
+              s"  - ${module.name.value} in ${module.organization.value}"
+            )
         }
         sys.exit(1)
       }
@@ -159,8 +198,14 @@ object Coursier {
         .unsafeRun()
     }
 
-    if (localArtefacts.exists(_._2.isLeft))
-      log.error("Failed to download: " + localArtefacts.filter(_._2.isLeft))
+    val failures = localArtefacts.filter(_._2.isLeft)
+    if (failures.nonEmpty) {
+      log.error("Some artefacts could not be downloaded:")
+      failures.foreach {
+        case (_, Left(b)) => log.error(" - " + b.describe)
+        case _            =>
+      }
+    }
 
     localArtefacts.toMap
       .collect {
@@ -172,6 +217,7 @@ object Coursier {
 
   def resolveAndDownload(
     deps: Set[JavaDep],
+    forceScala: (ScalaOrganisation, ScalaVersion),
     resolvers: Resolvers,
     ivyPath: Path,
     cachePath: Path,
@@ -179,7 +225,9 @@ object Coursier {
     silent: Boolean,
     log: Log
   ): ResolutionResult = {
-    val resolution = resolve(deps, resolvers, ivyPath, cachePath, silent, log)
+    val resolution =
+      resolve(deps, forceScala, resolvers, ivyPath, cachePath, silent, log)
+
     val artefacts = resolution
       .dependencyArtifacts(
         Some(
@@ -249,33 +297,44 @@ object Coursier {
       (if (sources) Seq(Classifier.sources) else Seq()) ++
       (if (javaDoc) Seq(Classifier.javadoc) else Seq())
 
+  def localArtefacts(
+    result: ResolutionResult,
+    artefacts: List[(JavaDep, List[(coursier.Classifier, Coursier.Artefact)])]
+  ): List[model.Resolution.Artefact] =
+    artefacts.map {
+      case (dep, a) =>
+        // `a` also contains URLs to POM files
+        val jars = a.filter(_._2.url.endsWith(".jar"))
+
+        val jar =
+          result.artefacts(jars.find(_._1 == Classifier.empty).get._2.url)
+        val doc = jars
+          .find(_._1 == Classifier.javadoc)
+          .map(_._2.url)
+          .flatMap(result.artefacts.get)
+        val src = jars
+          .find(_._1 == Classifier.sources)
+          .map(_._2.url)
+          .flatMap(result.artefacts.get)
+
+        model.Resolution.Artefact(
+          javaDep = dep,
+          libraryJar = jar.toPath,
+          javaDocJar = doc.map(_.toPath),
+          sourcesJar = src.map(_.toPath)
+        )
+    }
+
   /** Resolves requested libraries and their dependencies */
   def localArtefacts(
     result: ResolutionResult,
     all: Set[JavaDep],
     optionalArtefacts: Boolean
   ): List[model.Resolution.Artefact] =
-    resolveSubset(result.resolution, all, optionalArtefacts).toList
-      .map {
-        case (dep, a) =>
-          val jar =
-            result.artefacts(a.find(_._1 == Classifier.empty).get._2.url)
-          val doc = a
-            .find(_._1 == Classifier.javadoc)
-            .map(_._2.url)
-            .flatMap(result.artefacts.get)
-          val src = a
-            .find(_._1 == Classifier.sources)
-            .map(_._2.url)
-            .flatMap(result.artefacts.get)
-
-          model.Resolution.Artefact(
-            javaDep = dep,
-            libraryJar = jar.toPath,
-            javaDocJar = doc.map(_.toPath),
-            sourcesJar = src.map(_.toPath)
-          )
-      }
+    localArtefacts(
+      result,
+      resolveSubset(result.resolution, all, optionalArtefacts).toList
+    )
 
   /** Resolves path to JAR file of requested artefact */
   def artefactPath(

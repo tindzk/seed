@@ -78,13 +78,15 @@ object Link {
         val parsedModules =
           modules.map(util.Target.parseModuleString(result.build))
         util.Validation.unpack(parsedModules).right.map { allModules =>
+          val consoleOutput = new ConsoleOutput(log, onStdOut)
+
           val processes = seed.cli.BuildTarget.buildTargets(
             build,
             allModules,
             projectPath,
             watch,
             tmpfs,
-            log
+            consoleOutput.log
           )
 
           val linkModules = allModules.flatMap {
@@ -97,7 +99,6 @@ object Link {
 
           val expandedModules = BuildConfig.expandModules(build, linkModules)
 
-          val consoleOutput = new ConsoleOutput(log, onStdOut)
           val client = new BloopClient(
             consoleOutput,
             progress,
@@ -190,7 +191,7 @@ object Link {
             },
             optimise,
             log,
-            line => consoleOutput.write(line + "\n", sticky = false),
+            line => consoleOutput.writeRegular(line + "\n"),
             onBuildEvent
           )
       } yield ()

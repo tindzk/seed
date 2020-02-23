@@ -6,9 +6,10 @@ import scala.util.{Failure, Success, Try}
 import com.joefkelley.argyle._
 import com.joefkelley.argyle.reader.Reader
 import seed.artefact.Coursier
-import seed.cli.util.{Ansi, ColourScheme}
+import seed.cli.util.{Ansi, ColourScheme, RTS}
 import seed.config.{BuildConfig, SeedConfig}
 import seed.cli.util.ArgyleHelpers._
+import seed.model.Build.Resolvers
 
 object Cli {
   case class PackageConfig(
@@ -54,6 +55,19 @@ object Cli {
       libs: Boolean,
       output: Option[Path],
       module: String
+    ) extends Command
+    case class Publish(
+      packageConfig: PackageConfig,
+      version: Option[String],
+      skipSources: Boolean,
+      skipDocs: Boolean,
+      modules: List[String],
+      target: String
+    ) extends Command
+    case class Doc(
+      packageConfig: PackageConfig,
+      output: Option[Path],
+      modules: List[String]
     ) extends Command
 
     sealed trait Generate extends Command {
@@ -139,6 +153,21 @@ object Cli {
       .and(requiredFree[String])
       .to[Command.Package]
 
+  val publishCommand =
+    packageConfigArg
+      .and(optional[String]("--version"))
+      .and(flag("--skip-sources"))
+      .and(flag("--skip-docs"))
+      .and(repeatedAtLeastOnceFree[String])
+      .and(requiredFree[String])
+      .to[Command.Publish]
+
+  val docCommand =
+    packageConfigArg
+      .and(optional[Path]("--output"))
+      .and(repeatedAtLeastOnceFree[String])
+      .to[Command.Doc]
+
   val cliArgs =
     optional[Path]("--config")
       .and(optional[Path]("--build").default(Paths.get("")))
@@ -156,7 +185,9 @@ object Cli {
           "link"        -> linkCommand,
           "buildEvents" -> buildEventsCommand,
           "update"      -> flag("--pre-releases").to[Command.Update],
-          "package"     -> packageCommand
+          "package"     -> packageCommand,
+          "publish"     -> publishCommand,
+          "doc"         -> docCommand
         )
       )
       .to[Config]
@@ -183,6 +214,8 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
     ${italic("update")}        Check library dependencies for updates
     ${italic("package")}       Create JAR package for given module and its dependencies
                   Also sets the main class from the build file
+    ${italic("publish")}       Publish supplied module(s) to package repository
+    ${italic("doc")}           Generate HTML documentation for supplied module(s)
 
   ${bold("Parameters:")}
     ${italic("--build")}       Path to the build file (default: ${Ansi.italic("build.toml")})
@@ -241,7 +274,22 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
     ${italic("--tmpfs")}       Read build directory in tmpfs
     ${italic("--libs")}        Copy all library dependencies, reference them in the generated JAR file's class path
     ${italic("--output")}      Output path (default: ${Ansi.italic("build/dist/")})
-    ${italic("<module>")}      Module to build and package""")
+    ${italic("<module>")}      Module to build and package
+
+  ${bold("Command:")} ${underlined("publish")} [--version=<version>] [--skip-sources] [--skip-docs] <target> <modules>
+    ${italic("--version")}       Set artefact version. Must be a semantic version.
+                    If not specified, the version is read from the current Git tag.
+    ${italic("--skip-sources")}  Do not publish sources
+    ${italic("--skip-docs")}     Do not publish documentation
+    ${italic("<target>")}        Target repository
+                    ${italic("Syntax:")} bintray:<organisation>/<repository>/<package>
+    ${italic("<modules>")}       One or multiple space-separated modules. The syntax of a module is: ${italic("<name>")} or ${italic("<name>:<platform>")}
+                    ${italic("Examples:")}
+                    - app          Publish all available platform modules of ${Ansi.italic("app")}
+                    - app:js       Only publish JavaScript platform module of ${Ansi.italic("app")}
+
+  ${bold("Command:")} ${underlined("doc")} [--output=<path>] <modules>
+    ${italic("--output")}      Output path (default: ${Ansi.italic("build/docs/")})""")
   }
   // format: on
 
@@ -296,7 +344,7 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
           val result =
             BuildConfig.load(buildPath, log).getOrElse(sys.exit(1))
           val progress = config.cli.progress
-          cli.Package.ui(
+          val succeeded = cli.Package.ui(
             config,
             result.projectPath,
             result.resolvers,
@@ -308,13 +356,34 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
             packageConfig,
             log
           )
+          if (!succeeded) log.error("Packaging failed")
+          sys.exit(if (succeeded) 0 else 1)
+        case Success(Config(configPath, buildPath, command: Command.Publish)) =>
+          val config = SeedConfig.load(configPath)
+          val log    = Log(config)
+          val result =
+            BuildConfig.load(buildPath, log).getOrElse(sys.exit(1))
+          cli.Publish.ui(
+            config,
+            result.projectPath,
+            result.resolvers,
+            result.`package`,
+            result.build,
+            command.version,
+            command.target,
+            command.modules,
+            config.cli.progress,
+            command.skipSources,
+            command.skipDocs,
+            command.packageConfig,
+            log
+          )
         case Success(
             Config(configPath, buildPath, command: Command.Generate)
             ) =>
           val config = SeedConfig.load(configPath)
           val log    = Log(config)
-          val result =
-            BuildConfig.load(buildPath, log).getOrElse(sys.exit(1))
+          val result = BuildConfig.load(buildPath, log).getOrElse(sys.exit(1))
           cli.Generate.ui(
             config,
             result.projectPath,
@@ -340,6 +409,21 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
           val config = SeedConfig.load(configPath)
           val log    = Log(config)
           cli.Link.ui(buildPath, config, command, log)
+        case Success(Config(configPath, buildPath, command: Command.Doc)) =>
+          val config = SeedConfig.load(configPath)
+          val log    = Log(config)
+          val build  = BuildConfig.load(buildPath, log).getOrElse(sys.exit(1))
+          val uio = cli.Doc.ui(
+            build,
+            build.projectPath,
+            config,
+            command,
+            command.packageConfig,
+            config.cli.progress,
+            log
+          )
+          val result = RTS.unsafeRunSync(uio)
+          sys.exit(if (result.succeeded) 0 else 1)
         case Success(Config(configPath, _, command: Command.BuildEvents)) =>
           val config = SeedConfig.load(configPath)
           val log    = Log(config)
@@ -352,4 +436,34 @@ ${underlined("Usage:")} seed [--build=<path>] [--config=<path>] <command>
           sys.exit(1)
       }
     }
+
+  def showResolvers(
+    seedConfig: seed.model.Config,
+    resolvers: Resolvers,
+    packageConfig: PackageConfig,
+    log: Log
+  ): Unit = {
+    import packageConfig._
+    val resolvedIvyPath   = ivyPath.getOrElse(seedConfig.resolution.ivyPath)
+    val resolvedCachePath = cachePath.getOrElse(seedConfig.resolution.cachePath)
+
+    log.info("Configured resolvers:")
+    log.info(
+      "- " + Ansi.italic(resolvedIvyPath.toString) + " (Ivy)",
+      detail = true
+    )
+    log.info(
+      "- " + Ansi.italic(resolvedCachePath.toString) + " (Coursier)",
+      detail = true
+    )
+
+    resolvers.ivy
+      .foreach(
+        ivy => log.info("- " + Ansi.italic(ivy.url) + " (Ivy)", detail = true)
+      )
+    resolvers.maven
+      .foreach(
+        maven => log.info("- " + Ansi.italic(maven) + " (Maven)", detail = true)
+      )
+  }
 }

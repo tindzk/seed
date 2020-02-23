@@ -2,7 +2,7 @@ package seed.cli
 
 import java.nio.file.Path
 
-import seed.{Log, model}
+import seed.{Cli, Log, model}
 import seed.Cli.Command
 import seed.generation.{Bloop, Idea}
 import seed.artefact.ArtefactResolution
@@ -19,9 +19,7 @@ object Generate {
     command: Command.Generate,
     log: Log
   ): Unit = {
-    val compilerDeps = ArtefactResolution.allCompilerDeps(build)
-    val platformDeps = ArtefactResolution.allPlatformDeps(build)
-    val libraryDeps  = ArtefactResolution.allLibraryDeps(build)
+    Cli.showResolvers(seedConfig, resolvers, command.packageConfig, log)
 
     val (isBloop, isIdea) = command match {
       case _: Command.Bloop => (true, false)
@@ -31,17 +29,22 @@ object Generate {
 
     val optionalArtefacts = isIdea || seedConfig.resolution.optionalArtefacts
 
-    val (_, platformResolution, compilerResolution) =
-      ArtefactResolution.resolution(
-        seedConfig,
-        resolvers,
-        build,
-        command.packageConfig,
-        optionalArtefacts,
-        platformDeps ++ libraryDeps,
-        compilerDeps,
-        log
-      )
+    val runtimeResolution = ArtefactResolution.runtimeResolution(
+      build,
+      seedConfig,
+      resolvers,
+      command.packageConfig,
+      optionalArtefacts,
+      log
+    )
+    val compilerResolution = ArtefactResolution.compilerResolution(
+      build,
+      seedConfig,
+      resolvers,
+      command.packageConfig,
+      optionalArtefacts,
+      log
+    )
 
     val tmpfs = command.packageConfig.tmpfs || seedConfig.build.tmpfs
     if (isBloop)
@@ -49,7 +52,7 @@ object Generate {
         projectPath,
         outputPath,
         build,
-        platformResolution,
+        runtimeResolution,
         compilerResolution,
         tmpfs,
         optionalArtefacts,
@@ -60,7 +63,7 @@ object Generate {
         projectPath,
         outputPath,
         build,
-        platformResolution,
+        runtimeResolution,
         compilerResolution,
         tmpfs,
         log

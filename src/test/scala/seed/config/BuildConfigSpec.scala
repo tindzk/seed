@@ -121,7 +121,7 @@ object BuildConfigSpec extends SimpleTestSuite {
       parsed.right.get,
       Paths.get("."), { path =>
         val build = parseBuild(f(path))(f)
-        Some(Result(Paths.get("."), Resolvers(), build))
+        Some(Result(Paths.get("."), Build.Package(), Resolvers(), build))
       },
       Log.urgent
     )

@@ -21,10 +21,44 @@ object SeedConfig {
 
     val log = Log(Config())
 
-    def parse(path: Path) =
+    def parse(tomlPath: Path) = {
+      def parseRaw(
+        toml: String
+      ): Either[_root_.toml.Codec.Error, List[Value.Tbl]] =
+        Toml.parse(toml) match {
+          case Left(l) => Left(List() -> l)
+          case Right(r) =>
+            r.values.get("import") match {
+              case Some(Value.Arr(values))
+                  if values.forall(_.isInstanceOf[Value.Str]) =>
+                val included = values.flatMap {
+                  case Value.Str(path) =>
+                    val resolved =
+                      TomlUtils.fixPath(tomlPath.getParent, Paths.get(path))
+                    TomlUtils
+                      .parseFile(resolved, parseRaw, "Seed configuration", log)
+                      .getOrElse(sys.exit(1))
+                }
+                Right(included :+ Value.Tbl(r.values - "import"))
+              case None => Right(List(r))
+              case _    => Left(List("import") -> "Only paths may be specified")
+            }
+        }
+
+      def f(toml: String): Either[Codec.Error, Config] =
+        parseRaw(toml).right.flatMap { configurations =>
+          val parsedAll = configurations.foldLeft(Map[String, Value]()) {
+            case (acc, cur) =>
+              acc ++ cur.values
+          }
+
+          Toml.parseAs[Config](Value.Tbl(parsedAll))
+        }
+
       TomlUtils
-        .parseFile(path, Toml.parseAs[Config](_), "Seed configuration", log)
+        .parseFile(tomlPath, f, "Seed configuration", log)
         .getOrElse(sys.exit(1))
+    }
 
     userConfigPath match {
       case None =>
