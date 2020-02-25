@@ -430,4 +430,23 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       )
     )
   }
+
+  test("Override target platforms in test module") { _ =>
+    val config =
+      BuildConfig
+        .load(Paths.get("test", "test-module-override-targets"), Log.urgent)
+        .get
+    import config._
+    val buildPath = tempPath.resolve("test-module-override-targets")
+    Files.createDirectory(buildPath)
+    cli.Generate.ui(
+      Config(),
+      projectPath,
+      buildPath,
+      resolvers,
+      build,
+      Command.Bloop(packageConfig),
+      Log.urgent
+    )
+  }
 }

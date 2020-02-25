@@ -377,28 +377,32 @@ object ArtefactResolution {
     log: Log
   ): RuntimeResolution = {
     val all = allRuntimeLibs(build)
-    all.map {
+    all.flatMap {
       case (path, libs) =>
         val (n, p, t) = path
         val m         = build(n).module
-        val pm = (if (t == Regular) BuildConfig.platformModule(m, p)
-                  else
-                    m.test match {
-                      case None    => BuildConfig.platformModule(m, p)
-                      case Some(t) => BuildConfig.platformModule(t, p)
-                    }).get
-        val (scalaOrg, scalaVer) =
-          (pm.scalaOrganisation.get, pm.scalaVersion.get)
+        val pm =
+          if (t == Regular) BuildConfig.platformModule(m, p)
+          else
+            m.test match {
+              case None    => BuildConfig.platformModule(m, p)
+              case Some(t) => BuildConfig.platformModule(t, p)
+            }
 
-        path -> resolution(
-          seedConfig,
-          resolvers,
-          packageConfig,
-          libs ++ (if (t == Regular) Set() else all((n, p, Regular))),
-          (scalaOrg, scalaVer),
-          optionalArtefacts,
-          log
-        )
+        pm.map { pm =>
+          val (scalaOrg, scalaVer) =
+            (pm.scalaOrganisation.get, pm.scalaVersion.get)
+
+          path -> resolution(
+            seedConfig,
+            resolvers,
+            packageConfig,
+            libs ++ (if (t == Regular) Set() else all((n, p, Regular))),
+            (scalaOrg, scalaVer),
+            optionalArtefacts,
+            log
+          )
+        }.toList
     }
   }
 

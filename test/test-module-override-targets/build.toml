@@ -1,0 +1,15 @@
+[project]
+scalaVersion   = "2.11.11"
+scalaJsVersion = "0.6.28"
+scalaNativeVersion = "0.3.7"
+
+[module.example]
+root    = "src/"
+sources = ["src/"]
+targets = ["js", "jvm", "native"]
+
+[module.example.test]
+sources = ["test/"]
+
+# override targets, excluding Scala Native
+targets = ["js", "jvm"]
