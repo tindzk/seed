@@ -1,0 +1,22 @@
+[project]
+scalaVersion = "2.13.0"
+
+[module.utils.jvm]
+sources = ["utils"]
+
+[module.utils.target.gen-sources]
+class = ["utils:jvm", "GenerateSources"]
+await = true
+
+# `template1` and `template2` share the code generator `utils:gen-sources`
+[module.template1.jvm]
+moduleDeps = ["utils"]
+sources = ["template1"]
+
+[module.template2.jvm]
+moduleDeps = ["utils"]
+sources = ["template2"]
+
+[module.demo.jvm]
+moduleDeps = ["template1", "template2"]
+sources = ["demo"]

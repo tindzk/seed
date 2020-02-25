@@ -28,7 +28,7 @@ object BuildTarget {
       case _                                     => List()
     }.distinct
 
-    val inheritedTargets = modules
+    val flattenedDeps = modules
       .flatMap {
         case util.Target.Parsed(module, Some(Left(platform))) =>
           BuildConfig.collectModuleDepsBase(build, module.module, platform)
@@ -36,7 +36,34 @@ object BuildTarget {
         case util.Target.Parsed(module, None) =>
           module.name +: BuildConfig.collectModuleDeps(build, module.module)
       }
-      .flatMap(m => build(m).module.target.keys.toList.map(m -> _))
+
+    // Determine direct parents of build targets
+    type BuildTarget  = (String, String) // module, target name
+    type ParentModule = String
+    val parentModules: Map[BuildTarget, List[ParentModule]] =
+      flattenedDeps
+        .flatMap { parent =>
+          BuildConfig
+            .allTargets(build, parent)
+            .flatMap {
+              case (m, t) => BuildConfig.platformModule(build(m).module, t)
+            }
+            .flatMap(_.moduleDeps)
+            .flatMap(
+              module =>
+                build(module).module.target.keys.toList
+                  .map(target => (module, target) -> parent)
+            )
+        }
+        .groupBy(_._1)
+        .mapValues(_.map(_._2))
+
+    val inheritedTargets: List[BuildTarget] = flattenedDeps
+      .flatMap(
+        module =>
+          build(module).module.target.keys.toList
+            .map(target => (module, target))
+      )
       .distinct
 
     if (targets.nonEmpty)
@@ -58,6 +85,16 @@ object BuildTarget {
         val modulePath = build(m).path
         val target     = build(m).module.target(t)
 
+        val moduleSourcePaths = parentModules((m, t)).flatMap { module =>
+          val targets = BuildConfig.allTargets(build, module)
+          targets
+            .flatMap {
+              case (m, t) => BuildConfig.platformModule(build(m).module, t)
+            }
+            .flatMap(_.sources)
+            .map(_.toAbsolutePath.toString)
+        }
+
         target.`class` match {
           case Some(c) =>
             val bloopName =
@@ -68,6 +105,7 @@ object BuildTarget {
               customLog,
               customLog.info(_),
               Some(modulePath.toAbsolutePath.toString),
+              moduleSourcePaths,
               Some(buildPath.toAbsolutePath.toString)
             )(args: _*)
 
@@ -83,6 +121,7 @@ object BuildTarget {
                       ProcessHelper.runShell(
                         modulePath,
                         cmd,
+                        moduleSourcePaths,
                         buildPath.toAbsolutePath.toString,
                         customLog,
                         customLog.info(_)
@@ -96,6 +135,7 @@ object BuildTarget {
                   val process = ProcessHelper.runShell(
                     modulePath,
                     cmd,
+                    moduleSourcePaths,
                     buildPath.toAbsolutePath.toString,
                     customLog,
                     customLog.info(_)

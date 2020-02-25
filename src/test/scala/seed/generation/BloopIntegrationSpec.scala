@@ -281,8 +281,8 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   def buildCustomTarget(
     name: String,
     expectFailure: Boolean = false
-  ): Future[List[String]] = {
-    val path = Paths.get(s"test/$name")
+  ): Future[Either[List[String], List[String]]] = {
+    val path = Paths.get("test", name)
 
     val config = BuildConfig.load(path, Log.urgent).get
     import config._
@@ -317,7 +317,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     if (expectFailure)
       RTS.unsafeRunToFuture(uio).failed.map { _ =>
         assert(lines.nonEmpty)
-        lines.toList
+        Left(lines.toList)
       } else {
       RTS.unsafeRunSync(uio)
 
@@ -327,20 +327,38 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       TestProcessHelper
         .runBloop(buildPath)("run", "demo")
         .map { x =>
-          assertEquals(x.split("\n").count(_ == "42"), 1)
           Files.delete(generatedFile)
           assertEquals(lines.toList, List())
-          List()
+          Right(x.split("\n").toList)
         }
     }
   }
 
   testAsync("Build project with custom class target") { _ =>
-    buildCustomTarget("custom-class-target").map(_ => ())
+    buildCustomTarget("custom-class-target").map(
+      lines => assertEquals(lines.right.get.count(_ == "42"), 1)
+    )
+  }
+
+  testAsync(
+    "Build project with custom class target (shared by multiple modules)"
+  ) { _ =>
+    buildCustomTarget("custom-class-target-shared").map(
+      lines =>
+        assertEquals(
+          lines.right.get.map(_.split("test/").last),
+          List(
+            "custom-class-target-shared/template1",
+            "custom-class-target-shared/template2"
+          )
+        )
+    )
   }
 
   testAsync("Build project with custom command target") { _ =>
-    buildCustomTarget("custom-command-target").map { _ =>
+    buildCustomTarget("custom-command-target").map { lines =>
+      assertEquals(lines.right.get.count(_ == "42"), 1)
+
       val path = tempPath
         .resolve("custom-command-target")
         .resolve(".bloop")
@@ -368,7 +386,8 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       log =>
         // Must indicate correct position
         assert(
-          log.exists(_.contains("[2:41]: not found: value invalidIdentifier"))
+          log.left.get
+            .exists(_.contains("[2:41]: not found: value invalidIdentifier"))
         )
     )
   }

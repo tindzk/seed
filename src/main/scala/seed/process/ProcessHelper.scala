@@ -1,5 +1,6 @@
 package seed.process
 
+import java.io.File
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
@@ -65,6 +66,7 @@ object ProcessHelper {
     cwd: Path,
     cmd: List[String],
     modulePath: Option[String] = None,
+    moduleSourcePaths: List[String] = List(),
     buildPath: Option[String] = None,
     log: Log,
     onStdOut: String => Unit,
@@ -83,6 +85,16 @@ object ProcessHelper {
         pb.environment().put("MODULE_PATH", mp)
         log.debug(s"Module path: ${Ansi.italic(mp)}", detail = true)
       }
+
+      pb.environment()
+        .put(
+          "MODULE_SOURCE_PATHS",
+          moduleSourcePaths.mkString(File.pathSeparatorChar.toString)
+        )
+      log.debug(
+        s"Module source paths: ${moduleSourcePaths.map(Ansi.italic).mkString(", ")}",
+        detail = true
+      )
 
       buildPath.foreach { bp =>
         pb.environment().put("BUILD_PATH", bp)
@@ -125,6 +137,7 @@ object ProcessHelper {
     log: Log,
     onStdOut: String => Unit,
     modulePath: Option[String] = None,
+    moduleSourcePaths: List[String] = List(),
     buildPath: Option[String] = None,
     verbose: Boolean = true
   )(args: String*): Process =
@@ -132,6 +145,7 @@ object ProcessHelper {
       cwd,
       List("bloop") ++ args,
       modulePath,
+      moduleSourcePaths,
       buildPath,
       log,
       output => onStdOut(output),
@@ -141,6 +155,7 @@ object ProcessHelper {
   def runShell(
     cwd: Path,
     command: String,
+    moduleSourcePaths: List[String] = List(),
     buildPath: String,
     log: Log,
     onStdOut: String => Unit
@@ -149,6 +164,7 @@ object ProcessHelper {
       cwd,
       List("/bin/sh", "-c", command),
       None,
+      moduleSourcePaths,
       Some(buildPath),
       log,
       onStdOut

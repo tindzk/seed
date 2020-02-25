@@ -32,6 +32,7 @@ object TestProcessHelper {
       cwd,
       cmd,
       None,
+      List(),
       None,
       Log.urgent,
       out => sb.append(out + "\n")

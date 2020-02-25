@@ -525,9 +525,12 @@ class = { module = "keyboard:jvm", main = "keyboard.Bundle" }
 
 In addition to `BUILD_PATH`, we also set the environment variable `MODULE_PATH` when running classes. The module path is the root path of the Seed project which contains the referenced module. This environment variable is not set for commands since their current working directory will point to the module path.
 
-For two equivalent examples of using code generation, please refer to these links:
+It is possible for multiple modules to share a code generator. To access the source paths of all modules that depend on a generator, access the environment variable `MODULE_SOURCE_PATHS`. Its value uses the system path separator character (`java.io.File.pathSeparatorChar`).
+
+For examples of using code generation, please refer to these links:
 
 * [Class target](test/custom-class-target/)
+* [Class target shared by multiple modules](test/custom-class-target-shared/)
 * [Command target](test/custom-command-target/)
 
 ### Compiler plug-ins
