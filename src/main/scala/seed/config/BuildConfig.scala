@@ -225,7 +225,13 @@ object BuildConfig {
     }
 
     val invalidModuleDeps =
-      module.moduleDeps.filter(!build.isDefinedAt(_))
+      module.moduleDeps.filter(!build.isDefinedAt(_)) ++
+        Platform.All.flatMap(
+          p =>
+            platformModule(module, p._1).toList
+              .flatMap(_.moduleDeps.filter(!build.isDefinedAt(_)))
+        )
+
     val invalidTargetModules =
       module.target.toList
         .flatMap(_._2.`class`)
@@ -388,11 +394,11 @@ object BuildConfig {
       error(s"`root` cannot be set on native test module $moduleName")
     else if (invalidModuleDeps.nonEmpty)
       error(
-        s"Module dependencies of $moduleName not found in scope: ${invalidModuleDeps.mkString(", ")}"
+        s"Module dependencies of $moduleName not found in scope: ${invalidModuleDeps.map(Ansi.italic).mkString(", ")}"
       )
     else if (invalidTargetModules.nonEmpty)
       error(
-        s"Invalid module(s) referenced in $moduleName: ${invalidTargetModules.mkString(", ")}"
+        s"Invalid module(s) referenced in $moduleName: ${invalidTargetModules.map(Ansi.italic).mkString(", ")}"
       )
     else if (invalidTargetModules2.nonEmpty)
       error(

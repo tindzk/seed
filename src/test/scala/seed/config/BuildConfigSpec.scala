@@ -869,6 +869,62 @@ object BuildConfigSpec extends SimpleTestSuite {
     )
   }
 
+  test("Detect invalid module reference") {
+    val buildToml = """
+      |[project]
+      |scalaVersion = "2.12.4"
+      |
+      |[module.shared]
+      |root    = "shared/"
+      |sources = ["shared/src/"]
+      |targets = ["jvm"]
+      |
+      |[module.content]
+      |root       = "content/"
+      |moduleDeps = ["shared", "invalid-module"]
+      |sources    = ["content/src/"]
+      |targets = ["jvm"]
+    """.stripMargin
+
+    val messages = ListBuffer[String]()
+    val log      = new Log(messages += _, identity, LogLevel.Error, false)
+    parseBuild(buildToml, log, fail = true)(_ => "")
+    assert(
+      messages.exists(
+        _.contains(
+          s"Module dependencies of ${Ansi.italic("content")} not found in scope: ${Ansi.italic("invalid-module")}"
+        )
+      )
+    )
+  }
+
+  test("Detect invalid module reference (2)") {
+    val buildToml = """
+      |[project]
+      |scalaVersion = "2.12.4"
+      |
+      |[module.shared.jvm]
+      |root    = "shared/"
+      |sources = ["shared/src/"]
+      |
+      |[module.content.jvm]
+      |root       = "content/"
+      |moduleDeps = ["shared", "invalid-module"]
+      |sources    = ["content/src/"]
+    """.stripMargin
+
+    val messages = ListBuffer[String]()
+    val log      = new Log(messages += _, identity, LogLevel.Error, false)
+    parseBuild(buildToml, log, fail = true)(_ => "")
+    assert(
+      messages.exists(
+        _.contains(
+          s"Module dependencies of ${Ansi.italic("content")} not found in scope: ${Ansi.italic("invalid-module")}"
+        )
+      )
+    )
+  }
+
   test("Resolve source paths") {
     val buildToml = """
       |[project]
