@@ -69,3 +69,11 @@ class ConsoleOutput(parentLog: Log, print: String => Unit) {
     flushed = false
   }
 }
+
+object ConsoleOutput {
+  def conditional(
+    progress: Boolean,
+    consoleOutput: ConsoleOutput
+  ): ConsoleOutput =
+    if (progress) consoleOutput else new ConsoleOutput(Log.silent, _ => ())
+}

@@ -46,7 +46,7 @@ class BloopClient(
   onBuildEvent: BuildEvent => Unit
 ) extends BuildClient {
   val pb = new ProgressBars(
-    if (progress) consoleOutput else new ConsoleOutput(Log.silent, _ => ()),
+    ConsoleOutput.conditional(progress, consoleOutput),
     allModules.map {
       case (m, p) =>
         ProgressBarItem(
@@ -192,14 +192,20 @@ class BloopClient(
               if (!pb.compiled)
                 onBuildEvent(BuildEvent.Compiled(parsed._1, parsed._2))
               if (!progress)
-                log.info("Module " + Ansi.italic(parsed._1) + " compiled")
+                log.info(
+                  "Module " + Ansi.italic(
+                    seed.cli.util.Module.format(parsed._1, parsed._2)
+                  ) + " compiled"
+                )
               current.copy(result = r, step = 100, total = 100)
             } else {
               if (!pb.compiled)
                 onBuildEvent(BuildEvent.Failed(parsed._1, parsed._2))
               if (!progress)
                 log.error(
-                  "Module " + Ansi.italic(parsed._1) + " could not be compiled"
+                  "Module " + Ansi.italic(
+                    seed.cli.util.Module.format(parsed._1, parsed._2)
+                  ) + " could not be compiled"
                 )
               current.copy(result = r)
             }

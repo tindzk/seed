@@ -118,13 +118,16 @@ object Publish {
             )
 
             consoleOutput.reset()
-            val pb = new ProgressBars(consoleOutput, publishModules.map {
-              case (m, p) =>
-                ProgressBarItem(
-                  BuildConfig.targetName(build, m, p),
-                  Module.format(m, p)
-                )
-            })
+            val pb = new ProgressBars(
+              ConsoleOutput.conditional(progress, consoleOutput),
+              publishModules.map {
+                case (m, p) =>
+                  ProgressBarItem(
+                    BuildConfig.targetName(build, m, p),
+                    Module.format(m, p)
+                  )
+              }
+            )
 
             val runtimeLibs = ArtefactResolution.allRuntimeLibs(build)
             val runtimeResolution = ArtefactResolution.runtimeResolution(
