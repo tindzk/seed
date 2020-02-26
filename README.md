@@ -1034,7 +1034,9 @@ The output could use colours and bold/italic/underlined text. Also, components s
 ```
 
 ## Development
-To run all test cases, the Scaladoc bridges must be published locally after each commit:
+sbt takes the Git commit (`git describe --tags`) as the Seed version. This version can be overridden by creating a `SEED` file in the root folder.
+
+To run all test cases, the Scaladoc bridges must be published locally for the current Seed version:
 
 ```shell
 $ sbt
