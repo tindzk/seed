@@ -18,8 +18,9 @@ ENV JAVA_HOME  /usr/lib/jvm/java-1.8-openjdk
 ENV PATH       $PATH:$JAVA_HOME/jre/bin:$JAVA_HOME/bin:/seed/bloop
 
 COPY build.sh build.sbt BLOOP SEED COURSIER  /seed/
-COPY project/  /seed/project/
-COPY src/      /seed/src/
+COPY project/   /seed/project/
+COPY src/       /seed/src/
+COPY scaladoc/  /seed/scaladoc/
 
 WORKDIR /seed
 
