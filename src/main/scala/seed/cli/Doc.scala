@@ -276,7 +276,7 @@ object Doc {
     val r =
       ArtefactResolution.resolution(
         seedConfig,
-        resolvers,
+        resolvers.copy(maven = resolvers.maven :+ BuildInfo.MavenRepository),
         packageConfig,
         scaladocDeps,
         (scalaOrg, scalaVer),

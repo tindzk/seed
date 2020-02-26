@@ -12,7 +12,8 @@ def parseVersion(file: Path): Option[String] =
       .find(_.nonEmpty)
       .map(_.trim)
 
-val seedOrganisation = "tindzk"
+val seedOrganisation    = "tindzk"
+val seedMavenRepository = s"https://dl.bintray.com/$seedOrganisation/maven/"
 
 // Should be `val` instead of `def`, otherwise it is necessary to run
 // scaladoc*/publishLocal after every commit
@@ -35,10 +36,11 @@ Compile / sourceGenerators += Def.task {
     s"""package seed
        |
        |object BuildInfo {
-       |  val Organisation = "$seedOrganisation"
-       |  val Version      = "$seedVersion"
-       |  val Bloop        = "$bloopVersion"
-       |  val Coursier     = "$bloopCoursierVersion"
+       |  val Organisation    = "$seedOrganisation"
+       |  val Version         = "$seedVersion"
+       |  val Bloop           = "$bloopVersion"
+       |  val Coursier        = "$bloopCoursierVersion"
+       |  val MavenRepository = "$seedMavenRepository"
        |}""".stripMargin
   )
 
