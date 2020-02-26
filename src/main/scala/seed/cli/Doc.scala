@@ -95,28 +95,21 @@ object Doc {
                 log.info(
                   s"Output path: ${Ansi.italic(moduleDest.toString)}"
                 )
-                Try {
-                  documentModule(
-                    build.build,
-                    build.resolvers,
-                    runtimeResolution,
-                    compilerResolution,
-                    seedConfig,
-                    command.packageConfig,
-                    module,
-                    platform,
-                    runtimeLibs,
-                    moduleDest.toFile,
-                    paths,
-                    log
-                  )
-                }.toEither match {
-                  case Left(e) =>
-                    log.error("Internal error occurred")
-                    e.printStackTrace()
-                    false
-                  case Right(v) => v
-                }
+
+                documentModule(
+                  build.build,
+                  build.resolvers,
+                  runtimeResolution,
+                  compilerResolution,
+                  seedConfig,
+                  command.packageConfig,
+                  module,
+                  platform,
+                  runtimeLibs,
+                  moduleDest.toFile,
+                  paths,
+                  log
+                )
               }
           }
 
@@ -174,77 +167,84 @@ object Doc {
     val moduleLibs =
       Coursier.localArtefacts(r, resolvedLibraryDeps).map(_.libraryJar)
 
-    val classLoader = new java.net.URLClassLoader(
-      scaladocLibs.map(_.toUri.toURL).toArray,
-      null
-    )
-
-    val scaladocClass =
-      classLoader.loadClass("seed.publish.util.Scaladoc")
-    val scaladoc        = scaladocClass.newInstance()
-    val scaladocMethods = scaladocClass.getDeclaredMethods.toList
-    val scaladocExecuteMethod =
-      scaladocMethods.find(_.getName == "execute").get
-    val scaladocSettingsMethod =
-      scaladocMethods.find(_.getName == "settings").get
-
-    val sourceFiles = BuildConfig
-      .sourcePaths(build, List(module -> platform))
-      .flatMap(BuildConfig.allSourceFiles)
-      .map(_.toFile)
-
-    log.info(
-      s"Documenting ${Ansi.bold(sourceFiles.length.toString)} files..."
-    )
-
-    val platformModule =
-      BuildConfig.platformModule(build(module).module, platform).get
-    val scalacParams = platformModule.scalaOptions ++ ScalaCompiler
-      .compilerPlugIns(
-        build,
-        platformModule,
-        compilerResolution,
-        platform,
-        platformModule.scalaVersion.get
+    try {
+      val classLoader = new java.net.URLClassLoader(
+        scaladocLibs.map(_.toUri.toURL).toArray,
+        null
       )
 
-    val classpath = moduleClasspaths.map(new File(_)) ++
-      moduleLibs.map(_.toFile)
+      val scaladocClass =
+        classLoader.loadClass("seed.publish.util.Scaladoc")
+      val scaladoc        = scaladocClass.newInstance()
+      val scaladocMethods = scaladocClass.getDeclaredMethods.toList
+      val scaladocExecuteMethod =
+        scaladocMethods.find(_.getName == "execute").get
+      val scaladocSettingsMethod =
+        scaladocMethods.find(_.getName == "settings").get
 
-    val settings = scaladocSettingsMethod.invoke(
-      scaladoc,
-      Array[File](),
-      classpath.toArray,
-      Array[File](),
-      Array[File](),
-      dest,
-      scalacParams.mkString(" ")
-    )
+      val sourceFiles = BuildConfig
+        .sourcePaths(build, List(module -> platform))
+        .flatMap(BuildConfig.allSourceFiles)
+        .map(_.toFile)
 
-    val result = scaladocExecuteMethod
-      .invoke(
-        scaladoc,
-        settings,
-        sourceFiles.toArray,
-        (message => log.error(Ansi.bold("[scaladoc] ") + message)): Consumer[
-          String
-        ],
-        (message => log.warn(Ansi.bold("[scaladoc] ") + message)): Consumer[
-          String
-        ]
-      )
-      .asInstanceOf[java.lang.Boolean]
-
-    if (result)
       log.info(
-        s"Module ${Ansi.italic(seed.cli.util.Module.format(module, platform))} documented"
-      )
-    else
-      log.error(
-        s"Module ${Ansi.italic(seed.cli.util.Module.format(module, platform))} could not be documented"
+        s"Documenting ${Ansi.bold(sourceFiles.length.toString)} files..."
       )
 
-    result
+      val platformModule =
+        BuildConfig.platformModule(build(module).module, platform).get
+      val scalacParams = platformModule.scalaOptions ++ ScalaCompiler
+        .compilerPlugIns(
+          build,
+          platformModule,
+          compilerResolution,
+          platform,
+          platformModule.scalaVersion.get
+        )
+
+      val classpath = moduleClasspaths.map(new File(_)) ++
+        moduleLibs.map(_.toFile)
+
+      val settings = scaladocSettingsMethod.invoke(
+        scaladoc,
+        Array[File](),
+        classpath.toArray,
+        Array[File](),
+        Array[File](),
+        dest,
+        scalacParams.mkString(" ")
+      )
+
+      val result = scaladocExecuteMethod
+        .invoke(
+          scaladoc,
+          settings,
+          sourceFiles.toArray,
+          (message => log.error(Ansi.bold("[scaladoc] ") + message)): Consumer[
+            String
+          ],
+          (message => log.warn(Ansi.bold("[scaladoc] ") + message)): Consumer[
+            String
+          ]
+        )
+        .asInstanceOf[java.lang.Boolean]
+
+      if (result)
+        log.info(
+          s"Module ${Ansi.italic(seed.cli.util.Module.format(module, platform))} documented"
+        )
+      else
+        log.error(
+          s"Module ${Ansi.italic(seed.cli.util.Module.format(module, platform))} could not be documented"
+        )
+
+      result
+    } catch {
+      case t: Throwable =>
+        log.error("Internal error occurred")
+        t.printStackTrace()
+        false
+    }
   }
 
   def resolveScaladocBridge(
