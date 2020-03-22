@@ -9,7 +9,12 @@ import seed.artefact.ArtefactResolution.{
   ModuleRef,
   RuntimeResolution
 }
-import seed.artefact.{ArtefactResolution, Coursier, SemanticVersioning}
+import seed.artefact.{
+  ArtefactResolution,
+  Coursier,
+  MavenCentral,
+  SemanticVersioning
+}
 import seed.cli.util.{
   Ansi,
   ConsoleOutput,
@@ -22,8 +27,7 @@ import seed.cli.util.{
 import seed.config.BuildConfig
 import seed.config.BuildConfig.Build
 import seed.generation.util.PathUtil
-import seed.model.Build.{JavaDep, Resolvers}
-import seed.model.Platform.{JavaScript, Native}
+import seed.model.Build.{JavaDep, Resolvers, VersionTag}
 import seed.model.{Config, Platform}
 import seed.publish.Bintray
 import seed.publish.util.Http
@@ -400,10 +404,6 @@ object Publish {
     """.toXml
   }
 
-  def encodeVersion(version: String): String =
-    if (SemanticVersioning.isPreRelease(version)) version
-    else SemanticVersioning.majorMinorVersion(version)
-
   def getVersion(
     projectPath: Path,
     version: Option[String],
@@ -630,14 +630,14 @@ object Publish {
     platform: Platform,
     platformModule: seed.model.Build.Module
   ): String = {
-    val packageArtefactPlatform =
-      if (platform == JavaScript)
-        "_sjs" + encodeVersion(platformModule.scalaJsVersion.get)
-      else if (platform == Native)
-        "_native" + encodeVersion(platformModule.scalaNativeVersion.get)
-      else ""
-    val scalaVersion = "_" + encodeVersion(platformModule.scalaVersion.get)
-    s"$module$packageArtefactPlatform$scalaVersion"
+    val platformVersion = BuildConfig.platformVersion(platformModule, platform)
+    MavenCentral.formatArtefactName(
+      module,
+      VersionTag.PlatformBinary,
+      platform,
+      platformVersion,
+      platformModule.scalaVersion.get
+    )
   }
 
   def resolveArtefactsAndCreatePom(
