@@ -9,7 +9,7 @@ import seed.artefact.ArtefactResolution.CompilerResolution
 import seed.config.BuildConfig.Build
 import seed.model.Build.Module
 import seed.model.Platform.{JavaScript, Native}
-import seed.model.{Artefact, Build, Platform}
+import seed.model.{Artefact, Platform}
 
 object ScalaCompiler {
   private def resolveCompiler(

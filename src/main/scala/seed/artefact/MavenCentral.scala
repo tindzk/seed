@@ -162,6 +162,24 @@ object MavenCentral {
       }
     }
 
+  def scalaJsBinaryVersion(version: String): String =
+    SemanticVersioning.parseVersion(version) match {
+      case Some(v) if v.preRelease.isDefined => version
+      case Some(v) if v.major >= 1           => v.major.toString
+      case Some(v)                           => v.major + "." + v.minor
+      case None                              => version
+    }
+
+  def scalaNativeBinaryVersion(version: String): String =
+    trimCompilerVersion(version)
+
+  def platformBinaryTag(platform: Platform, platformVersion: String): String =
+    platform match {
+      case JVM        => ""
+      case JavaScript => "sjs" + scalaJsBinaryVersion(platformVersion) + "_"
+      case Native     => "native" + scalaNativeBinaryVersion(platformVersion) + "_"
+    }
+
   def formatArtefactName(
     artefactName: String,
     versionTag: VersionTag,
@@ -172,18 +190,8 @@ object MavenCentral {
     versionTag match {
       case VersionTag.PlatformBinary =>
         val trimmedCompilerVersion = trimCompilerVersion(compilerVersion)
-
-        val version = platform match {
-          case JVM => trimmedCompilerVersion
-          case JavaScript =>
-            "sjs" + trimCompilerVersion(platformVersion) +
-              "_" + trimmedCompilerVersion
-          case Native =>
-            "native" + trimCompilerVersion(platformVersion) +
-              "_" + trimmedCompilerVersion
-        }
-
-        artefactName + "_" + version
+        val version                = platformBinaryTag(platform, platformVersion)
+        artefactName + "_" + version + trimmedCompilerVersion
 
       case VersionTag.Full =>
         val trimmedCompilerVersion = trimCompilerVendor(compilerVersion)
