@@ -104,10 +104,11 @@ class Scaffold(log: Log, silent: Boolean = false) {
     log.info(
       s"${Ansi.italic("Which test framework(s) do you need?")} [default: ${Ansi.underlined("none")}]"
     )
-    log.infoHighlight(s"${Ansi.bold("1.")} minitest")
-    log.infoHighlight(s"${Ansi.bold("2.")} ScalaTest")
-    log.infoHighlight(s"${Ansi.bold("3.")} ScalaCheck")
-    log.infoHighlight(s"${Ansi.bold("4.")} µTest")
+    log.infoHighlight(s"${Ansi.bold("1.")} MUnit")
+    log.infoHighlight(s"${Ansi.bold("2.")} minitest")
+    log.infoHighlight(s"${Ansi.bold("3.")} ScalaTest")
+    log.infoHighlight(s"${Ansi.bold("4.")} ScalaCheck")
+    log.infoHighlight(s"${Ansi.bold("5.")} µTest")
 
     import TestFramework._
     readInput[Set[TestFramework]](
@@ -115,10 +116,11 @@ class Scaffold(log: Log, silent: Boolean = false) {
         case "none" => Some(Set())
         case input =>
           val result = input.split(",").map(u => Try(u.trim.toInt)).map {
-            case Success(1) => Some(Minitest)
-            case Success(2) => Some(ScalaTest)
-            case Success(3) => Some(ScalaCheck)
-            case Success(4) => Some(Utest)
+            case Success(1) => Some(MUnit)
+            case Success(2) => Some(Minitest)
+            case Success(3) => Some(ScalaTest)
+            case Success(4) => Some(ScalaCheck)
+            case Success(5) => Some(Utest)
             case _          => None
           }
 

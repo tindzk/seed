@@ -40,6 +40,7 @@ object Artefact {
   val ScalaNativeAuxlib =
     Artefact("org.scala-native", "auxlib", Some(PlatformBinary))
 
+  val MUnit     = Artefact("org.scalameta", "munit", Some(PlatformBinary))
   val Minitest  = Artefact("io.monix", "minitest", Some(PlatformBinary))
   val ScalaTest = Artefact("org.scalatest", "scalatest", Some(PlatformBinary))
   val ScalaCheck =
