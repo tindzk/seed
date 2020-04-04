@@ -85,15 +85,16 @@ object BuildTarget {
         val modulePath = build(m).path
         val target     = build(m).module.target(t)
 
-        val moduleSourcePaths = parentModules((m, t)).flatMap { module =>
-          val targets = BuildConfig.allTargets(build, module)
-          targets
-            .flatMap {
-              case (m, t) => BuildConfig.platformModule(build(m).module, t)
-            }
-            .flatMap(_.sources)
-            .map(_.toAbsolutePath.toString)
-        }
+        val moduleSourcePaths =
+          parentModules.getOrElse((m, t), List()).flatMap { module =>
+            val targets = BuildConfig.allTargets(build, module)
+            targets
+              .flatMap {
+                case (m, t) => BuildConfig.platformModule(build(m).module, t)
+              }
+              .flatMap(_.sources)
+              .map(_.toAbsolutePath.toString)
+          }
 
         target.`class` match {
           case Some(c) =>
