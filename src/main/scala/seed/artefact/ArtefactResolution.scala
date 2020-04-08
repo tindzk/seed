@@ -215,8 +215,12 @@ object ArtefactResolution {
     platform: Platform,
     tpe: Type
   ): Set[JavaDep] = {
-    val m  = build(name).module
-    val pm = BuildConfig.platformModule(m, platform).get
+    val baseModule = build(name).module
+    val m =
+      if (tpe == Regular) baseModule
+      else baseModule.test.getOrElse(baseModule)
+    val pm = BuildConfig.platformModule(m, platform).getOrElse(m)
+
     val modules = BuildConfig
       .collectModuleDeps(
         build,
@@ -225,7 +229,7 @@ object ArtefactResolution {
         Set(platform)
       )
       .map(m => build(m).module)
-      .toSet ++ Set(m)
+      .toSet ++ Set(baseModule)
 
     if (tpe == Test)
       modules.flatMap(
