@@ -414,7 +414,9 @@ object Publish {
         log.info("Determining version from Git tag...")
         import sys.process._
         val result =
-          Try(Process("git describe --tags", projectPath.toFile).!!).toOption
+          Try(
+            Process("git describe --tags", projectPath.toAbsolutePath.toFile).!!
+          ).toOption
             .map { t =>
               val tag = t.trim
               if (!tag.startsWith("v")) tag else tag.tail
