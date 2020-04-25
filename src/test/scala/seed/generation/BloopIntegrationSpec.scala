@@ -6,18 +6,16 @@ import bloop.config.Config.JsConfig
 import bloop.config.ConfigEncoderDecoders
 import minitest.TestSuite
 import org.apache.commons.io.FileUtils
-import seed.{Log, LogLevel, cli}
+import seed.{Log, cli}
 import seed.Cli.{Command, PackageConfig}
 import seed.cli.util.RTS
 import seed.config.BuildConfig
-import seed.generation.util.TestProcessHelper
+import seed.generation.util.{CustomTargetUtil, TestProcessHelper}
 import seed.generation.util.TestProcessHelper.ec
 import seed.model.Config
 
 import scala.concurrent.Future
 import seed.generation.util.BuildUtil.tempPath
-
-import scala.collection.mutable.ListBuffer
 
 object BloopIntegrationSpec extends TestSuite[Unit] {
   override def setupSuite(): Unit    = TestProcessHelper.semaphore.acquire()
@@ -278,64 +276,39 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       }
   }
 
-  def buildCustomTarget(
+  def buildCustomTargetAndRun(
     name: String,
     expectFailure: Boolean = false
   ): Future[Either[List[String], List[String]]] = {
-    val path = Paths.get("test", name)
-
-    val config = BuildConfig.load(path, Log.urgent).get
+    val testId = "integ"
+    val (config, lines, uio) =
+      CustomTargetUtil.buildCustomTarget(name, "demo", testId)
     import config._
-    val buildPath = tempPath.resolve(name)
-    Files.createDirectory(buildPath)
-    cli.Generate.ui(
-      Config(),
-      projectPath,
-      buildPath,
-      resolvers,
-      build,
-      Command.Bloop(packageConfig),
-      Log.urgent
-    )
-
-    val lines = ListBuffer[String]()
-
-    val result = seed.cli.Build.build(
-      path,
-      Some(buildPath),
-      List("demo"),
-      watch = false,
-      tmpfs = false,
-      progress = false,
-      new Log(lines += _, identity, LogLevel.Warn, false),
-      stdOut => lines ++= stdOut.split('\n'),
-      _ => ()
-    )
-
-    val uio = result.right.get
 
     if (expectFailure)
       RTS.unsafeRunToFuture(uio).failed.map { _ =>
-        assert(lines.nonEmpty)
-        Left(lines.toList)
+        val l = lines()
+        assert(l.nonEmpty)
+        Left(l)
       } else {
       RTS.unsafeRunSync(uio)
 
       val generatedFile = projectPath.resolve("demo").resolve("Generated.scala")
       assert(Files.exists(generatedFile))
 
+      val buildPath = tempPath.resolve(testId).resolve(name)
       TestProcessHelper
         .runBloop(buildPath)("run", "demo")
         .map { x =>
           Files.delete(generatedFile)
-          assertEquals(lines.toList, List())
+          assertEquals(lines(), List())
           Right(x.split("\n").toList)
         }
     }
   }
 
   testAsync("Build project with custom class target") { _ =>
-    buildCustomTarget("custom-class-target").map(
+    buildCustomTargetAndRun("custom-class-target").map(
       lines => assertEquals(lines.right.get.count(_ == "42"), 1)
     )
   }
@@ -343,7 +316,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   testAsync(
     "Build project with custom class target (shared by multiple modules)"
   ) { _ =>
-    buildCustomTarget("custom-class-target-shared").map(
+    buildCustomTargetAndRun("custom-class-target-shared").map(
       lines =>
         assertEquals(
           lines.right.get.map(_.split("test/").last),
@@ -356,10 +329,11 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   }
 
   testAsync("Build project with custom command target") { _ =>
-    buildCustomTarget("custom-command-target").map { lines =>
+    buildCustomTargetAndRun("custom-command-target").map { lines =>
       assertEquals(lines.right.get.count(_ == "42"), 1)
 
       val path = tempPath
+        .resolve("integ")
         .resolve("custom-command-target")
         .resolve(".bloop")
         .resolve("demo.json")
@@ -377,12 +351,12 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   }
 
   testAsync("Build project with failing custom command target") { _ =>
-    buildCustomTarget("custom-command-target-fail", expectFailure = true)
+    buildCustomTargetAndRun("custom-command-target-fail", expectFailure = true)
       .map(_ => ())
   }
 
   testAsync("Build project with failing compilation") { _ =>
-    buildCustomTarget("compilation-failure", expectFailure = true).map(
+    buildCustomTargetAndRun("compilation-failure", expectFailure = true).map(
       log =>
         // Must indicate correct position
         assert(
