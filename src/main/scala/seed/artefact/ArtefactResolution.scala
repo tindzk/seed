@@ -12,6 +12,8 @@ import seed.artefact.Coursier.ResolutionResult
 import seed.config.BuildConfig
 import seed.config.BuildConfig.Build
 
+import scala.util.Try
+
 object ArtefactResolution {
   def javaDepFromScalaDep(
     dep: ScalaDep,
@@ -65,13 +67,20 @@ object ArtefactResolution {
   def jvmPlatformDeps(module: Module): Set[JavaDep] =
     scalaLibraryDeps(module.scalaOrganisation.get, module.scalaVersion.get)
 
-  def jsPlatformDeps(module: Module): Set[JavaDep] = {
+  def jsPlatformDeps(module: Module, test: Boolean): Set[JavaDep] = {
     val scalaVersion   = module.scalaVersion.get
     val scalaJsVersion = module.scalaJsVersion.get
+    val needTestBridge = SemanticVersioning
+      .parseVersion(scalaJsVersion)
+      .exists(
+        v => v.major >= 1 || (v.major == 0 && v.minor == 6 && v.patch >= 29)
+      )
 
-    Set(
-      Artefact.ScalaJsLibrary
-    ).map(
+    val base = Set(Artefact.ScalaJsLibrary)
+    val bridge =
+      if (!test || !needTestBridge) Set() else Set(Artefact.ScalaJsTestBridge)
+
+    (base ++ bridge).map(
       artefact =>
         javaDepFromArtefact(
           artefact,
@@ -231,13 +240,14 @@ object ArtefactResolution {
       .map(m => build(m).module)
       .toSet ++ Set(baseModule)
 
-    if (tpe == Test)
-      modules.flatMap(
-        _.test.fold(Set[JavaDep]())(t => libraryDeps(t, Set(platform)))
-      )
-    else
-      modules.flatMap(libraryDeps(_, Set(platform))) ++
-        platformDeps(pm, platform)
+    val moduleDeps =
+      if (tpe == Regular) modules.flatMap(libraryDeps(_, Set(platform)))
+      else
+        modules.flatMap(
+          _.test.fold(Set[JavaDep]())(t => libraryDeps(t, Set(platform)))
+        )
+
+    moduleDeps ++ platformDeps(pm, platform, tpe)
   }
 
   /** Perform resolution for all modules separately */
@@ -276,8 +286,12 @@ object ArtefactResolution {
       )
       .toSet
 
-  def platformDeps(module: Module, platform: Platform): Set[JavaDep] =
-    if (platform == JavaScript) jsPlatformDeps(module)
+  def platformDeps(
+    module: Module,
+    platform: Platform,
+    tpe: Type
+  ): Set[JavaDep] =
+    if (platform == JavaScript) jsPlatformDeps(module, tpe == Test)
     else if (platform == Native) nativePlatformDeps(module)
     else jvmPlatformDeps(module)
 

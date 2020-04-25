@@ -24,15 +24,6 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
   override def setup(): Unit             = ()
   override def tearDown(env: Unit): Unit = ()
 
-  def readBloopJson(path: Path): bloop.config.Config.File = {
-    val content = FileUtils.readFileToString(path.toFile, "UTF-8")
-
-    import io.circe.parser._
-    decode[bloop.config.Config.File](content)(
-      ConfigEncoderDecoders.allDecoder
-    ).right.get
-  }
-
   def compileAndRun(projectPath: Path) = {
     def compile =
       TestProcessHelper.runBloop(projectPath)("compile", "example").map { x =>
@@ -80,14 +71,14 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     val bloopBuildPath = buildPath.resolve("build").resolve("bloop")
 
     val bloopPath = buildPath.resolve(".bloop")
-    val root      = readBloopJson(bloopPath.resolve("root.json"))
+    val root      = util.BloopUtil.readJson(bloopPath.resolve("root.json"))
     val paths     = root.project.classpath.filter(_.startsWith(buildPath))
     assertEquals(
       paths,
       List(
         bloopBuildPath.resolve("a"),
-        bloopBuildPath.resolve("b"),
-        bloopBuildPath.resolve("shared")
+        bloopBuildPath.resolve("shared"),
+        bloopBuildPath.resolve("b")
       )
     )
   }
@@ -187,10 +178,13 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
 
     val bloopPath = buildPath.resolve(".bloop")
 
-    val macrosJvm  = readBloopJson(bloopPath.resolve("macros-jvm.json"))
-    val macrosJs   = readBloopJson(bloopPath.resolve("macros-js.json"))
-    val exampleJvm = readBloopJson(bloopPath.resolve("example-jvm.json"))
-    val exampleJs  = readBloopJson(bloopPath.resolve("example-js.json"))
+    val macrosJvm =
+      util.BloopUtil.readJson(bloopPath.resolve("macros-jvm.json"))
+    val macrosJs = util.BloopUtil.readJson(bloopPath.resolve("macros-js.json"))
+    val exampleJvm =
+      util.BloopUtil.readJson(bloopPath.resolve("example-jvm.json"))
+    val exampleJs =
+      util.BloopUtil.readJson(bloopPath.resolve("example-js.json"))
 
     def getFileName(path: String): String = path.drop(path.lastIndexOf('/') + 1)
 
@@ -337,7 +331,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
         .resolve("custom-command-target")
         .resolve(".bloop")
         .resolve("demo.json")
-      val result = readBloopJson(path)
+      val result = util.BloopUtil.readJson(path)
 
       // Do not include the `utils` classpath since the module is only a custom
       // build target and does not have a JVM target.
@@ -412,14 +406,14 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
 
     val bloopPath = buildPath.resolve(".bloop")
 
-    val root  = readBloopJson(bloopPath.resolve("example.json"))
+    val root  = util.BloopUtil.readJson(bloopPath.resolve("example.json"))
     val paths = root.project.classpath.filter(_.startsWith(buildPath))
 
     assertEquals(
       paths,
       List(
-        bloopBuildPath.resolve("base"),
-        bloopBuildPath.resolve("core")
+        bloopBuildPath.resolve("core"),
+        bloopBuildPath.resolve("base")
       )
     )
   }

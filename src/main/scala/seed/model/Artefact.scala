@@ -29,6 +29,8 @@ object Artefact {
 
   val ScalaJsCompiler = Artefact("org.scala-js", "scalajs-compiler", Some(Full))
   val ScalaJsLibrary  = Artefact("org.scala-js", "scalajs-library", Some(Binary))
+  val ScalaJsTestBridge =
+    Artefact("org.scala-js", "scalajs-test-bridge", Some(Binary))
 
   val ScalaNativePlugin = Artefact("org.scala-native", "nscplugin", Some(Full))
   val ScalaNativeJavalib =

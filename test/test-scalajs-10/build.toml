@@ -1,0 +1,13 @@
+[project]
+scalaVersion = "2.13.2"
+scalaJsVersion = "1.0.1"
+testFrameworks = ["munit.Framework"]
+
+[module.example.js]
+root = "."
+sources = ["src"]
+
+[module.example.test.js]
+sources = ["test"]
+scalaDeps = [["org.scalameta", "munit", "0.7.4"]]
+moduleKind = "commonjs"

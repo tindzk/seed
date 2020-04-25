@@ -14,7 +14,7 @@ import seed.config.BuildConfig.{
 }
 import seed.artefact.{ArtefactResolution, Coursier}
 import seed.cli.util.Ansi
-import seed.model.Build.Module
+import seed.model.Build.{Module, ModuleKindJs}
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.model.Resolution
 import seed.Log
@@ -53,8 +53,7 @@ object Bloop {
       dependencies = dependencies,
       classpath = scalaCompiler.fold(List[Path]())(
         sc =>
-          (sc.libraries.map(_.libraryJar) ++
-            sc.classPath.map(_.toAbsolutePath)).sorted
+          sc.libraries.map(_.libraryJar) ++ sc.classPath.map(_.toAbsolutePath)
       ),
       out = classesDir.toAbsolutePath,
       classesDir = classesDir.toAbsolutePath,
@@ -65,7 +64,7 @@ object Bloop {
             name = "scala-compiler",
             version = scalaCompiler.scalaVersion,
             options = scalaOptions,
-            jars = scalaCompiler.compilerJars.sorted,
+            jars = scalaCompiler.compilerJars,
             analysis = Some(classesDir.resolve("analysis.bin").toAbsolutePath),
             setup = Some(
               Config.CompileSetup(
@@ -156,6 +155,7 @@ object Bloop {
     module.js.foreach { js =>
       val jsdom          = js.jsdom
       val emitSourceMaps = js.emitSourceMaps
+      val moduleKind     = js.moduleKind
       val mainClass      = js.mainClass
 
       val bloopName = if (!test) name else name + "-test"
@@ -183,7 +183,7 @@ object Bloop {
                 js.scalaVersion.get
               )
           )
-          .toSet ++ ArtefactResolution.jsPlatformDeps(js),
+          .toSet ++ ArtefactResolution.jsPlatformDeps(js, test),
         optionalArtefacts
       )
       val dependencies =
@@ -221,7 +221,10 @@ object Bloop {
             Config.JsConfig(
               version = js.scalaJsVersion.get,
               mode = Config.LinkerMode.Debug,
-              kind = Config.ModuleKindJS.NoModule,
+              kind = moduleKind match {
+                case ModuleKindJs.Default  => Config.ModuleKindJS.NoModule
+                case ModuleKindJs.CommonJs => Config.ModuleKindJS.CommonJSModule
+              },
               emitSourceMaps = emitSourceMaps,
               jsdom = Some(jsdom),
               output = jsOutputPath,
