@@ -1,0 +1,17 @@
+[project]
+scalaVersion = "2.13.0"
+
+[module.foo.jvm]
+sources = ["foo/src"]
+
+[module.foo.test.jvm]
+sources   = ["foo/test"]
+scalaDeps = [["org.scalatest", "scalatest", "3.0.8"]]
+
+[module.bar.jvm]
+sources = ["bar/src"]
+
+# Should inherit scalaDeps from [module.foo.test.jvm]
+[module.bar.test.jvm]
+moduleDeps = ["foo"]
+sources    = ["bar/test"]

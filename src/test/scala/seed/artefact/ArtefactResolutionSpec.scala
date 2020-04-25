@@ -130,6 +130,35 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
     )
   }
 
+  test("Derive runtime libraries from test module (3)") {
+    // Child module should inherit libraries of parent module
+    val path = new File("test", "test-inherit-deps")
+    val tomlBuild =
+      FileUtils.readFileToString(new File(path, "build.toml"), "UTF-8")
+    val build = BuildConfigSpec.parseBuild(tomlBuild)(_ => "")
+
+    val libs = ArtefactResolution.allRuntimeLibs(build)
+    assertEquals(
+      libs,
+      Map(
+        ("foo", JVM, Regular) -> Set(
+          JavaDep("org.scala-lang", "scala-library", "2.13.0"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.13.0")
+        ),
+        ("foo", JVM, Test) -> Set(
+          JavaDep("org.scalatest", "scalatest_2.13", "3.0.8")
+        ),
+        ("bar", JVM, Regular) -> Set(
+          JavaDep("org.scala-lang", "scala-library", "2.13.0"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.13.0")
+        ),
+        ("bar", JVM, Test) -> Set(
+          JavaDep("org.scalatest", "scalatest_2.13", "3.0.8")
+        )
+      )
+    )
+  }
+
   test("jvmDeps()") {
     val module = Module(
       scalaVersion = Some("2.12.8"),
