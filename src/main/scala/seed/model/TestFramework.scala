@@ -6,6 +6,7 @@ sealed abstract class TestFramework(
 )
 
 object TestFramework {
+  case object MUnit extends TestFramework(Artefact.MUnit, "munit.Framework")
   case object Minitest
       extends TestFramework(Artefact.Minitest, "minitest.runner.Framework")
   case object ScalaTest

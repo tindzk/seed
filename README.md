@@ -434,6 +434,7 @@ If you add a test framework, make sure that `testFrameworks` in `project` contai
 * **ScalaCheck:** `org.scalacheck.ScalaCheckFramework`
 * **MiniTest:** `minitest.runner.Framework`
 * **µTest:** `utest.runner.Framework`
+* **MUnit:** `munit.Framework`
 
 In Bloop, you can run the test suites as follows: `bloop test myModule` which is short for `bloop test myModule-test`. The latter depends on `myModule-js-test` and `myModule-jvm-test`.
 
