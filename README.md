@@ -333,6 +333,7 @@ jsdom          = false  # Import the jsdom library in the generated.
                         # yarn/npm. Useful for test cases that rely
                         # on DOM operations.
 emitSourceMaps = true   # Emit source maps
+moduleKind     = "default"  # Options: default, commonjs
 output         = "myModule.js"  # Path to generated file
                                 # Default: <module name>.js
 ```

@@ -98,6 +98,12 @@ object Build {
       )
   }
 
+  sealed trait ModuleKindJs
+  object ModuleKindJs {
+    case object Default  extends ModuleKindJs
+    case object CommonJs extends ModuleKindJs
+  }
+
   // TODO Instead of using this `case class` directly, create a polymorphic
   //      version for different platform types
   case class Module(
@@ -122,6 +128,7 @@ object Build {
     // --- JavaScript
     jsdom: Boolean = false,
     emitSourceMaps: Boolean = true,
+    moduleKind: ModuleKindJs = ModuleKindJs.Default,
     // --- Native
     gc: Option[String] = None,
     targetTriple: Option[String] = None,

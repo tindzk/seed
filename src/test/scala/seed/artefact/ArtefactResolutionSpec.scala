@@ -11,7 +11,7 @@ import seed.Log
 import seed.artefact.ArtefactResolution.{Regular, Test}
 import seed.config.BuildConfig.ModuleConfig
 import seed.config.{BuildConfig, BuildConfigSpec}
-import seed.generation.util.ProjectGeneration
+import seed.generation.util.{BloopUtil, ProjectGeneration}
 import seed.model.Build.{JavaDep, Module, Resolvers, ScalaDep, VersionTag}
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.generation.util.BuildUtil.tempPath
@@ -84,7 +84,9 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
           JavaDep("org.scala-lang", "scala-reflect", "2.12.8")
         ),
         ("a", JVM, Test) -> Set(
-          JavaDep("io.monix", "minitest_2.12", "2.3.2")
+          JavaDep("io.monix", "minitest_2.12", "2.3.2"),
+          JavaDep("org.scala-lang", "scala-library", "2.12.8"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.12.8")
         ),
         ("a", JavaScript, Regular) -> Set(
           JavaDep("org.scala-js", "scalajs-library_2.12", "0.6.26"),
@@ -92,7 +94,10 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
           JavaDep("org.scala-lang", "scala-reflect", "2.12.8")
         ),
         ("a", JavaScript, Test) -> Set(
-          JavaDep("io.monix", "minitest_sjs0.6_2.12", "2.3.2")
+          JavaDep("io.monix", "minitest_sjs0.6_2.12", "2.3.2"),
+          JavaDep("org.scala-js", "scalajs-library_2.12", "0.6.26"),
+          JavaDep("org.scala-lang", "scala-library", "2.12.8"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.12.8")
         )
       )
     )
@@ -115,7 +120,9 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
           JavaDep("org.scala-lang", "scala-reflect", "2.11.11")
         ),
         ("example", JVM, Test) -> Set(
-          JavaDep("org.scalatest", "scalatest_2.11", "3.0.8")
+          JavaDep("org.scalatest", "scalatest_2.11", "3.0.8"),
+          JavaDep("org.scala-lang", "scala-library", "2.11.11"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.11.11")
         ),
         ("example", Native, Regular) -> Set(
           JavaDep("org.scala-lang", "scala-reflect", "2.11.11"),
@@ -125,7 +132,14 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
           JavaDep("org.scala-native", "nativelib_native0.3_2.11", "0.3.7"),
           JavaDep("org.scala-native", "auxlib_native0.3_2.11", "0.3.7")
         ),
-        ("example", Native, Test) -> Set()
+        ("example", Native, Test) -> Set(
+          JavaDep("org.scala-lang", "scala-reflect", "2.11.11"),
+          JavaDep("org.scala-lang", "scala-library", "2.11.11"),
+          JavaDep("org.scala-native", "javalib_native0.3_2.11", "0.3.7"),
+          JavaDep("org.scala-native", "scalalib_native0.3_2.11", "0.3.7"),
+          JavaDep("org.scala-native", "nativelib_native0.3_2.11", "0.3.7"),
+          JavaDep("org.scala-native", "auxlib_native0.3_2.11", "0.3.7")
+        )
       )
     )
   }
@@ -146,14 +160,18 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
           JavaDep("org.scala-lang", "scala-reflect", "2.13.0")
         ),
         ("foo", JVM, Test) -> Set(
-          JavaDep("org.scalatest", "scalatest_2.13", "3.0.8")
+          JavaDep("org.scalatest", "scalatest_2.13", "3.0.8"),
+          JavaDep("org.scala-lang", "scala-library", "2.13.0"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.13.0")
         ),
         ("bar", JVM, Regular) -> Set(
           JavaDep("org.scala-lang", "scala-library", "2.13.0"),
           JavaDep("org.scala-lang", "scala-reflect", "2.13.0")
         ),
         ("bar", JVM, Test) -> Set(
-          JavaDep("org.scalatest", "scalatest_2.13", "3.0.8")
+          JavaDep("org.scalatest", "scalatest_2.13", "3.0.8"),
+          JavaDep("org.scala-lang", "scala-library", "2.13.0"),
+          JavaDep("org.scala-lang", "scala-reflect", "2.13.0")
         )
       )
     )
@@ -347,7 +365,6 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
   }
 
   import seed.generation.BloopIntegrationSpec.packageConfig
-  import seed.generation.BloopIntegrationSpec.readBloopJson
 
   test("Resolve library versions requested by modules") {
     val projectPath = Paths.get("test", "resolve-dep-versions")
@@ -367,10 +384,10 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
 
     val bloopPath = buildPath.resolve(".bloop")
 
-    val a        = readBloopJson(bloopPath.resolve("a.json"))
-    val b        = readBloopJson(bloopPath.resolve("b.json"))
-    val example1 = readBloopJson(bloopPath.resolve("example1.json"))
-    val example2 = readBloopJson(bloopPath.resolve("example2.json"))
+    val a        = BloopUtil.readJson(bloopPath.resolve("a.json"))
+    val b        = BloopUtil.readJson(bloopPath.resolve("b.json"))
+    val example1 = BloopUtil.readJson(bloopPath.resolve("example1.json"))
+    val example2 = BloopUtil.readJson(bloopPath.resolve("example2.json"))
 
     def artefact(path: Path): String = path.getFileName.toString
 
@@ -459,6 +476,55 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
         "scala-compiler-2.12.4-bin-typelevel-4.jar",
         "scala-library-2.12.4-bin-typelevel-4.jar",
         "scala-reflect-2.12.4-bin-typelevel-4.jar"
+      )
+    )
+  }
+
+  test("Do not resolve test bridge for Scala.js < 0.6.29") {
+    val module = Module(
+      targets = List(JavaScript),
+      scalaVersion = Some("2.13.2"),
+      scalaJsVersion = Some("0.6.28"),
+      scalaOrganisation = Some("org.scala-lang"),
+      test = Some(Module(sources = List(Paths.get("test"))))
+    )
+
+    val jsDeps = ArtefactResolution.jsPlatformDeps(
+      BuildConfig.inheritSettings(Module())(module).test.get.js.get,
+      true
+    )
+
+    assertEquals(
+      jsDeps,
+      Set(
+        JavaDep("org.scala-lang", "scala-library", "2.13.2"),
+        JavaDep("org.scala-lang", "scala-reflect", "2.13.2"),
+        JavaDep("org.scala-js", "scalajs-library_2.13", "0.6.28")
+      )
+    )
+  }
+
+  test("Resolve test bridge for Scala.js >= 0.6.29") {
+    val module = Module(
+      targets = List(JavaScript),
+      scalaVersion = Some("2.13.2"),
+      scalaJsVersion = Some("0.6.29"),
+      scalaOrganisation = Some("org.scala-lang"),
+      test = Some(Module(sources = List(Paths.get("test"))))
+    )
+
+    val jsDeps = ArtefactResolution.jsPlatformDeps(
+      BuildConfig.inheritSettings(Module())(module).test.get.js.get,
+      true
+    )
+
+    assertEquals(
+      jsDeps,
+      Set(
+        JavaDep("org.scala-lang", "scala-library", "2.13.2"),
+        JavaDep("org.scala-lang", "scala-reflect", "2.13.2"),
+        JavaDep("org.scala-js", "scalajs-library_2.13", "0.6.29"),
+        JavaDep("org.scala-js", "scalajs-test-bridge_2.13", "0.6.29")
       )
     )
   }

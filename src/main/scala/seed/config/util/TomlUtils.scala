@@ -5,7 +5,7 @@ import java.nio.file.{Path, Paths}
 import org.apache.commons.io.FileUtils
 import seed.{Log, LogLevel}
 import seed.cli.util.Ansi
-import seed.model.Build.{PlatformModule, VersionTag}
+import seed.model.Build.{ModuleKindJs, PlatformModule, VersionTag}
 import seed.model.{Licence, Platform, TomlBuild}
 import toml.{Codec, Value}
 
@@ -68,6 +68,18 @@ object TomlUtils {
 
       case (value, _, _) =>
         Left((List(), s"Version tag expected, $value provided"))
+    }
+
+    implicit val moduleKindJs: Codec[ModuleKindJs] = Codec {
+      case (Value.Str(id), _, _) =>
+        id match {
+          case "default"  => Right(ModuleKindJs.Default)
+          case "commonjs" => Right(ModuleKindJs.CommonJs)
+          case _          => Left((List(), "Invalid module kind provided"))
+        }
+
+      case (value, _, _) =>
+        Left((List(), s"Module kind expected, $value provided"))
     }
 
     implicit val licenceCodec: Codec[Licence] = Codec {
