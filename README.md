@@ -35,7 +35,7 @@ You can either install Seed via Coursier or use a self-contained Docker image.
 The following prerequisites are needed:
 
 * **JVM**
-* **Bloop**: Bloop serves the function of compiling your projects. The latest version should work since Bloop configurations strive for backward compatibility. If you encounter any problems, you can always install the version Seed is targeting which is indicated in `seed info`.
+* **Bloop**: Bloop serves the function of compiling your projects. The latest version should work since Bloop configurations strive for backward compatibility. If you encounter any problems, you can always install the version Seed is targeting which is indicated in `seed version`.
 * **JavaScript:** [Node.js](https://nodejs.org/en/download/) needs to be installed if you want to run the project or its tests.
 * **LLVM:** For Scala Native projects to link, LLVM needs to be installed. Please refer to the [Scala Native documentation](http://www.scala-native.org/en/latest/user/setup.html) for more information.
 
