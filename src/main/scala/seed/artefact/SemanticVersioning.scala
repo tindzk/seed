@@ -41,7 +41,7 @@ object SemanticVersioning {
     minor: Int = 0,
     patch: Int = 0,
     preRelease: Option[PreRelease] = None,
-    preReleaseVersion: Long = 0
+    preReleaseVersion: List[Long] = List()
   )
 
   def isPreRelease(version: String): Boolean =
@@ -55,11 +55,13 @@ object SemanticVersioning {
       Some((parts(0).toInt, parts(1).toInt, parts(2).toInt))
     else None
 
-  def parsePreReleaseParts(parts: List[String]): (Option[PreRelease], Long) = {
+  def parsePreReleaseParts(
+    parts: List[String]
+  ): (Option[PreRelease], List[Long]) = {
     val preReleaseComponent =
       parts.find(p => p.length > 1 && p(0).isLetter).map(_.toLowerCase)
-    val versionComponent =
-      parts.find(p => p.length > 0 && p.forall(_.isDigit)).map(_.toLong)
+    val versionComponents =
+      parts.filter(p => p.length > 0 && p.forall(_.isDigit)).map(_.toLong)
 
     preReleaseComponent
       .flatMap { prc =>
@@ -67,20 +69,15 @@ object SemanticVersioning {
           case (prefix, preRelease) =>
             if (!prc.startsWith(prefix)) None
             else {
-              val v = versionComponent.getOrElse {
-                val version = prc.drop(prefix.length)
-                if (version.nonEmpty && version.forall(_.isDigit))
-                  version.toLong
-                else if (parts.length >= 2 && parts(1).nonEmpty && parts(1)
-                           .forall(_.isDigit)) parts(1).toLong
-                else 0L
-              }
-
-              Some((Some(preRelease), v))
+              val version = prc.drop(prefix.length)
+              val v =
+                if (version.isEmpty || !version.forall(_.isDigit)) List()
+                else List(version.toLong)
+              Some((Some(preRelease), v ++ versionComponents))
             }
         }.headOption
       }
-      .getOrElse((None, versionComponent.getOrElse(0L)))
+      .getOrElse((None, versionComponents))
   }
 
   def parseVersion(version: String): Option[Version] = {
@@ -109,9 +106,21 @@ object SemanticVersioning {
 
   private val comparator = new NaturalOrderComparator
 
+  implicit private val preReleaseVersionOrdering = new Ordering[List[Long]] {
+    // From https://stackoverflow.com/a/3137980/13300239
+    override def compare(l1: List[Long], l2: List[Long]): Int = {
+      for ((x, y) <- l1.zip(l2)) {
+        val c = x.compare(y)
+        if (c != 0) return c
+      }
+
+      l1.length - l2.length
+    }
+  }
+
   implicit val versionOrdering = new Ordering[Version] {
     override def compare(v1: Version, v2: Version): Int =
-      implicitly[Ordering[(Int, Int, Int, Int, Long)]].compare(
+      implicitly[Ordering[(Int, Int, Int, Int, List[Long])]].compare(
         (
           v1.major,
           v1.minor,

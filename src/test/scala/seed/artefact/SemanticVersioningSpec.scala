@@ -17,17 +17,17 @@ object SemanticVersioningSpec extends SimpleTestSuite {
     assertEquals(parseVersion("1.0.0"), Some(Version(1, 0, 0)))
     assertEquals(
       parseVersion("1.0.0-rc"),
-      Some(Version(1, 0, 0, Some(ReleaseCandidate), 0))
+      Some(Version(1, 0, 0, Some(ReleaseCandidate), List()))
     )
     assertEquals(
       parseVersion("1.0.0-rc.1"),
-      Some(Version(1, 0, 0, Some(ReleaseCandidate), 1))
+      Some(Version(1, 0, 0, Some(ReleaseCandidate), List(1)))
     )
 
     // From https://repo1.maven.org/maven2/org/eclipse/jgit/org.eclipse.jgit/maven-metadata.xml
     assertEquals(
       parseVersion("1.3.0.201202151440-r"),
-      Some(Version(1, 3, 0, None, 201202151440L))
+      Some(Version(1, 3, 0, None, List(201202151440L)))
     )
   }
 
@@ -44,19 +44,19 @@ object SemanticVersioningSpec extends SimpleTestSuite {
   test("Parse Scala's semantic versioning") {
     assertEquals(
       parseVersion("1.0.0-M3"),
-      Some(Version(1, 0, 0, Some(Milestone), 3))
+      Some(Version(1, 0, 0, Some(Milestone), List(3)))
     )
     assertEquals(
       parseVersion("3.2.0-SNAP10"),
-      Some(Version(3, 2, 0, Some(Snapshot), 10))
+      Some(Version(3, 2, 0, Some(Snapshot), List(10)))
     )
     assertEquals(
       parseVersion("2.12.0-RC2"),
-      Some(Version(2, 12, 0, Some(ReleaseCandidate), 2))
+      Some(Version(2, 12, 0, Some(ReleaseCandidate), List(2)))
     )
     assertEquals(
       parseVersion("2.11.11-bin-typelevel-4"),
-      Some(Version(2, 11, 11, None, 4))
+      Some(Version(2, 11, 11, None, List(4)))
     )
     assertEquals(
       parseVersion("0.1.2-SNAPSHOT"),
@@ -64,16 +64,16 @@ object SemanticVersioningSpec extends SimpleTestSuite {
     )
     assertEquals(
       parseVersion("2.9.0.RC4"),
-      Some(Version(2, 9, 0, Some(ReleaseCandidate), 4))
+      Some(Version(2, 9, 0, Some(ReleaseCandidate), List(4)))
     )
-    assertEquals(parseVersion("2.9.0-1"), Some(Version(2, 9, 0, None, 1)))
+    assertEquals(parseVersion("2.9.0-1"), Some(Version(2, 9, 0, None, List(1))))
     assertEquals(
       parseVersion("2.8.0.Beta1-RC1"),
-      Some(Version(2, 8, 0, Some(Beta), 1))
+      Some(Version(2, 8, 0, Some(Beta), List(1)))
     )
     assertEquals(
       parseVersion("2.8.0.r18462-b20090811081019"),
-      Some(Version(2, 8, 0, Some(Snapshot), 18462))
+      Some(Version(2, 8, 0, Some(Snapshot), List(18462)))
     )
 
     // From https://semver.org/:
@@ -88,6 +88,19 @@ object SemanticVersioningSpec extends SimpleTestSuite {
     assertEquals(Random.shuffle(versions).sorted(versionOrdering), versions)
   }
 
+  test("Parse pre-release parts") {
+    assert(parsePreReleaseParts(List("RC")) == Some(ReleaseCandidate) -> List())
+    assert(
+      parsePreReleaseParts(List("RC1")) == Some(ReleaseCandidate) -> List(1)
+    )
+    assert(
+      parsePreReleaseParts(List("RC1", "2")) == Some(ReleaseCandidate) -> List(
+        1,
+        2
+      )
+    )
+  }
+
   test("Compare pre-release versions") {
     // From https://mvnrepository.com/artifact/org.scalactic/scalactic_2.12
     assert(parseVersion("3.0.5") > parseVersion("3.0.5-M1"))
@@ -95,6 +108,21 @@ object SemanticVersioningSpec extends SimpleTestSuite {
     assert(parseVersion("3.0.6-SNAP6") > parseVersion("3.0.6-SNAP5"))
     assert(parseVersion("3.0.6-SNAP10") > parseVersion("3.0.6-SNAP6"))
     assert(parseVersion("3.1.0-RC1") > parseVersion("3.1.0-SNAP13"))
+  }
+
+  test("Compare pre-release versions (2)") {
+    // From https://mvnrepository.com/artifact/dev.zio/zio
+    assert(parseVersion("1.0.0-RC18-2") > parseVersion("1.0.0-RC18-1"))
+    assert(parseVersion("1.0.0-RC18-1") > parseVersion("1.0.0-RC18"))
+
+    val versions = List(
+      "1.0.0-RC12-1",
+      "1.0.0-RC13",
+      "1.0.0-RC18",
+      "1.0.0-RC18-1",
+      "1.0.0-RC18-2"
+    )
+    assertEquals(Random.shuffle(versions).sorted(versionOrdering), versions)
   }
 
   test("Order Scala's semantic versions") {
@@ -121,9 +149,9 @@ object SemanticVersioningSpec extends SimpleTestSuite {
     val versions = List("0.1.1", "0.1.1-14-g80f67e7", "0.1.1-20-gac74eb0g")
     val parsed   = versions.map(parseVersion)
 
-    assertEquals(parsed(0), Some(Version(0, 1, 1, None, 0)))
-    assertEquals(parsed(1), Some(Version(0, 1, 1, Some(Commit), 14)))
-    assertEquals(parsed(2), Some(Version(0, 1, 1, Some(Commit), 20)))
+    assertEquals(parsed(0), Some(Version(0, 1, 1, None, List())))
+    assertEquals(parsed(1), Some(Version(0, 1, 1, Some(Commit), List(14))))
+    assertEquals(parsed(2), Some(Version(0, 1, 1, Some(Commit), List(20))))
 
     assert(!isPreRelease(versions(0)))
     assert(isPreRelease(versions(1)))
