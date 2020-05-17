@@ -12,6 +12,7 @@ object IdeaFile {
     projectId: String,
     rootPath: String,
     sourcePaths: List[String],
+    resourcePaths: List[String],
     testPaths: List[String],
     libraries: List[String],
     testLibraries: List[String],
@@ -41,6 +42,10 @@ object IdeaFile {
       xml"""<sourceFolder url="file://$path" isTestSource="false" />"""
     }
 
+    val resourceFolders = module.resourcePaths.map { path =>
+      xml"""<sourceFolder url="file://$path" type="java-resource" />"""
+    }
+
     val testFolders = module.testPaths.map { path =>
       xml"""<sourceFolder url="file://$path" isTestSource="true" />"""
     }
@@ -65,6 +70,7 @@ object IdeaFile {
         <exclude-output />
         <content url="file://${module.rootPath}">
           $sourceFolders
+          $resourceFolders
           $testFolders
         </content>
         <orderEntry type="inheritedJdk" />
