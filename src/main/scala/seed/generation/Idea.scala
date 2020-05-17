@@ -71,6 +71,7 @@ object Idea {
     root: Path,
     name: String,
     sources: List[Path],
+    resources: List[Path],
     tests: List[Path],
     resolvedDeps: List[Resolution.Artefact],
     resolvedTestDeps: List[Resolution.Artefact],
@@ -112,6 +113,7 @@ object Idea {
         projectId = name,
         rootPath = normalisePath(ModuleDir, modulesPath)(root),
         sourcePaths = sources.map(normalisePath(ModuleDir, modulesPath)),
+        resourcePaths = resources.map(normalisePath(ModuleDir, modulesPath)),
         testPaths = tests.map(normalisePath(ModuleDir, modulesPath)),
         libraries = List(scalaDep) ++
           filteredResolvedDeps.map(_.libraryJar.getFileName.toString),
@@ -257,9 +259,10 @@ object Idea {
   ): List[String] = {
     val isCrossBuild = BuildConfig.isCrossBuild(module)
 
-    val jsModule  = module.js.getOrElse(Module())
-    val jsSources = jsModule.sources
-    val jsTests   = module.test.toList.flatMap(_.js.toList.flatMap(_.sources))
+    val jsModule    = module.js.getOrElse(Module())
+    val jsSources   = jsModule.sources
+    val jsResources = jsModule.resources
+    val jsTests     = module.test.toList.flatMap(_.js.toList.flatMap(_.sources))
     val js =
       if (!module.targets.contains(JavaScript)) List()
       else {
@@ -278,6 +281,7 @@ object Idea {
             root = jsModule.root.get,
             name = moduleName,
             sources = jsSources,
+            resources = jsResources,
             tests = jsTests,
             resolvedDeps = Coursier.localArtefacts(
               resolution((name, JavaScript, Regular)),
@@ -332,9 +336,10 @@ object Idea {
         }
       }
 
-    val jvmModule  = module.jvm.getOrElse(Module())
-    val jvmSources = jvmModule.sources
-    val jvmTests   = module.test.toList.flatMap(_.jvm.toList.flatMap(_.sources))
+    val jvmModule    = module.jvm.getOrElse(Module())
+    val jvmSources   = jvmModule.sources
+    val jvmResources = jvmModule.resources
+    val jvmTests     = module.test.toList.flatMap(_.jvm.toList.flatMap(_.sources))
     val jvm =
       if (!module.targets.contains(JVM)) List()
       else {
@@ -353,6 +358,7 @@ object Idea {
             root = jvmModule.root.get,
             name = moduleName,
             sources = jvmSources,
+            resources = jvmResources,
             tests = jvmTests,
             resolvedDeps = Coursier.localArtefacts(
               resolution((name, JVM, Regular)),
@@ -410,8 +416,9 @@ object Idea {
         }
       }
 
-    val nativeModule  = module.native.getOrElse(Module())
-    val nativeSources = nativeModule.sources
+    val nativeModule    = module.native.getOrElse(Module())
+    val nativeSources   = nativeModule.sources
+    val nativeResources = nativeModule.resources
     val nativeTests =
       module.test.toList.flatMap(_.native.toList.flatMap(_.sources))
     val native =
@@ -432,6 +439,7 @@ object Idea {
             root = nativeModule.root.get,
             name = moduleName,
             sources = nativeSources,
+            resources = nativeResources,
             tests = nativeTests,
             resolvedDeps = Coursier.localArtefacts(
               resolution((name, Native, Regular)),
@@ -486,8 +494,9 @@ object Idea {
         }
       }
 
-    val sharedSources = module.sources
-    val sharedTests   = module.test.toList.flatMap(_.sources)
+    val sharedSources   = module.sources
+    val sharedResources = module.resources
+    val sharedTests     = module.test.toList.flatMap(_.sources)
     val shared =
       if (module.root.isEmpty) {
         if (sharedSources.nonEmpty || sharedTests.nonEmpty)
@@ -510,6 +519,7 @@ object Idea {
           root = module.root.get,
           name = name,
           sources = sharedSources,
+          resources = sharedResources,
           tests = sharedTests,
           resolvedDeps = Coursier.localArtefacts(
             resolution((name, platform, Regular)),
@@ -581,6 +591,7 @@ object Idea {
             root = target.root.get,
             name = moduleName,
             sources = List(),
+            resources = List(),
             tests = List(),
             resolvedDeps = List(),
             resolvedTestDeps = List(),

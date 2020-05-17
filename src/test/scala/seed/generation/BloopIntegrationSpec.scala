@@ -436,4 +436,24 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       Log.urgent
     )
   }
+
+  testAsync("Run JVM project with resource path set") { _ =>
+    val config =
+      BuildConfig.load(Paths.get("test", "example-resources"), Log.urgent).get
+    import config._
+    val buildPath = tempPath.resolve("example-resources")
+    Files.createDirectory(buildPath)
+    cli.Generate.ui(
+      Config(),
+      projectPath,
+      buildPath,
+      resolvers,
+      build,
+      Command.Bloop(packageConfig),
+      Log.urgent
+    )
+    TestProcessHelper
+      .runBloop(buildPath)("run", "example")
+      .map(x => assert(x.endsWith("hello world\n")))
+  }
 }

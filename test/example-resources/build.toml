@@ -1,0 +1,7 @@
+[project]
+scalaVersion = "2.11.11"
+
+[module.example.jvm]
+root      = "."
+sources   = ["src/"]
+resources = ["resources/"]

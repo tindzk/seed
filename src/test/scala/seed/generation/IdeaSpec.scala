@@ -525,4 +525,47 @@ object IdeaSpec extends SimpleTestSuite {
       Log.urgent
     )
   }
+
+  test("Generate project with resource folder") {
+    import pine._
+    val (result, outputPath) = createProject("example-resources")
+
+    cli.Generate.ui(
+      Config(),
+      result.projectPath,
+      outputPath,
+      result.resolvers,
+      result.build,
+      Command.Idea(packageConfig),
+      Log.urgent
+    )
+
+    val ideaPath = outputPath.resolve(".idea")
+    val exampleModule =
+      pine.XmlParser.fromString(
+        FileUtils.readFileToString(
+          ideaPath.resolve("modules").resolve("example.iml").toFile,
+          "UTF-8"
+        )
+      )
+
+    def updateAttr[TagName <: Singleton with String](
+      tag: Tag[TagName],
+      attribute: String,
+      f: String => String
+    ): Tag[TagName] =
+      if (!tag.hasAttr(attribute)) tag
+      else tag.setAttr(attribute, f(tag.attr(attribute).get))
+
+    val sourceFolders = exampleModule
+      .byTagAll["sourceFolder"]
+      .map(updateAttr(_, "url", v => v.drop(v.lastIndexOf('/'))))
+    assertEquals(
+      sourceFolders,
+      List(
+        xml"""<sourceFolder url="/src" isTestSource="false" />""",
+        xml"""<sourceFolder url="/resources" type="java-resource" />"""
+      )
+    )
+  }
 }
