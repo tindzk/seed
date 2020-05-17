@@ -411,14 +411,24 @@ object Bsp {
     val (bspSocketPath, bspProcess) = runBspServer(
       projectPath,
       new Log(log.f, log.map, log.level, log.unicode) {
-        override def error(message: String, detail: Boolean = false): Unit =
-          // This message is printed to stderr, but it is not an error, therefore
-          // change log level to 'debug'
-          if (message.contains("BSP server cancelled, closing socket..."))
-            // Remove "[E] " from message
-            debug(message.dropWhile(_ != ' ').tail)
-          else
-            super.error(message, detail)
+        override def error(message: String, detail: Boolean = false): Unit = {
+          // Remove log level ("[E] ") from message since it contains escape
+          // codes. Furthermore, the tab character is replaced by spaces.
+          // These fixes are needed to prevent graphical glitches when the
+          // progress bars are updated.
+          val messageText =
+            (if (message.contains(' ')) message.dropWhile(_ != ' ').tail
+             else message).replaceAllLiterally("\t", "  ")
+
+          if (messageText.trim.nonEmpty) {
+            // This message is printed to stderr, but it is not an error,
+            // therefore change the log level to 'debug'
+            if (messageText.contains("BSP server cancelled, closing socket..."))
+              debug(messageText)
+            else
+              super.error(messageText, detail)
+          }
+        }
       },
       message => log.debug(Ansi.bold("[BSP] ") + message)
     )
