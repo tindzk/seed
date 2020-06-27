@@ -5,6 +5,8 @@
 package com.mkyong;
 
 import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
@@ -15,30 +17,30 @@ public class Application {
     public static void main(String[] args) throws IOException {
 
         Application main = new Application();
-        File file = main.getFileFromResources("test.txt");
+        InputStream stream = main.getFileFromResources("test.txt");
 
-        printFile(file);
+        printStream(stream);
     }
 
     // get file from classpath, resources folder
-    private File getFileFromResources(String fileName) {
+    private InputStream getFileFromResources(String fileName) {
 
         ClassLoader classLoader = getClass().getClassLoader();
 
-        URL resource = classLoader.getResource(fileName);
+        InputStream resource = classLoader.getResourceAsStream(fileName);
         if (resource == null) {
-            throw new IllegalArgumentException("file is not found!");
+            throw new IllegalArgumentException("File not found");
         } else {
-            return new File(resource.getFile());
+            return resource;
         }
 
     }
 
-    private static void printFile(File file) throws IOException {
+    private static void printStream(InputStream stream) throws IOException {
 
-        if (file == null) return;
+        if (stream == null) return;
 
-        try (FileReader reader = new FileReader(file);
+        try (InputStreamReader reader = new InputStreamReader(stream);
              BufferedReader br = new BufferedReader(reader)) {
 
             String line;
