@@ -48,11 +48,11 @@ object Package {
 
         if (paths.isEmpty) log.error("No build paths were found")
         else {
-          val files = collectFiles(paths)
-
           val resolvedModule = build(module)
           val jvmModule =
             resolvedModule.module.jvm.getOrElse(resolvedModule.module)
+
+          val files = collectFiles(paths) ++ collectFiles(jvmModule.resources)
 
           val classPath =
             if (!libs) List()

@@ -5,3 +5,4 @@ scalaVersion = "2.11.11"
 root      = "."
 sources   = ["src/"]
 resources = ["resources/"]
+mainClass = "com.mkyong.Application"
