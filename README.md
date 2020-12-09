@@ -168,6 +168,8 @@ This compiles the module to `build/` and runs it.
     * Tiny code base
 
 ## Build Configuration
+The [TOML file format](https://github.com/toml-lang/toml) is used for all configuration files. A language extension was enabled to [allow line breaks in inline tables](https://github.com/toml-lang/toml/issues/516).
+
 The default build file is named `build.toml`. You can specify a custom path with the `--build` parameter. A build file corresponds to a *project* which can contain multiple *modules*.
 
 This section explains the components of build configurations and provides examples you can use in your own build files.

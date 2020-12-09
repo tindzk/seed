@@ -19,17 +19,27 @@ object ScaffoldSpec extends SimpleTestSuite {
     )
 
     val project = result.nodes(0).asInstanceOf[NamedTable]
-    assert(project.values("scalaVersion").asInstanceOf[Str].value.nonEmpty)
     assert(
-      project.values("scalaNativeVersion").asInstanceOf[Str].value.nonEmpty
+      project.values.toMap
+        .apply("scalaVersion")
+        .asInstanceOf[Str]
+        .value
+        .nonEmpty
     )
-    assert(!project.values.isDefinedAt("testFrameworks"))
+    assert(
+      project.values.toMap
+        .apply("scalaNativeVersion")
+        .asInstanceOf[Str]
+        .value
+        .nonEmpty
+    )
+    assert(!project.values.toMap.isDefinedAt("testFrameworks"))
 
     val module = result.nodes(1).asInstanceOf[NamedTable]
     assertEquals(module.ref, List("module", "example", "native"))
     assertEquals(
       module.values,
-      Map("root" -> Str("."), "sources" -> Arr(List(Str("src"))))
+      List("root" -> Str("."), "sources" -> Arr(List(Str("src"))))
     )
 
     assertEquals(result.nodes.length, 2)

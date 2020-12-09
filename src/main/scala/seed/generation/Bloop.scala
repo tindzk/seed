@@ -49,6 +49,7 @@ object Bloop {
     val project = Config.Project(
       name = name,
       directory = projectPath.toAbsolutePath,
+      workspaceDir = Some(projectPath.toAbsolutePath),
       sources = sources.map(_.toAbsolutePath),
       dependencies = dependencies,
       classpath = scalaCompiler.fold(List[Path]())(

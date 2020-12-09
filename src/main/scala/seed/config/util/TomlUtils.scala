@@ -7,11 +7,13 @@ import seed.{Log, LogLevel}
 import seed.cli.util.Ansi
 import seed.model.Build.{ModuleKindJs, PlatformModule, VersionTag}
 import seed.model.{Licence, Platform, TomlBuild}
-import toml.{Codec, Value}
+import toml.{Codec, Extension, Parse, Value}
 
 import scala.util.Try
 
 object TomlUtils {
+  val Extensions: Set[Extension] = Set(Extension.MultiLineInlineTables)
+
   object Codecs {
     implicit val logLevelCodec: Codec[LogLevel] = Codec {
       case (Value.Str(level), _, _) if level == "detail" =>
@@ -132,7 +134,7 @@ object TomlUtils {
 
   def parseFile[T](
     path: Path,
-    f: String => Either[Codec.Error, T],
+    f: String => Either[Parse.Error, T],
     description: String,
     log: Log
   ): Option[T] =
@@ -168,13 +170,13 @@ object TomlUtils {
 
   def parseBuildToml(
     projectPath: Path
-  )(content: String): Either[Codec.Error, TomlBuild] = {
+  )(content: String): Either[Parse.Error, TomlBuild] = {
     import toml._
     import toml.Codecs._
     import seed.config.util.TomlUtils.Codecs._
 
     implicit val pCodec = pathCodec(fixPath(projectPath, _))
 
-    Toml.parseAs[TomlBuild](content)
+    Toml.parseAs[TomlBuild](content, Extensions)
   }
 }

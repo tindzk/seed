@@ -24,9 +24,9 @@ object SeedConfig {
     def parse(tomlPath: Path) = {
       def parseRaw(
         toml: String
-      ): Either[_root_.toml.Codec.Error, List[Value.Tbl]] =
+      ): Either[_root_.toml.Parse.Error, List[Value.Tbl]] =
         Toml.parse(toml) match {
-          case Left(l) => Left(List() -> l)
+          case Left(l) => Left(l)
           case Right(r) =>
             r.values.get("import") match {
               case Some(Value.Arr(values))
@@ -45,7 +45,7 @@ object SeedConfig {
             }
         }
 
-      def f(toml: String): Either[Codec.Error, Config] =
+      def f(toml: String): Either[_root_.toml.Parse.Error, Config] =
         parseRaw(toml).right.flatMap { configurations =>
           val parsedAll = configurations.foldLeft(Map[String, Value]()) {
             case (acc, cur) =>
