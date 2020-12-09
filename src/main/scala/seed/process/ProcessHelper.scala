@@ -12,7 +12,7 @@ import com.zaxxer.nuprocess.{
 import seed.Log
 
 import scala.collection.JavaConverters._
-import seed.cli.util.Ansi
+import seed.cli.util.{Ansi, BloopCli}
 import zio._
 
 sealed trait ProcessOutput
@@ -147,7 +147,15 @@ object ProcessHelper {
       modulePath,
       moduleSourcePaths,
       buildPath,
-      log,
+      BloopCli.wrapLog(
+        log.filter(
+          message =>
+            // Workaround for https://github.com/sgerrand/alpine-pkg-glibc/issues/80
+            !message.contains(
+              "/usr/lib/libstdc++.so.6: no version information available"
+            )
+        )
+      ),
       output => onStdOut(output),
       verbose
     )

@@ -51,6 +51,8 @@ object Bloop {
       directory = projectPath.toAbsolutePath,
       workspaceDir = Some(projectPath.toAbsolutePath),
       sources = sources.map(_.toAbsolutePath),
+      sourcesGlobs = None,
+      sourceRoots = None,
       dependencies = dependencies,
       classpath = scalaCompiler.fold(List[Path]())(
         sc =>
@@ -129,7 +131,8 @@ object Bloop {
           )
         )
       ),
-      resources = Some(resources.map(_.toAbsolutePath))
+      resources = Some(resources.map(_.toAbsolutePath)),
+      tags = None
     )
 
     bloop.config.write(
@@ -428,7 +431,13 @@ object Bloop {
         testFrameworks = if (test) jvm.testFrameworks else List(),
         platform = Some(
           Config.Platform
-            .Jvm(Config.JvmConfig(None, List()), mainClass = jvm.mainClass)
+            .Jvm(
+              Config.JvmConfig(None, List()),
+              mainClass = jvm.mainClass,
+              runtimeConfig = None,
+              classpath = None,
+              resources = None
+            )
         )
       )
     }
