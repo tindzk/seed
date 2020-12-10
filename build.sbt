@@ -22,7 +22,7 @@ val seedVersion =
     .getOrElse(Seq("git", "describe", "--tags").!!.trim) // Local development
 val bloopVersion = parseVersion(Paths.get("BLOOP")).get
 
-val coursierVersion = "1.1.0-M14-4"
+val coursierVersion = "2.0.7"
 
 organization := seedOrganisation
 version := seedVersion

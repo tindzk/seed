@@ -20,7 +20,7 @@ import seed.{Log, model}
 import scala.concurrent.ExecutionContext.Implicits.global
 
 object Coursier {
-  type Artefact    = Artifact
+  type Artefact    = coursier.util.Artifact
   type ArtefactUrl = String
 
   val ArtefactSuffix: String = ".jar"

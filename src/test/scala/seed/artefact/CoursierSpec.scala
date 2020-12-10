@@ -108,6 +108,7 @@ object CoursierSpec extends SimpleTestSuite {
       .map(_._1)
       .filter(_.organisation == "org.jboss.xnio")
       .map(_.artefact)
+      .sorted
 
     // The xnio-nio dependency sets the runtime scope
     // See also https://repo1.maven.org/maven2/io/undertow/undertow-core/2.0.13.Final/undertow-core-2.0.13.Final.pom
