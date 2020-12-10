@@ -31,10 +31,11 @@ In the following screencast, we create a minimal Typelevel Scala project for the
 ## Installation
 You can either install Seed via Coursier or use a self-contained Docker image.
 
-## Coursier
+### Coursier
 The following prerequisites are needed:
 
 * **JVM**
+* **Coursier**: Coursier is a tool for fetching Maven and Ivy dependencies. It can also launch JAR entry points and create executable launchers.
 * **Bloop**: Bloop serves the function of compiling your projects. The latest version should work since Bloop configurations strive for backward compatibility. If you encounter any problems, you can always install the version Seed is targeting which is indicated in `seed version`.
 * **JavaScript:** [Node.js](https://nodejs.org/en/download/) needs to be installed if you want to run the project or its tests.
 * **LLVM:** For Scala Native projects to link, LLVM needs to be installed. Please refer to the [Scala Native documentation](http://www.scala-native.org/en/latest/user/setup.html) for more information.
@@ -48,17 +49,22 @@ version=$(curl https://api.github.com/repos/tindzk/seed/tags | jq -r '.[0].name'
 # Use pre-release version
 version=$(curl https://api.bintray.com/packages/tindzk/maven/seed | jq -r '.latest_version')
 
-blp-coursier bootstrap \
+coursier bootstrap \
     -r bintray:tindzk/maven \
     tindzk:seed_2.12:$version \
     -f -o seed
 ```
 
-Alternatively, you can use Coursier's `launch` command to run Seed directly.
+Alternatively, you can use Coursier's `launch` command to run Seed directly:
 
-Note that we use Bloop's version of Coursier. This is to avoid incompatibilities because Seed itself relies on Coursier and its version would be overridden by the launcher otherwise.
+```shell
+coursier bootstrap \
+    -r bintray:tindzk/maven \
+    tindzk:seed_2.12:$version -- \
+    help
+```
 
-## Docker
+### Docker
 A [self-contained Docker image](https://hub.docker.com/r/tindzk/seed) based on [Alpine Linux](https://alpinelinux.org/) is provided for all Seed versions. You can pull it from the public Docker Hub registry:
 
 ```shell
@@ -72,7 +78,6 @@ $ docker run -it tindzk/seed:$version /bin/sh
 apk add git
 git clone https://github.com/sparsetech/toml-scala.git
 cd toml-scala
-bloop server &
 seed bloop
 bloop test toml-js toml-jvm
 ```

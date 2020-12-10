@@ -11,14 +11,15 @@ steps:
       - git describe --tags > SEED
       - echo -n $(git describe --tags),latest > .tags
   - name: test
-    image: alpine:3.10
+    image: frolvlad/alpine-glibc:alpine-3.12
     commands:
-      - apk add --no-cache openjdk8 python curl nodejs clang libc-dev libunwind-dev g++ git
+      - apk add --no-cache openjdk8 nodejs clang libc-dev libunwind-dev g++ git libstdc++
       - git config --global user.email "ci@example.com"
       - git config --global user.name "CI user"
-      - curl -L https://github.com/scalacenter/bloop/releases/download/v$(cat BLOOP)/install.py | python - -d bloop
-      - export PATH=$(pwd)/bloop:$PATH
-      - blp-server &
+      # Coursier v2.0.7
+      - wget https://raw.githubusercontent.com/coursier/launchers/cbccb1e174b641e7b8f1907bf4fbdfa6f3d58d6a/cs-x86_64-pc-linux && mv cs-x86_64-pc-linux /usr/bin/coursier && chmod +x /usr/bin/coursier
+      - export PATH=$PATH:/root/.local/share/coursier/bin
+      - coursier install bloop:$(cat BLOOP) --only-prebuilt=true
       - ./build.sh
       - COURSIER_SBT_LAUNCHER_ADD_PLUGIN=true ./csbt "; scaladoc211/publishLocal; scaladoc212/publishLocal; scaladoc213/publishLocal; test"
   - name: publish_prerelease

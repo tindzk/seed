@@ -1,3 +1,0 @@
-# Must be the same version as Bloop uses
-# See https://github.com/scalacenter/bloop/blob/v$BLOOP/project/Dependencies.scala
-1.1.0-M14-4

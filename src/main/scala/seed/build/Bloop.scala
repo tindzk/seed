@@ -410,39 +410,7 @@ object Bsp {
   ): ZIO[Any, Nothing, (BspProcess, Socket, BloopServer)] = {
     val (bspSocketPath, bspProcess) = runBspServer(
       projectPath,
-      new Log(log.f, log.map, log.level, log.unicode) {
-        var lastLogLevel: Option[LogLevel] = None
-
-        override def error(message: String, detail: Boolean = false): Unit = {
-          // Remove log level ("[E] ") from message since it contains escape
-          // codes. Furthermore, the tab character is replaced by spaces.
-          // These fixes are needed to prevent graphical glitches when the
-          // progress bars are updated.
-          val messageText =
-            (if (message.contains(' ')) message.dropWhile(_ != ' ').tail
-             else message).replaceAllLiterally("\t", "  ")
-
-          if (messageText.trim.nonEmpty) {
-            // TODO The BSP server should not indicate the log level in the message
-            val logLevel = (if (message.contains("[D]")) Some(LogLevel.Debug)
-                            else if (message.contains("[E]"))
-                              Some(LogLevel.Error)
-                            else lastLogLevel).getOrElse(LogLevel.Info)
-            lastLogLevel = Some(logLevel)
-
-            // This message is printed to stderr, but it is not an error,
-            // therefore change the log level to 'debug'
-            if (messageText.contains("BSP server cancelled, closing socket..."))
-              debug(messageText)
-            else {
-              if (logLevel == LogLevel.Debug) super.debug(messageText, detail)
-              else if (logLevel == LogLevel.Error)
-                super.error(messageText, detail)
-              else super.info(messageText, detail)
-            }
-          }
-        }
-      },
+      BloopCli.wrapLog(log),
       message => log.debug(Ansi.bold("[BSP] ") + message)
     )
 

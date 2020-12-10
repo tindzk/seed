@@ -20,8 +20,9 @@ val seedMavenRepository = s"https://dl.bintray.com/$seedOrganisation/maven/"
 val seedVersion =
   parseVersion(Paths.get("SEED"))                        // CI
     .getOrElse(Seq("git", "describe", "--tags").!!.trim) // Local development
-val bloopVersion         = parseVersion(Paths.get("BLOOP")).get
-val bloopCoursierVersion = parseVersion(Paths.get("COURSIER")).get
+val bloopVersion = parseVersion(Paths.get("BLOOP")).get
+
+val coursierVersion = "1.1.0-M14-4"
 
 organization := seedOrganisation
 version := seedVersion
@@ -39,7 +40,7 @@ Compile / sourceGenerators += Def.task {
        |  val Organisation    = "$seedOrganisation"
        |  val Version         = "$seedVersion"
        |  val Bloop           = "$bloopVersion"
-       |  val Coursier        = "$bloopCoursierVersion"
+       |  val Coursier        = "$coursierVersion"
        |  val MavenRepository = "$seedMavenRepository"
        |}""".stripMargin
   )
@@ -49,8 +50,8 @@ Compile / sourceGenerators += Def.task {
 
 libraryDependencies ++= Seq(
   "com.lihaoyi"                  %% "fansi"            % "0.2.7",
-  "io.get-coursier"              %% "coursier"         % bloopCoursierVersion,
-  "io.get-coursier"              %% "coursier-cache"   % bloopCoursierVersion,
+  "io.get-coursier"              %% "coursier"         % coursierVersion,
+  "io.get-coursier"              %% "coursier-cache"   % coursierVersion,
   "tech.sparse"                  %% "toml-scala"       % "0.2.2",
   "tech.sparse"                  %% "pine"             % "0.1.6",
   "ch.epfl.scala"                %% "bloop-config"     % bloopVersion,
