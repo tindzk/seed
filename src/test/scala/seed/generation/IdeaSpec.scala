@@ -13,18 +13,12 @@ import seed.generation.util.PathUtil
 import seed.model.Build.{Module, Resolvers}
 import seed.model.{Build, Config}
 import seed.generation.util.BuildUtil.tempPath
+import seed.util.TestUtil
 
 object IdeaSpec extends SimpleTestSuite {
   private val seedConfig = seed.model.Config()
 
   private val resolvers = Resolvers()
-
-  private val packageConfig = PackageConfig(
-    tmpfs = false,
-    silent = false,
-    ivyPath = None,
-    cachePath = None
-  )
 
   private val log = Log.urgent
 
@@ -124,7 +118,7 @@ object IdeaSpec extends SimpleTestSuite {
       build,
       seedConfig,
       resolvers,
-      packageConfig,
+      TestUtil.packageConfig,
       false,
       log
     )
@@ -132,7 +126,7 @@ object IdeaSpec extends SimpleTestSuite {
       build,
       seedConfig,
       resolvers,
-      packageConfig,
+      TestUtil.packageConfig,
       false,
       log
     )
@@ -165,7 +159,7 @@ object IdeaSpec extends SimpleTestSuite {
       outputPath,
       result.resolvers,
       result.build,
-      Command.Idea(packageConfig),
+      Command.Idea(TestUtil.packageConfig),
       Log.urgent
     )
 
@@ -196,7 +190,7 @@ object IdeaSpec extends SimpleTestSuite {
       outputPath,
       result.resolvers,
       result.build,
-      Command.Idea(packageConfig),
+      Command.Idea(TestUtil.packageConfig),
       Log.urgent
     )
 
@@ -293,7 +287,7 @@ object IdeaSpec extends SimpleTestSuite {
       outputPath,
       result.resolvers,
       result.build,
-      Command.Idea(packageConfig),
+      Command.Idea(TestUtil.packageConfig),
       Log.urgent
     )
 
@@ -356,7 +350,7 @@ object IdeaSpec extends SimpleTestSuite {
       outputPath,
       result.resolvers,
       result.build,
-      Command.Idea(packageConfig),
+      Command.Idea(TestUtil.packageConfig),
       Log.urgent
     )
 
@@ -397,7 +391,7 @@ object IdeaSpec extends SimpleTestSuite {
       outputPath,
       result.resolvers,
       result.build,
-      Command.Idea(packageConfig),
+      Command.Idea(TestUtil.packageConfig),
       Log.urgent
     )
 
@@ -490,7 +484,7 @@ object IdeaSpec extends SimpleTestSuite {
       outputPath,
       result.resolvers,
       result.build,
-      Command.Idea(packageConfig),
+      Command.Idea(TestUtil.packageConfig),
       Log.urgent
     )
 
@@ -521,7 +515,7 @@ object IdeaSpec extends SimpleTestSuite {
       outputPath,
       result.resolvers,
       result.build,
-      Command.Idea(packageConfig),
+      Command.Idea(TestUtil.packageConfig),
       Log.urgent
     )
   }
@@ -536,7 +530,7 @@ object IdeaSpec extends SimpleTestSuite {
       outputPath,
       result.resolvers,
       result.build,
-      Command.Idea(packageConfig),
+      Command.Idea(TestUtil.packageConfig),
       Log.urgent
     )
 

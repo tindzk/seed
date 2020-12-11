@@ -7,11 +7,10 @@ import seed.Cli.Command
 import seed.cli.util.RTS
 import seed.config.BuildConfig
 import seed.{Log, cli}
-import seed.generation.BloopIntegrationSpec
-import seed.generation.BloopIntegrationSpec.packageConfig
 import seed.generation.util.BuildUtil.tempPath
 import seed.model.Config
 import seed.generation.util.TestProcessHelper
+import seed.util.TestUtil
 
 object DocSpec extends TestSuite[Unit] {
   override def setupSuite(): Unit    = TestProcessHelper.semaphore.acquire()
@@ -37,12 +36,11 @@ object DocSpec extends TestSuite[Unit] {
       buildPath,
       resolvers,
       build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
 
-    val command =
-      Command.Doc(BloopIntegrationSpec.packageConfig, Some(buildPath), modules)
+    val command = Command.Doc(TestUtil.packageConfig, Some(buildPath), modules)
     val uio = Doc.ui(
       config,
       buildPath,

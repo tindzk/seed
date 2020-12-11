@@ -16,6 +16,7 @@ import seed.model.Build.{JavaDep, Module, Resolvers, ScalaDep, VersionTag}
 import seed.model.Platform.{JVM, JavaScript, Native}
 import seed.generation.util.BuildUtil.tempPath
 import seed.model.Config
+import seed.util.TestUtil
 
 object ArtefactResolutionSpec extends SimpleTestSuite {
   test("javaDepFromScalaDep() with Scala.js dependency") {
@@ -364,8 +365,6 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
     )
   }
 
-  import seed.generation.BloopIntegrationSpec.packageConfig
-
   test("Resolve library versions requested by modules") {
     val projectPath = Paths.get("test", "resolve-dep-versions")
     val result      = BuildConfig.load(projectPath, Log.urgent).get
@@ -378,7 +377,7 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
       buildPath,
       resolvers,
       build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
 
@@ -456,7 +455,7 @@ object ArtefactResolutionSpec extends SimpleTestSuite {
       build,
       seed.model.Config(),
       Resolvers(),
-      packageConfig,
+      TestUtil.packageConfig,
       optionalArtefacts = false,
       Log.urgent
     )

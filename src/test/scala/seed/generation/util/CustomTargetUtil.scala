@@ -5,9 +5,9 @@ import java.nio.file.{Files, Paths}
 import seed.Cli.Command
 import seed.{Log, LogLevel, cli}
 import seed.config.BuildConfig
-import seed.generation.BloopIntegrationSpec.packageConfig
 import seed.generation.util.BuildUtil.tempPath
 import seed.model.Config
+import seed.util.TestUtil
 
 import scala.collection.mutable.ListBuffer
 
@@ -29,7 +29,7 @@ object CustomTargetUtil {
       buildPath,
       resolvers,
       build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
 

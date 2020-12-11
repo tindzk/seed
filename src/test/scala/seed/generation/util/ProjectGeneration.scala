@@ -3,7 +3,6 @@ package seed.generation.util
 import java.nio.file.{Files, Path, Paths}
 
 import org.apache.commons.io.FileUtils
-import seed.Cli.PackageConfig
 import seed.Log
 import seed.artefact.ArtefactResolution
 import seed.config.BuildConfig
@@ -11,15 +10,9 @@ import seed.config.BuildConfig.{Build, ModuleConfig}
 import seed.generation.Bloop
 import seed.model.Build.{JavaDep, Resolvers}
 import seed.model.{Build, Platform}
+import seed.util.TestUtil
 
 object ProjectGeneration {
-  private val packageConfig = PackageConfig(
-    tmpfs = false,
-    silent = false,
-    ivyPath = None,
-    cachePath = None
-  )
-
   def generate(projectPath: Path, build: Build): Unit = {
     val bloopPath      = projectPath.resolve(".bloop")
     val buildPath      = projectPath.resolve("build")
@@ -32,7 +25,7 @@ object ProjectGeneration {
       build,
       seed.model.Config(),
       Resolvers(),
-      packageConfig,
+      TestUtil.packageConfig,
       optionalArtefacts = false,
       Log.urgent
     )
@@ -41,7 +34,7 @@ object ProjectGeneration {
       build,
       seed.model.Config(),
       Resolvers(),
-      packageConfig,
+      TestUtil.packageConfig,
       optionalArtefacts = false,
       Log.urgent
     )

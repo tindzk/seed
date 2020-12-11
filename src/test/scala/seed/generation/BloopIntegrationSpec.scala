@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 import bloop.config.Config.JsConfig
 import minitest.TestSuite
 import seed.{Log, cli}
-import seed.Cli.{Command, PackageConfig}
+import seed.Cli.Command
 import seed.cli.util.RTS
 import seed.config.BuildConfig
 import seed.generation.util.{CustomTargetUtil, TestProcessHelper}
@@ -14,6 +14,7 @@ import seed.model.Config
 
 import scala.concurrent.Future
 import seed.generation.util.BuildUtil.tempPath
+import seed.util.TestUtil
 
 object BloopIntegrationSpec extends TestSuite[Unit] {
   override def setupSuite(): Unit    = TestProcessHelper.semaphore.acquire()
@@ -39,13 +40,6 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
     for { _ <- compile; _ <- run } yield ()
   }
 
-  private[seed] val packageConfig = PackageConfig(
-    tmpfs = false,
-    silent = false,
-    ivyPath = None,
-    cachePath = None
-  )
-
   test(
     "Generate project with duplicate transitive module dependencies"
   ) { _ =>
@@ -62,7 +56,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       buildPath,
       resolvers,
       build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
 
@@ -101,7 +95,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       buildPath,
       resolvers,
       build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
     compileAndRun(buildPath)
@@ -121,7 +115,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
         buildPath,
         resolvers,
         build,
-        Command.Bloop(packageConfig),
+        Command.Bloop(TestUtil.packageConfig),
         Log.urgent
       )
       compileAndRun(buildPath)
@@ -139,7 +133,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       buildPath,
       resolvers,
       build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
     TestProcessHelper
@@ -170,7 +164,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       buildPath,
       resolvers,
       build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
 
@@ -256,7 +250,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       buildPath,
       resolvers,
       build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
     TestProcessHelper
@@ -371,7 +365,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       buildPath,
       resolvers,
       build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
 
@@ -396,7 +390,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       buildPath,
       result.resolvers,
       result.build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
 
@@ -430,7 +424,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       buildPath,
       resolvers,
       build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
   }
@@ -447,7 +441,7 @@ object BloopIntegrationSpec extends TestSuite[Unit] {
       buildPath,
       resolvers,
       build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
     TestProcessHelper
