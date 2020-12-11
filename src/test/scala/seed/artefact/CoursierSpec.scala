@@ -88,4 +88,30 @@ object CoursierSpec extends SimpleTestSuite {
       )
     )
   }
+
+  test("Resolve dependencies with runtime scope") {
+    val dep = JavaDep("io.undertow", "undertow-core", "2.0.13.Final")
+    val resolution = Coursier.resolveAndDownload(
+      Set(dep),
+      (scalaOrganisation, scalaVersion),
+      Build.Resolvers(),
+      Coursier.DefaultIvyPath,
+      Coursier.DefaultCachePath,
+      optionalArtefacts = true,
+      silent = true,
+      Log.urgent
+    )
+
+    val result = Coursier
+      .resolveSubset(resolution.resolution, Set(dep), optionalArtefacts = true)
+      .toList
+      .map(_._1)
+      .filter(_.organisation == "org.jboss.xnio")
+      .map(_.artefact)
+      .sorted
+
+    // The xnio-nio dependency sets the runtime scope
+    // See also https://repo1.maven.org/maven2/io/undertow/undertow-core/2.0.13.Final/undertow-core-2.0.13.Final.pom
+    assertEquals(result, List("xnio-api", "xnio-nio"))
+  }
 }

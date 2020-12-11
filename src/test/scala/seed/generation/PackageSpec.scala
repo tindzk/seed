@@ -5,13 +5,13 @@ import java.nio.file.{Files, Paths}
 import minitest.TestSuite
 import seed.{Log, cli}
 import seed.Cli.{Command, PackageConfig}
-import seed.cli.util.RTS
 import seed.config.BuildConfig
 import seed.generation.util.TestProcessHelper
 import seed.generation.util.TestProcessHelper.ec
 import seed.model.Config
 import seed.generation.util.BuildUtil.tempPath
 import seed.model.Build.Resolvers
+import seed.util.TestUtil
 
 object PackageSpec extends TestSuite[Unit] {
   override def setupSuite(): Unit    = TestProcessHelper.semaphore.acquire()
@@ -27,19 +27,13 @@ object PackageSpec extends TestSuite[Unit] {
     val outputPath = tempPath.resolve("package-modules")
     Files.createDirectory(outputPath)
     val buildPath = outputPath.resolve("build")
-    val packageConfig = PackageConfig(
-      tmpfs = false,
-      silent = false,
-      ivyPath = None,
-      cachePath = None
-    )
     cli.Generate.ui(
       Config(),
       config.projectPath,
       outputPath,
       config.resolvers,
       config.build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
 
@@ -54,7 +48,7 @@ object PackageSpec extends TestSuite[Unit] {
           Some(buildPath),
           libs = true,
           progress = false,
-          packageConfig,
+          TestUtil.packageConfig,
           Log.urgent
         )
 
@@ -71,19 +65,13 @@ object PackageSpec extends TestSuite[Unit] {
     val outputPath = tempPath.resolve("example-resources-package")
     Files.createDirectory(outputPath)
     val buildPath = outputPath.resolve("build")
-    val packageConfig = PackageConfig(
-      tmpfs = false,
-      silent = false,
-      ivyPath = None,
-      cachePath = None
-    )
     cli.Generate.ui(
       Config(),
       config.projectPath,
       outputPath,
       config.resolvers,
       config.build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
 
@@ -98,7 +86,7 @@ object PackageSpec extends TestSuite[Unit] {
           Some(buildPath),
           libs = true,
           progress = false,
-          packageConfig,
+          TestUtil.packageConfig,
           Log.urgent
         )
 

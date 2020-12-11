@@ -6,9 +6,9 @@ import minitest.SimpleTestSuite
 import seed.Cli.Command
 import seed.{Log, cli}
 import seed.config.BuildConfig
-import seed.generation.BloopIntegrationSpec.packageConfig
 import seed.generation.util.BuildUtil
 import seed.model.Config
+import seed.util.TestUtil
 
 object GenerateSpec extends SimpleTestSuite {
   private val tempPath = BuildUtil.tempPath.resolve("generate")
@@ -27,7 +27,7 @@ object GenerateSpec extends SimpleTestSuite {
       buildPath,
       resolvers,
       build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
   }
@@ -46,7 +46,7 @@ object GenerateSpec extends SimpleTestSuite {
       buildPath,
       resolvers,
       build,
-      Command.Bloop(packageConfig),
+      Command.Bloop(TestUtil.packageConfig),
       Log.urgent
     )
 
